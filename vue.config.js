@@ -3,8 +3,7 @@ var webpack = require('webpack');
 module.exports = defineConfig({
   publicPath: '/',
   devServer: {
-    port: 3000,
-    allowedHosts: 'all',
+    allowedHosts: 'all'
     },
   configureWebpack: {
    

@@ -11,6 +11,7 @@
   </div>
 </template>
 
+
 <script>
 import { BeaconEvent } from "@airgap/beacon-sdk";
 import { BeaconWallet } from '@taquito/beacon-wallet'
@@ -84,7 +85,7 @@ export default {
     
   },
   created() {    
-      this.socket = io('http://localhost:5007')
+      this.socket = io('http://localhost:3000')
       //this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
       console.log('create')
       console.log(this.socket)
