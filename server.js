@@ -1,9 +1,13 @@
 const port = process.env.PORT || 3000
 //const isProd = process.env.NODE_ENV === 'production'
-const cors = require("cors");
+const express = require('express')
+const path = require('path')
+const cool = require('cool-ascii-faces')
 
+
+const app = express()
+const cors = require("cors");
 const http = require('http')
-//const app = require('express')()
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')))
 app.set('views', path.join(__dirname, 'views'))
@@ -13,6 +17,12 @@ app.get('/', (req, res) => {
   console.log(`Rendering 'pages/index' for route '/'`)
   res.render('pages/index')
 })
+
+app.get('/cool', (req, res) => {
+  console.log(`Rendering a cool ascii face for route '/cool'`)
+  res.send(cool())
+})
+
 const server = http.createServer(app)
 const io = require('socket.io')(server, {
   cors: {
