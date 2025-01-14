@@ -3,14 +3,23 @@ const port = process.env.PORT || 3000
 const cors = require("cors");
 
 const http = require('http')
-const app = require('express')()
+//const app = require('express')()
 app.use(cors());
+app.use(express.static(path.join(__dirname, 'public')))
+app.set('views', path.join(__dirname, 'views'))
+app.set('view engine', 'ejs')
+
+app.get('/', (req, res) => {
+  console.log(`Rendering 'pages/index' for route '/'`)
+  res.render('pages/index')
+})
 const server = http.createServer(app)
 const io = require('socket.io')(server, {
   cors: {
     origin: '*',
   }
 });
+
 
 
 
