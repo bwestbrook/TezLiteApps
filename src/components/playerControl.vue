@@ -111,7 +111,26 @@ export default {
             }    
             const signer = new RemoteSigner(activeAccount.address, NODE_URL )
             await this.tezos.setProvider({signer:signer})
-            await this.tezos.setWalletProvider(this.wallet)            
+            await this.tezos.setWalletProvider(this.wallet)      
+            this.tezos.contract
+                .at(CONTRACT_ADDRESS)
+                .then((contract) => {
+                    return contract.methods.joinGame(gameId, activeAccount.address);
+                })
+                .then((op) => {
+                    console.log(`Estimating the smart contract call: `);
+                    return this.tezos.estimate.contractCall(op);
+                })
+                .then((estimate) => {
+                    console.log(`burnFeeMutez : ${estimate.burnFeeMutez},
+                    gasLimit : ${estimate.gasLimit},
+                    minimalFeeMutez : ${estimate.minimalFeeMutez},
+                    storageLimit : ${estimate.storageLimit},
+                    suggestedFeeMutez : ${estimate.suggestedFeeMutez},
+                    totalCost : ${estimate.totalCost},
+                    usingBaseFeeMutez : ${estimate.usingBaseFeeMutez}`);
+                })
+                .catch((error) => console.table(`Error: ${JSON.stringify(error, null, 2)}`));     
             this.tezos.wallet
                 .at(CONTRACT_ADDRESS)
                 .then((contract) => {

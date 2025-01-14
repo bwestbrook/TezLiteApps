@@ -2,9 +2,9 @@ export const TITLE = "Welcome to TezTacto simple H2H gaming on the Tezos Blockch
 
 export const PORT = 3000
 
-export const NODE_URL = 'https://ghostnet.smartpy.io/'
+//export const NODE_URL = 'https://ghostnet.smartpy.io/'
 
-//export const NODE_URL = 'https://ghostnet.tezos.ecadinfra.com/'
+export const NODE_URL = 'https://ghostnet.tezos.ecadinfra.com/'
 
 //export const NODE_URL = 'https://rpc.ghostnet.teztnets.com/'
 
