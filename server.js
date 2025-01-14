@@ -71,16 +71,9 @@ io.on('connection', (socket) => {
     console.log('emitting GGG')
     io.emit("gameGrid", gameGrid, gameId)
   });
+
   socket.on("updateGameGrid", function(gameGrid, coords, owner, gameId) {
-    console.log(coords, owner, gameId )
-    if (!coords) {
-      return;
-    }
-    if (coords.length == 3) {
-        gameGrid[coords[0]][coords[1]][coords[2]] = owner  
-    } 
-    console.log('updateGG')
-    io.emit("updateGameGrid", gameGrid, gameId)
+    io.emit("gameGrid", gameGrid)
 });
 socket.on("resizeGame", function(width) {
   io.emit("resizeGame", width)

@@ -16,6 +16,9 @@ export default {
       cameraY: 0,
       moveMade: false,
       playerColor: 'red',
+      playerTurn: 1, 
+      gamePaused: false,
+      halfTurn: false,
       player1Plays: {},
       player2Plays: {}
     }
@@ -56,7 +59,6 @@ export default {
     // Set up socket to receive from server
     this.socket.on('gameGrid', (gameGrid) => {
       //
-      console.log('getting', gameGrid)
       this.gameGrid = gameGrid
     });
     this.socket.on('resizeGame', (width) => {
@@ -79,11 +81,8 @@ export default {
       this.playX = evt.x
       this.playY = evt.y   
     },
-    checkClickUp: function(evt) {
+    checkClickUp: function() {
       this.rotate = false
-      if (this.playX === evt.x && this.playY === evt.y) {
-        this.makeMove(evt)
-      }
     },
     submitMove: function() {
       if (this.playerColor === 'red') {
@@ -111,6 +110,9 @@ export default {
       this.scene.add(this.board)
     },
     highlightMove: function(evt) {
+      if (this.gamePaused) {
+        return
+      }
       const intersects = this.findIntersects(evt)
       this.updateGridRender()
       if (intersects.length > 0) {
@@ -119,18 +121,27 @@ export default {
         mousedVertex.object.geometry = this.highlightGeometry
       } 
     },
-    makeMove: function(evt) {
+    makeMove: function(evt) {  
       const intersects = this.findIntersects(evt)
-      console.log(this.socket)
       if (intersects.length > 0) {
           let clickedVertex = intersects[0]
           const i = clickedVertex.object.coords[0]
           const j = clickedVertex.object.coords[1]
           const k = clickedVertex.object.coords[2]
-          this.gameGrid[i][j][k] = 1
+          if (this.gameGrid[i][j][k] < 0) {
+              if (this.gamePaused) {
+                this.gameGrid[i][j][k] = 0
+              }
+              this.gamePaused = false
+          } else if (this.gameGrid[i][j][k] == 0 && !this.gamePaused) {
+            this.gameGrid[i][j][k] = -1 * this.playerTurn
+            this.gamePaused = true
+          } else {
+            this.gamePaused = true
+          }
       }
       this.updateGridRender()
-      this.socket.emit("test",'ya buddy')
+      this.socket.emit("updateGameGrid",this.gameGrid)
     },
     resizeGameRender: function(width) {
         this.gameSize = width * 0.65
@@ -154,7 +165,7 @@ export default {
           if (gameGridOwner == 0) {
             thisVertex.material = this.defaultMaterial
             thisVertex.geometry = this.defaultGeometry
-          } else if (gameGridOwner == 1) {
+          } else if (gameGridOwner == 1 || gameGridOwner == -1) {
             thisVertex.material = this.player1Material
             thisVertex.geometry = this.player1Geometry
           }

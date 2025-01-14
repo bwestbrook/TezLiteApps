@@ -61,8 +61,6 @@ export default {
       return globalWallet
     },
     async brodcastWallet (account) {
-      //this.getWallet()
-      console.log('wallet', account)
       if (account) {
         const reducedAddress = await reduceAddress(account.address)       
         Tezos.setWalletProvider(this.wallet)
