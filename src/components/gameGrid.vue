@@ -63,6 +63,7 @@ export default {
     });
     this.socket.on('resizeGame', (width) => {
       //
+      console.log(width)
       this.resizeGameRender(width)
     });
   },

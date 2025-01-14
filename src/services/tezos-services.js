@@ -1,16 +1,20 @@
 import { TezosToolkit } from '@taquito/taquito'
 //import { RemoteSigner } from '@taquito/remote-signer';
-import { NODE_URL } from '../constants'
+import { NODE_URL, CONTRACT_ADDRESS } from '../constants'
 //const cors = require('cors');
 const Tezos = new TezosToolkit(NODE_URL);
 
 
-export const getContractStorageService = async(nft_contract_address) => {
-  //const contract = getContractService(nft_contract_address);
-  const contract = await Tezos.wallet.at(nft_contract_address);
+export const getGamesFromContract = async() => {
+  console.log('gettingGames')
+  const contract = await Tezos.wallet.at(CONTRACT_ADDRESS)
+  console.log(contract)
   const storage = await contract.storage()
-  return storage
-}
+  console.log(storage)
+  return storage.games
+    }  
+  
+
 
 export const getContractService = async(nft_contract_address) => {
   const contract = await Tezos.wallet.at(nft_contract_address);

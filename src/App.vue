@@ -9,14 +9,17 @@
           :windowHeight="windowHeight"
       />
   </div>
+  
 </template>
 
 
-<script>
+<script >
+
 import { BeaconEvent } from "@airgap/beacon-sdk";
 import { BeaconWallet } from '@taquito/beacon-wallet'
 import { NetworkType } from "@airgap/beacon-types";
 import io from 'socket.io-client'
+//import { state } from "@/socket";
 import mainBody from "./components/mainBody.vue"
 import { reduceAddress } from "./utilities";
 import { RemoteSigner } from '@taquito/remote-signer';
@@ -42,6 +45,18 @@ export default {
       socket: this.socket
     }
   },
+  created() {   
+     
+      this.socket = io('localhost:3000')
+      //this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
+      this.tezos = Tezos
+      this.getWallet()
+  },
+  mounted() {
+      window.addEventListener('resize', () =>{
+        this.onResize()
+      })
+    },
   methods: {
     async getWallet() {
       if (!globalWallet) {
@@ -53,6 +68,9 @@ export default {
           })           
           wallet.client.subscribeToEvent(BeaconEvent.ACTIVE_ACCOUNT_SET, (account) => {
               this.brodcastWallet(account)
+              console.log('broadcast', account.address, this.socket)   
+              this.socket.emit("walletConnection", account.address)  
+              this.socket.emit("updateGames", account)                
           })
           this.wallet = wallet
         } else {
@@ -67,39 +85,23 @@ export default {
         const signer = new RemoteSigner(account.address, NODE_URL )
         await this.tezos.setProvider({signer:signer})
         this.walletAddress = 'UNSYNC WALLET ' + reducedAddress
+        
       } else {
         this.walletAddress = 'SYNC WALLET'
       }
     },
     async sendTezos(activeAccount, amount) {
-            const signer = new RemoteSigner(activeAccount.address, NODE_URL )
-            await this.tezos.setProvider({signer:signer})
-            await this.tezos.setWalletProvider(this.wallet)
-            await this.tezos.wallet.transfer({amount:amount, to:'tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w'}).send()
+        const signer = new RemoteSigner(activeAccount.address, NODE_URL )
+        await this.tezos.setProvider({signer:signer})
+        await this.tezos.setWalletProvider(this.wallet)
+        await this.tezos.wallet.transfer({amount:amount, to:'tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w'}).send()
     },
     async onResize() {
         this.socket.emit("resizeGame", window.innerWidth)
     }
     
-  },
-  created() {    
-      //this.socket = io('http://localhost:3000')
-      this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
-      console.log('create')
-      console.log(this.socket)
-      this.tezos = Tezos
-      this.getWallet()
-  },
-  mounted() {
-      window.addEventListener('resize', () =>{
-        this.onResize()
-      })
-            
- 
-      //const PORT = this.socket.io.engine.port
-      //console.log(PORT)
-    
   }
+          
 }
 </script>
 

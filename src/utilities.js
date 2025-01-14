@@ -8,8 +8,6 @@ export const degsToRads = function(degs) {
     return degs * Math.PI / 180;
 }
   
-
-
 export const getJsonObjectFromString = async(input_string) => {
 const meta_data = await $.getJSON(input_string)
 console.log(meta_data)

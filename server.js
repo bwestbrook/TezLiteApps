@@ -46,25 +46,7 @@ let addressesInGame = []
 // Socket.io
 const messages = []
 io.on('connection', (socket) => {
- 
-     // User Handling 
-    //console.log(socket)
-    console.log("user " + socket.id + " connected");
-    idx = connectedUsers.length
-    connectedUsers[idx] = (socket.id)
-    io.emit("connectedUsers", connectedUsers)
-
-    socket.on("disconnect", function() {
-        let n = 0;
-        for (n; n < connectedUsers.length; n++ ){
-          const thisUser = connectedUsers[n]
-          if (thisUser == socket.id) {
-            connectedUsers.pop(n)
-          }
-        }
-        console.log("user " + socket.id + " disconnected");
-        io.emit("connectedUsers", connectedUsers)
-    });
+    // Game Play
     socket.on("initGameGrid", function(gameId) {
       console.log('recieved', socket.id)
       gameData.gameBalance = 0
@@ -90,18 +72,48 @@ io.on('connection', (socket) => {
     console.log('emitting GGG')
     io.emit("gameGrid", gameGrid, gameId)
   });
+  
+  socket.on("newGameGrid", function(gameGrid, gameId) {
+    console.log('NGG')
+    io.emit("gameGrid", gameGrid, gameId)
+  });
 
-  socket.on("updateGameGrid", function(gameGrid, coords, owner, gameId) {
-    io.emit("gameGrid", gameGrid)
-});
-socket.on("resizeGame", function(width) {
-  io.emit("resizeGame", width)
+  socket.on("resizeGame", function(width) {
+    console.log('rs')
+    io.emit("resizeGame", width)
+  });
+  // Contract
+  socket.on("updateGames", function(address) {
+    console.log('updateGames')
+    io.emit('updateGames', address)
+    
+  });
+  // Wallet
+  socket.on("walletConnection", function(address) {
+    let userId ={}
+    idx = connectedUsers.length
+    userId[socket.id] = address
+    //userId.socketId = socket.id
+    connectedUsers[idx] = userId
+    console.log(connectedUsers)
+    });
 
-
-});
-socket.on("test", function(test) {
-  console.log(test)
-   
-});
+  socket.on("connect", function() {
+    console.log("user " + socket.id + " connected");
+    idx = connectedUsers.length
+    connectedUsers[idx] = (socket.id)
+    io.emit("connectedUsers", connectedUsers)
+  });
+  socket.on("disconnect", function() {
+    let n = 0;
+    for (n; n < connectedUsers.length; n++ ){
+      const thisUser = connectedUsers[n]
+      if (thisUser == socket.id) {
+        connectedUsers.pop(n)
+      }
+    }
+    console.log("user " + socket.id + " disconnected");
+    io.emit("connectedUsers", connectedUsers)
+  });
 });
   
