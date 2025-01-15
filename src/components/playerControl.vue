@@ -153,17 +153,15 @@ export default {
             const games = await getGamesFromContract(activeAccount.address)  
             const allGames = await games.values()
             let j = 0;
-            console.log(this.gamesObject)
+            //
             for (let game of allGames) {
                 if (j == gameId) {
-                    this.getGameGridBC(game, j)
-                    console.log(this.gamesObject[j])
-                    this.updateLoadedGameStatus(j)
+                    await this.getGameGridBC(game, j)
+                    await this.updateLoadedGameStatus(j)
                     {break ;}
                 }  
                 j ++;
-            }
-            
+            }           
         },
         async getGameGridBC(game, gameId) {
             let loadedGridPoints = []
