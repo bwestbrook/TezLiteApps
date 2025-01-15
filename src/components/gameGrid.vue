@@ -93,7 +93,7 @@ export default {
       cameraY: 0,
       moveMade: false,
       playerColor: 'red',
-      playerTurn: 1, 
+      playerTurn: 2, 
       gamePaused: false,
       halfTurn: false,
       player1Plays: {},
@@ -109,17 +109,20 @@ export default {
     this.gameSize = this.windowWidth * 0.6
     this.board = new Three.Group()
     // Materials
-    this.defaultGeometry = new Three.SphereGeometry(0.05, 32, 16)
-    this.playedGeometry = new Three.BoxGeometry(0.1, 0.1, 0.1)
+    this.defaultGeometry = new Three.SphereGeometry(0.06, 32, 16)
+    //this.playedGeometry = new Three.BoxGeometry(0.1, 0.1, 0.1)
     this.defaultMaterial = new Three.MeshNormalMaterial()
     this.highlightGeometry = this.defaultGeometry
+    this.playedGeometry = this.defaultGeometry
     this.highlightMaterial = new Three.MeshMatcapMaterial( {color:'black', opacity: 0.75, transparent: true} )
     this.player1Material = new Three.MeshMatcapMaterial( {color: 'red',  opacity: 0.95, transparent: true} )
     this.player2Material = new Three.MeshMatcapMaterial( {color: 'blue',  opacity: 0.95, transparent: true} )
     //this.lineMaterial = new Three.LineBasicMaterial( { color: 0x0000ff } );
     this.defaultLineMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.3, transparent:true});
-    this.deHightlightLineMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity: 0.0});
-    this.tubeRadius = 0.015
+    this.hightlightMaterial = new Three.MeshMatcapMaterial({color: 'red', opacity: 0.5, transparent: true});
+    this.playedLineMaterial = new Three.MeshMatcapMaterial({color: 'red', opacity: 0.8, transparent: true});   
+    this.playedMaterial = this.playedLineMaterial
+    this.tubeRadius = 0.012
       //this.player2Material = new Three.MeshMatcapMaterial( {color: 'blue',  opacity: 0.5} )
     // General 
     this.scene = new Three.Scene();
@@ -245,9 +248,11 @@ export default {
                     this.gameGrid[i][j][k] = 0
                   }
                   this.gamePaused = false
+                  clickedVertex.object.opacity = 0.95
               } else if (this.gameGrid[i][j][k] == 0 && !this.gamePaused) {
                 this.gameGrid[i][j][k] = -1 * this.playerTurn
                 this.gamePaused = true
+                clickedVertex.object.opacity = 0.3
               } else {
                 this.gamePaused = true
               }
@@ -276,15 +281,21 @@ export default {
             if (gameGridOwner == 0) {
               thisVertex.material = this.defaultMaterial
               thisVertex.geometry = this.defaultGeometry
-            } else if (gameGridOwner == 1 || gameGridOwner == -1) {
+            } else if (gameGridOwner == 1) {
               thisVertex.material = this.player1Material
               thisVertex.geometry = this.playedGeometry
-            }
-            else if (gameGridOwner == 2 || gameGridOwner == -2) {
+            } else if (gameGridOwner == 2 ) {
               thisVertex.material = this.player2Material
               thisVertex.geometry = this.playedGeometry
+            } else if (gameGridOwner == -1) {
+              thisVertex.material = this.hightlightMaterial
+              thisVertex.geometry = this.playedGeometry
+            } else if (gameGridOwner == -2 ) {
+              console.log('ad')
+              thisVertex.material = this.hightlightMaterial
+              thisVertex.geometry = this.playedGeometry
+            }
           }
-        }
       }    
     },
     connectMoves: function() {
@@ -316,13 +327,31 @@ export default {
                   z * this.intvl - 0.5 * this.intvl
               )
               const path = new Three.LineCurve3(start, end);
-              this.highlightTubeGeometry = new Three.TubeGeometry(path, 20, this.tubeRadius * 2, 10, false);
+              this.highlightTubeGeometry = new Three.TubeGeometry(path, 20, this.tubeRadius * 1.2, 10, false);
               let material = {}
-              if (gameGridOwner == 1 ) {
-                material = this.player1Material
+              if (istemp) {
+                material = this.hightlightMaterial
+                if (gameGridOwner == 1 ) {
+                  material.color.r = 1
+                  material.color.b = 0
+                } else {
+                  material.color.r = 0
+                  material.color.b = 1
+                }
               } else {
-                material = this.player2Material
+                material = this.playedLineMaterial
+                if (gameGridOwner == 1 ) {
+                  material.color.r = 1
+                  material.color.b = 0
+                } else {
+                  material.color.r = 0
+                  material.color.b = 1
+                }
+                0.2158605001032441
               }
+              console.log(material)
+              
+              
               const tempHighlight = new Three.Mesh(this.highlightTubeGeometry, material);
               if (istemp) {
                 this.tempHighlights.push(tempHighlight)
