@@ -119,7 +119,7 @@ export default {
     //this.lineMaterial = new Three.LineBasicMaterial( { color: 0x0000ff } );
     this.defaultLineMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.3, transparent:true});
     this.deHightlightLineMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity: 0.0});
-    this.tubeRadius = 0.003
+    this.tubeRadius = 0.015
       //this.player2Material = new Three.MeshMatcapMaterial( {color: 'blue',  opacity: 0.5} )
     // General 
     this.scene = new Three.Scene();
