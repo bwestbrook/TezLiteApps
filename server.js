@@ -95,7 +95,6 @@ io.on('connection', (socket) => {
     userId[socket.id] = address
     //userId.socketId = socket.id
     connectedUsers[idx] = userId
-    console.log(connectedUsers)
     });
 
   socket.on("connect", function() {
