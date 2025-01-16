@@ -110,9 +110,10 @@ export default {
   margin:0px;
   padding:0px
 }
+* { 
+  box-shadow: inset 0 0 1px rgba(0,0,0,.5) 
+}
 body, html{
-  width: 100vw;
-  background-size: 100% 100%;
   overflow-x: hidden;
   margin:0px;
   padding:0px;
@@ -120,7 +121,7 @@ body, html{
   padding: 0.8em 0;
 }
 .centerMiddle{
-  width: 65%;  
+  box-shadow: inset 0 0 1px rgba(0,0,0,.5);
   padding:0px
 }
 </style>
