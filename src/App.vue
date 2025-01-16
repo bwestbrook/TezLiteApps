@@ -46,8 +46,8 @@ export default {
     }
   },
   created() { 
-      //this.socket = io('localhost:3000')
-      this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
+      this.socket = io('localhost:3000')
+      //this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
       this.tezos = Tezos
       this.getWallet()
   },
@@ -95,7 +95,7 @@ export default {
         await this.tezos.wallet.transfer({amount:amount, to:'tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w'}).send()
     },
     async onResize() {
-        this.socket.emit("resizeGame", window.innerWidth)
+        this.socket.emit("resizeGame", window.innerWidth, this.socket.id)
     } 
   }        
 }

@@ -82,8 +82,11 @@ io.on('connection', (socket) => {
     io.emit("gameGrid", gameGrid, gameId)
   });
 
-  socket.on("resizeGame", function(width) {
-    io.emit("resizeGame", width)
+  socket.on("resizeGame", function(width, socketId) {
+    console.log('resize request', socketId, socket.id)
+    if (socketId == socket.id ) {
+      io.emit("resizeGame", width)
+    }
   });
 
   // Contract
