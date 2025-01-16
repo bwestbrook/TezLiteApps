@@ -3,9 +3,10 @@ import * as Three from 'three'
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 
-let gameWinners = [
- [[-1, -1, -1], [0, 0, 0], [1, 1, 1], [2, 2, 2]],
+let gameWinners = [[[-1, -1, -1], [0, 0, 0], [1, 1, 1], [2, 2, 2]],
  [[-1, -1, 2], [0, 0, 1], [1, 1, 0], [2, 2, -1]],
+ [[2, -1, -1], [1, 0, 0], [0, 1, 1], [-1, 2, 2]],
+ [[2, -1, 2], [1, 0, 1], [0, 1, 0], [-1, 2, -1]],
  [[-1, -1, -1], [-1, 0, 0], [-1, 1, 1], [-1, 2, 2]],
  [[0, -1, -1], [0, 0, 0], [0, 1, 1], [0, 2, 2]],
  [[1, -1, -1], [1, 0, 0], [1, 1, 1], [1, 2, 2]],
@@ -79,6 +80,10 @@ let gameWinners = [
  [[2, 1, -1], [2, 1, 0], [2, 1, 1], [2, 1, 2]],
  [[2, 2, -1], [2, 2, 0], [2, 2, 1], [2, 2, 2]]]
 
+
+
+
+
 export default {
   name: 'gameGrid',
   data() {
@@ -98,7 +103,8 @@ export default {
       halfTurn: false,
       player1Plays: {},
       player2Plays: {},
-      tempHighlights: []
+      tempHighlights: [],
+      allPaths: {}
       
     }
   },
@@ -108,27 +114,28 @@ export default {
     this.intvl = 0.5
     this.gameSize = this.windowWidth * 0.6
     this.board = new Three.Group()
-    // Materials
+    // Geometry
     this.defaultGeometry = new Three.SphereGeometry(0.06, 32, 16)
-    //this.playedGeometry = new Three.BoxGeometry(0.1, 0.1, 0.1)
-    this.defaultMaterial = new Three.MeshNormalMaterial()
+
     this.highlightGeometry = this.defaultGeometry
     this.playedGeometry = this.defaultGeometry
+    // Materials
+    this.defaultMaterial = new Three.MeshNormalMaterial()
     this.highlightMaterial = new Three.MeshMatcapMaterial( {color:'black', opacity: 0.75, transparent: true} )
     this.player1Material = new Three.MeshMatcapMaterial( {color: 'red',  opacity: 0.95, transparent: true} )
     this.player2Material = new Three.MeshMatcapMaterial( {color: 'blue',  opacity: 0.95, transparent: true} )
-    //this.lineMaterial = new Three.LineBasicMaterial( { color: 0x0000ff } );
     this.defaultLineMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.3, transparent:true});
-    this.hightlightMaterial = new Three.MeshMatcapMaterial({color: 'red', opacity: 0.5, transparent: true});
+    //this.hightlightMaterial = new Three.MeshMatcapMaterial({color: 'red', opacity: 0.5, transparent: true});
+    this.player1HightlightMaterial = new Three.MeshMatcapMaterial({color: 'red', opacity: 0.5, transparent: true});
+    this.player2HightlightMaterial = new Three.MeshMatcapMaterial({color: 'blue', opacity: 0.5, transparent: true});
+    //this.player2HightlightMaterial
     this.playedLineMaterial = new Three.MeshMatcapMaterial({color: 'red', opacity: 0.8, transparent: true});   
     this.playedMaterial = this.playedLineMaterial
     this.tubeRadius = 0.012
-      //this.player2Material = new Three.MeshMatcapMaterial( {color: 'blue',  opacity: 0.5} )
     // General 
     this.scene = new Three.Scene();
     this.renderer = new Three.WebGLRenderer({antialias: true});
     this.renderer.setSize(this.gameSize, this.gameSize)
-    
     //Camera
     this.camera = new Three.PerspectiveCamera(45, 1, 1, 5000);
     this.camera.position.x = 3;
@@ -150,7 +157,8 @@ export default {
       this.gamePaused = false
       this.gameGrid = gameGrid
       this.updateGridRender()
-      this.connectMoves()
+      console.log('CM', this.gameGrid)
+      this.connectMoves(false)
     });
     this.socket.on('resizeGame', (width) => {
       //
@@ -201,6 +209,7 @@ export default {
             }
         }
       this.addWinningLines()
+      this.createConnectionLinks()
       this.scene.add(this.board)
     },
     addWinningLines: function() {    
@@ -221,45 +230,102 @@ export default {
           this.scene.add(line)
         }
     },
+    createConnectionLinks: function() {
+      for (let i in gameWinners) {
+        let j = 0
+        //let istemp = false
+        for (j; j < 3; j++) {
+          const x1 = gameWinners[i][j][0]
+          const y1 = gameWinners[i][j][1]
+          const z1 = gameWinners[i][j][2]
+          const x2 = gameWinners[i][j + 1][0]
+          const y2 = gameWinners[i][j + 1][1]
+          const z2 = gameWinners[i][j + 1][2]
+          const start = this.makeThreeVector(x1, y1, z1)
+          const end = this.makeThreeVector(x2, y2, z2)
+          const lineId = 's'+ x1.toString()+  y1.toString() + z1.toString()+'e'+ x2.toString()+  y2.toString() + z2.toString()
+          const path = new Three.LineCurve3(start, end);
+          const tubeGeometry = new Three.TubeGeometry(path, 20, this.tubeRadius * 1.2, 10, false)
+          const tube = this.makeConnectingTube(tubeGeometry)
+          this.allPaths[lineId] = tube
+          tube.visible = false
+          tube.start = [x1, y1, z1]
+          tube.end = [x2, y2, z2]
+          this.scene.add(tube)
+          }
+        }
+      
+    },
     highlightMove: function(evt) {
+      this.connectMoves()
+      if (!this.gameGrid) {
+        return
+      }
       if (this.gamePaused) {
         return
       }
       const intersects = this.findIntersects(evt)
       this.updateGridRender()
       if (intersects.length > 0) {
-        const mousedVertex = intersects[0]
-        if (mousedVertex.object.owner == 0) {
-          mousedVertex.object.material = this.highlightMaterial
-          mousedVertex.object.geometry = this.highlightGeometry
+        this.lastMousedVertex = intersects[0]
+        if (this.lastMousedVertex.object.owner == 0) {
+          this.lastMousedVertex.object.material = this.highlightMaterial
+          this.lastMousedVertex.object.geometry = this.highlightGeometry
+          const i = this.lastMousedVertex.object.coords[0]
+          const j = this.lastMousedVertex.object.coords[1]
+          const k = this.lastMousedVertex.object.coords[2]
+          this.gameGrid[i][j][k] = -1 * this.playerTurn         
+        } 
+      } else {
+        if (!this.gamePaused){
+          let i = -1
+          for (i; i < 3; i++) {
+              let j = -1
+              for (j; j < 3; j++) {
+                  let k = -1
+                  for (k; k < 3; k++) {
+                    if (this.gameGrid[i][j][k] < 0) {
+                          this.gameGrid[i][j][k] = 0
+                      }
+                    }
+              }
+            }
+          }
         }
-      } 
     },
     makeMove: function(evt) {  
       const intersects = this.findIntersects(evt)
       if (intersects.length > 0) {
-          let clickedVertex = intersects[0]
-          if (clickedVertex.object.owner == 0 || clickedVertex.object.owner < 0) {
-              const i = clickedVertex.object.coords[0]
-              const j = clickedVertex.object.coords[1]
-              const k = clickedVertex.object.coords[2]
-              if (this.gameGrid[i][j][k] < 0) {
-                  if (this.gamePaused) {
-                    this.gameGrid[i][j][k] = 0
-                  }
-                  this.gamePaused = false
-                  clickedVertex.object.opacity = 0.95
-              } else if (this.gameGrid[i][j][k] == 0 && !this.gamePaused) {
-                this.gameGrid[i][j][k] = -1 * this.playerTurn
-                this.gamePaused = true
-                clickedVertex.object.opacity = 0.3
-              } else {
-                this.gamePaused = true
-              }
+          this.clickedVertex = intersects[0]
+          const i = this.clickedVertex.object.coords[0]
+          const j = this.clickedVertex.object.coords[1]
+          const k = this.clickedVertex.object.coords[2]
+          console.log('pre', this.gameGrid[i][j][k], this.gamePaused)
+          if (!this.gamePaused) {
+            if (this.gameGrid[i][j][k] < 0) { //Already Highlighted by licked
+              console.log('set to owned')
+              this.gamePaused = true
+            } 
+          } else {
+            console.log('toggle', this.gameGrid[i][j][k])
+            if (this.gameGrid[i][j][k] < 0) { //Already owned
+              this.gameGrid[i][j][k] == 0
+              this.gamePaused = false
+            } else if (this.gameGrid[i][j][k] == 0) {
+              console.log('made it')
+              this.gameGrid[i][j][k] == -1 * this.playerTurn
+              this.gamePaused = false
+              const x = this.lastClickedVertex.object.coords[0]
+              const y = this.lastClickedVertex.object.coords[1]
+              const z = this.lastClickedVertex.object.coords[2]
+              this.gameGrid[x][y][z] = 0
             }
+          }
+        
       }
+      this.lastClickedVertex = this.clickedVertex
       this.updateGridRender()
-      this.connectMoves()
+      this.connectMoves(false)
       this.socket.emit("updateGameGrid",this.gameGrid)
     },
     updateGridRender: function() {
@@ -288,81 +354,60 @@ export default {
               thisVertex.material = this.player2Material
               thisVertex.geometry = this.playedGeometry
             } else if (gameGridOwner == -1) {
-              thisVertex.material = this.hightlightMaterial
+              thisVertex.material = this.player1HightlightMaterial
               thisVertex.geometry = this.playedGeometry
             } else if (gameGridOwner == -2 ) {
-              console.log('ad')
-              thisVertex.material = this.hightlightMaterial
+              thisVertex.material = this.player2HightlightMaterial
               thisVertex.geometry = this.playedGeometry
             }
           }
       }    
     },
     connectMoves: function() {
-      let prevGridOwner = 0
-      let gameGridOwner = 0
-      let prevGridPoint = [0,0,0]
-      let istemp = false
+      
       for (let i in gameWinners) {
-        for (let j in gameWinners[i]) {
-          const x = gameWinners[i][j][0]
-          const y = gameWinners[i][j][1]
-          const z = gameWinners[i][j][2]
-          gameGridOwner = this.gameGrid[x][y][z]
-          if (gameGridOwner < 0) {
-            gameGridOwner = -1 * gameGridOwner
-            istemp = true
+        let j = 0
+        //let istemp = false
+        for (j; j < 3; j++) {
+          const x1 = gameWinners[i][j][0]
+          const y1 = gameWinners[i][j][1]
+          const z1 = gameWinners[i][j][2]
+          const x2 = gameWinners[i][j + 1][0]
+          const y2 = gameWinners[i][j + 1][1]
+          const z2 = gameWinners[i][j + 1][2]
+          let gameGridOwner1 = this.gameGrid[x1][y1][z1]
+          let gameGridOwner2 = this.gameGrid[x2][y2][z2]
+          const lineId = 's'+ x1.toString()+  y1.toString() + z1.toString()+'e'+ x2.toString()+  y2.toString() + z2.toString()
+          if (Math.abs(gameGridOwner1) == Math.abs(gameGridOwner2)) {
+            if (gameGridOwner1 < 0 || gameGridOwner2 < 0) {
+                this.allPaths[lineId].visible = true
+            } else if (gameGridOwner1 > 0 || gameGridOwner2 > 0) {
+                this.allPaths[lineId].visible = true
+            }  
           } else {
-            istemp = false
-          }
-          if (prevGridOwner == gameGridOwner && gameGridOwner > 0) {
-                const start =  new Three.Vector3(
-                  prevGridPoint[0] * this.intvl - 0.5 * this.intvl,
-                  prevGridPoint[1] * this.intvl - 0.5 * this.intvl,
-                  prevGridPoint[2] * this.intvl - 0.5 * this.intvl
-              )
-                const end = new Three.Vector3(
-                  x * this.intvl - 0.5 * this.intvl,
-                  y * this.intvl - 0.5 * this.intvl,
-                  z * this.intvl - 0.5 * this.intvl
-              )
-              const path = new Three.LineCurve3(start, end);
-              this.highlightTubeGeometry = new Three.TubeGeometry(path, 20, this.tubeRadius * 1.2, 10, false);
-              let material = {}
-              if (istemp) {
-                material = this.hightlightMaterial
-                if (gameGridOwner == 1 ) {
-                  material.color.r = 1
-                  material.color.b = 0
-                } else {
-                  material.color.r = 0
-                  material.color.b = 1
-                }
-              } else {
-                material = this.playedLineMaterial
-                if (gameGridOwner == 1 ) {
-                  material.color.r = 1
-                  material.color.b = 0
-                } else {
-                  material.color.r = 0
-                  material.color.b = 1
-                }
-                0.2158605001032441
-              }
-              console.log(material)
-              
-              
-              const tempHighlight = new Three.Mesh(this.highlightTubeGeometry, material);
-              if (istemp) {
-                this.tempHighlights.push(tempHighlight)
-              }
-              
-              this.scene.add(tempHighlight)
-          }
-          prevGridOwner =  this.gameGrid[x][y][z]
-          prevGridPoint = [x, y, z]
-        }
-      }
+                this.allPaths[lineId].visible = false
+            }
+        } 
+      
+    }
+    },
+    makeConnectingTube: function(tubeGeometry) {  
+      let tube = {}
+      if (this.playerTurn == 1) {
+        tube = new Three.Mesh(tubeGeometry, this.player1HightlightMaterial)
+      } else if (this.playerTurn == 2) {
+        tube = new Three.Mesh(tubeGeometry, this.player2HightlightMaterial)
+      } 
+      return tube
+    },
+    makeThreeVector: function(x, y, z) {  
+      //let vector = {}
+      const vector = new Three.Vector3(
+          x * this.intvl - 0.5 * this.intvl,
+          y * this.intvl - 0.5 * this.intvl,
+          z * this.intvl - 0.5 * this.intvl
+      )
+      return vector
     },
     findIntersects: function(evt) {     
       if (this.mouseDown) {
@@ -378,6 +423,19 @@ export default {
       raycaster.setFromCamera( pointer, this.camera );     
       intersects = raycaster.intersectObjects(this.board.children)
       return intersects
+    },
+    getTempRange: function(position) {
+      let range = []
+      if (position == -1 ) {
+        range = [-1, 0]
+      } else if (position == 0 ) {
+        range = [-1, 1]
+      } else if (position == 1 ) {
+        range = [0, 2]
+      } else if (position == 2 ) {
+        range = [1, 2]
+      }
+      return range
     },
     // Game Play Utilities
     // Socket

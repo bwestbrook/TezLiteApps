@@ -47,8 +47,8 @@ export default {
   },
   created() {   
      
-      //this.socket = io('localhost:3000')
-      this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
+      this.socket = io('localhost:3000')
+      //this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
       this.tezos = Tezos
       this.getWallet()
   },
@@ -98,10 +98,8 @@ export default {
     },
     async onResize() {
         this.socket.emit("resizeGame", window.innerWidth)
-    }
-    
-  }
-          
+    } 
+  }        
 }
 </script>
 
