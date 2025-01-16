@@ -277,6 +277,9 @@ export default {
     },
     makeMove: function(evt) {  
       const intersects = this.findIntersects(evt)
+      if (intersects.length == 0) {
+        return
+      }
       if (intersects.length > 0) {
           this.clickedVertex = intersects[0]
           const i = this.clickedVertex.object.coords[0]
@@ -284,6 +287,7 @@ export default {
           const k = this.clickedVertex.object.coords[2]
           if (!this.gamePaused) {
             if (this.gameGrid[i][j][k] == 0) { //Not owned
+              console.log(this.clickedVertex)
               this.socket.emit("updatePlayedPoint", this.clickedVertex.object.coords)
               this.gameGrid[i][j][k] = -1 * this.playerTurn
               this.gamePaused = true
