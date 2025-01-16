@@ -46,9 +46,12 @@ let addressesInGame = []
 // Socket.io
 const messages = []
 io.on('connection', (socket) => {
+
+    console.log("user " + socket.id + " connected");
+    io.emit("socketId", socket.id)
+
     // Game Play
     socket.on("initGameGrid", function(gameId) {
-      console.log('recieved', socket.id)
       gameData.gameBalance = 0
       usersInGame = []  
       addressesInGame = []
@@ -85,7 +88,7 @@ io.on('connection', (socket) => {
   socket.on("resizeGame", function(width, socketId) {
     console.log('resize request', socketId, socket.id)
     if (socketId == socket.id ) {
-      io.emit("resizeGame", width)
+      io.emit("resizeGame", width, socketId)
     }
   });
 
@@ -106,20 +109,17 @@ io.on('connection', (socket) => {
 
   socket.on("connect", function() {
     console.log("user " + socket.id + " connected");
-    idx = connectedUsers.length
-    connectedUsers[idx] = (socket.id)
-    io.emit("connectedUsers", connectedUsers)
+    console.log('seding socketId')
+    io.emit("socketId", socket.id)
+  });
+
+  socket.on("reconnect", function() {
+    console.log("user " + socket.id + " connected");
+    console.log('seding socketId')
+    io.emit("socketId", socket.id)
   });
   socket.on("disconnect", function() {
-    let n = 0;
-    for (n; n < connectedUsers.length; n++ ){
-      const thisUser = connectedUsers[n]
-      if (thisUser == socket.id) {
-        connectedUsers.pop(n)
-      }
-    }
-    console.log("user " + socket.id + " disconnected");
-    io.emit("connectedUsers", connectedUsers)
+    console.log("user333 " + socket.id + " disconnected");
   });
 });
   

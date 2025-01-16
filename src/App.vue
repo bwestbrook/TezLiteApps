@@ -1,18 +1,3 @@
-<template>
-  <div class="body">
-      <mainBody class="centerMiddle"
-          :wallet="wallet"
-          :walletAddress="walletAddress"
-          :socket="socket"
-          :tezos="tezos"
-          :windowWidth="windowWidth"
-          :windowHeight="windowHeight"
-      />
-  </div>
-  
-</template>
-
-
 <script >
 
 import { BeaconEvent } from "@airgap/beacon-sdk";
@@ -42,7 +27,9 @@ export default {
       wallet: this.wallet,
       tezos: this.tezos,
       walletAddress: this.walletAddress,
-      socket: this.socket
+      socket: this.socket,
+      user: '',
+      gameSize: 500
     }
   },
   created() { 
@@ -50,11 +37,21 @@ export default {
       this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
       this.tezos = Tezos
       this.getWallet()
+      //console.log(this.socket['id'])
+      this.socket.on('socketId', (socketId) => {
+            //
+            console.log('back from server')
+            this.user = socketId
+            console.log(this.user)
+        })
+      
   },
   mounted() {
+      console.log(this.user, this.socket.id)
       window.addEventListener('resize', () =>{
         this.onResize()
       })
+      
     },
   methods: {
     async getWallet() {
@@ -95,11 +92,31 @@ export default {
         await this.tezos.wallet.transfer({amount:amount, to:'tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w'}).send()
     },
     async onResize() {
-        this.socket.emit("resizeGame", window.innerWidth, this.socket.id)
+        console.log(this.user, this.socket.id)
+        this.windowWidth = window.innerWidth
+        //this.socket.emit("resizeGame", window.innerWidth, this.socket.id)
     } 
   }        
 }
 </script>
+
+<template>
+  <div class="body">
+      <mainBody class="centerMiddle"
+          :wallet="wallet"
+          :walletAddress="walletAddress"
+          :socket="socket"
+          :tezos="tezos"
+          :gameSize="gameSize"
+          :windowWidth="windowWidth"
+          :windowHeight="windowHeight"
+      />
+  </div>
+  
+</template>
+
+
+
 
 <style>
 #app {
@@ -112,8 +129,6 @@ export default {
 body, html{
   background-color: #000000;
   margin:0px;
-  overflow-x: hidden;
-  overflow-y: hidden;
   padding: 0.8em 0;
 }
 .centerMiddle{

@@ -155,10 +155,15 @@ export default {
       this.updateGridRender()
       this.connectMoves(false)
     });
-    this.socket.on('resizeGame', (width) => {
-      //
-      //
-      this.resizeGameRender(width)
+    this.socket.on('resizeGame', (width, socketId) => {
+      console.log(this.gameSize)
+
+      console.log(this.user == socketId)
+      if (!this.user) {
+        //console.log(this.user)
+        this.resizeGameRender(width)
+      }
+     
     });
   },
   methods: {
