@@ -284,7 +284,7 @@ export default {
           const k = this.clickedVertex.object.coords[2]
           if (!this.gamePaused) {
             if (this.gameGrid[i][j][k] == 0) { //Not owned
-              //this.socket.emit("updatePlayedPoint", this.clickedVertex.object.coords)
+              this.socket.emit("updatePlayedPoint", this.clickedVertex.object.coords)
               this.gameGrid[i][j][k] = -1 * this.playerTurn
               this.gamePaused = true
             } 
