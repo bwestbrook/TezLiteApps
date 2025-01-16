@@ -52,7 +52,6 @@ export default {
   display: flex;
   flex-direction: column;
   margin: auto;
-  box-shadow: inset 0 0 1px rgba(228, 223, 223, 0.5) 
 }
 .centerBody{
   display: flex;
@@ -60,7 +59,7 @@ export default {
   flex-direction: column;
   border-width: 2px;
   border-color: #fff;
-  box-shadow: inset 0 0 1px rgba(200, 189, 189, 0.5) 
+
 }
 .rules {
   align-content: stretch;

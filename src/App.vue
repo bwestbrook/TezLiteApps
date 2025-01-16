@@ -110,16 +110,13 @@ export default {
   margin:0px;
   padding:0px
 }
-* { 
-  box-shadow: inset 0 0 1px rgba(0,0,0,.5) 
-}
 body, html{
-  margin:20px;
+  margin:0px;
   overflow-x: hidden;
+  overflow-y: hidden;
   padding: 0.8em 0;
 }
 .centerMiddle{
-  box-shadow: inset 0 0 1px rgba(255, 255, 255, 0.5);
   margin:20px;
   overflow-x: hidden;
   padding: 10px;
