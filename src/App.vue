@@ -107,15 +107,17 @@ export default {
   text-align: center;
   color: #000000;
   background-color: #000000;
-  background-size: 100% 100%;
-  overflow-x: hidden;
   margin:0px;
   padding:0px
 }
-body{
-  width: 100%;  
+body, html{
+  width: 100vw;
+  background-size: 100% 100%;
+  overflow-x: hidden;
   margin:0px;
-  padding:0px
+  padding:0px;
+  overflow-x: hidden;
+  padding: 0.8em 0;
 }
 .centerMiddle{
   width: 65%;  
