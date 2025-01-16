@@ -311,15 +311,7 @@ export default {
             if (this.gameGrid[i][j][k] < 0) { //Already owned
               this.gameGrid[i][j][k] == 0
               this.gamePaused = false
-            } else if (this.gameGrid[i][j][k] == 0) {
-              console.log('made it')
-              this.gameGrid[i][j][k] == -1 * this.playerTurn
-              this.gamePaused = false
-              const x = this.lastClickedVertex.object.coords[0]
-              const y = this.lastClickedVertex.object.coords[1]
-              const z = this.lastClickedVertex.object.coords[2]
-              this.gameGrid[x][y][z] = 0
-            }
+            } 
           }
         
       }
