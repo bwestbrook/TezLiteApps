@@ -256,8 +256,12 @@ export default {
         this.lastMousedVertex = intersects[0]
         this.lastMousedVertex.object.material = this.highlightMaterial
         this.lastMousedVertex.object.geometry = this.highlightGeometry  
-      } else {
-          let i = -1
+      } 
+      this.redoGrid()
+      this.connectMoves()
+    },
+    redoGrid: function(){
+      let i = -1
           for (i; i < 3; i++) {
               let j = -1
               for (j; j < 3; j++) {
@@ -269,10 +273,7 @@ export default {
                     }
               }
             }
-          }
-   
-
-      this.connectMoves()
+          
     },
     makeMove: function(evt) {  
       const intersects = this.findIntersects(evt)
@@ -300,9 +301,10 @@ export default {
       }
       this.lastClickedVertex = this.clickedVertex
       this.playedPoint = this.lastClickedVertex.object.coords
-      this.updateGridRender()
-      this.connectMoves(false)
       this.socket.emit("updateGameGrid",this.gameGrid) 
+      this.connectMoves(false)
+      this.updateGridRender()
+
     },
     updateGridRender: function() {
       if (!this.gameGrid) {
