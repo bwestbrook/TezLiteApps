@@ -72,16 +72,23 @@ io.on('connection', (socket) => {
     console.log('emitting GGG')
     io.emit("gameGrid", gameGrid, gameId)
   });
+
+  socket.on("updatePlayedPoint", function(playedPoint) {
+    console.log('server sees UPP', playedPoint)
+    io.emit("playedPoint", playedPoint)
+  });
   
   socket.on("newGameGrid", function(gameGrid, gameId) {
-    console.log('NGG')
     io.emit("gameGrid", gameGrid, gameId)
   });
 
-  socket.on("resizeGame", function(width) {
-    console.log('rs')
-    io.emit("resizeGame", width)
+  socket.on("resizeGame", function(width, socketId) {
+    console.log('resize request', socketId, socket.id)
+    if (socketId == socket.id ) {
+      io.emit("resizeGame", width)
+    }
   });
+
   // Contract
   socket.on("updateGames", function(address) {
     console.log('updateGames')
@@ -95,7 +102,6 @@ io.on('connection', (socket) => {
     userId[socket.id] = address
     //userId.socketId = socket.id
     connectedUsers[idx] = userId
-    console.log(connectedUsers)
     });
 
   socket.on("connect", function() {

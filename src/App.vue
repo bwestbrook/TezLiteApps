@@ -45,10 +45,16 @@ export default {
       socket: this.socket
     }
   },
+<<<<<<< HEAD
   created() {   
      
       this.socket = io('localhost:3000')
       //this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
+=======
+  created() { 
+      //this.socket = io('localhost:3000')
+      this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
+>>>>>>> c3ffde03d4f371a4bc7b0622b2a278d2f8e5a6e8
       this.tezos = Tezos
       this.getWallet()
   },
@@ -67,8 +73,7 @@ export default {
             }
           })           
           wallet.client.subscribeToEvent(BeaconEvent.ACTIVE_ACCOUNT_SET, (account) => {
-              this.brodcastWallet(account)
-              console.log('broadcast', account.address, this.socket)   
+              this.brodcastWallet(account)  
               this.socket.emit("walletConnection", account.address)  
               this.socket.emit("updateGames", account)                
           })
@@ -97,11 +102,9 @@ export default {
         await this.tezos.wallet.transfer({amount:amount, to:'tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w'}).send()
     },
     async onResize() {
-        this.socket.emit("resizeGame", window.innerWidth)
-    }
-    
-  }
-          
+        this.socket.emit("resizeGame", window.innerWidth, this.socket.id)
+    } 
+  }        
 }
 </script>
 
@@ -113,12 +116,16 @@ export default {
   margin:0px;
   padding:0px
 }
-body{
+body, html{
+  background-color: #000000;
   margin:0px;
-  padding:0px
+  overflow-x: hidden;
+  overflow-y: hidden;
+  padding: 0.8em 0;
 }
 .centerMiddle{
-  width: 65%;  
-  padding:0px
+  margin:20px;
+  overflow-x: hidden;
+  padding: 10px;
 }
 </style>

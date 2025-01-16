@@ -13,8 +13,9 @@
           :socket="socket"
       />
       <div class="rules">
+        Load a Game!  When you click on a move, click again to search for anther move, when you are ready with you move submit it to the blockchain!
       </div>
-      <div>aaaaaaaaa</div>
+      
     </div>
   </div>
 </template>
@@ -59,6 +60,7 @@ export default {
   flex-direction: column;
   border-width: 2px;
   border-color: #fff;
+
 }
 .rules {
   align-content: stretch;
