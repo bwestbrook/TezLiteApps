@@ -157,7 +157,6 @@ export default {
       this.gamePaused = false
       this.gameGrid = gameGrid
       this.updateGridRender()
-      console.log('CM', this.gameGrid)
       this.connectMoves(false)
     });
     this.socket.on('resizeGame', (width) => {
@@ -300,20 +299,16 @@ export default {
           const i = this.clickedVertex.object.coords[0]
           const j = this.clickedVertex.object.coords[1]
           const k = this.clickedVertex.object.coords[2]
-          console.log('pre', this.gameGrid[i][j][k], this.gamePaused)
           if (!this.gamePaused) {
             if (this.gameGrid[i][j][k] < 0) { //Already Highlighted by licked
-              console.log('set to owned')
               this.gamePaused = true
             } 
           } else {
-            console.log('toggle', this.gameGrid[i][j][k])
             if (this.gameGrid[i][j][k] < 0) { //Already owned
               this.gameGrid[i][j][k] == 0
               this.gamePaused = false
             } 
           }
-        
       }
       this.lastClickedVertex = this.clickedVertex
       this.updateGridRender()

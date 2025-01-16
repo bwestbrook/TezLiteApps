@@ -67,8 +67,7 @@ export default {
             }
           })           
           wallet.client.subscribeToEvent(BeaconEvent.ACTIVE_ACCOUNT_SET, (account) => {
-              this.brodcastWallet(account)
-              console.log('broadcast', account.address, this.socket)   
+              this.brodcastWallet(account)  
               this.socket.emit("walletConnection", account.address)  
               this.socket.emit("updateGames", account)                
           })
@@ -108,10 +107,13 @@ export default {
   text-align: center;
   color: #000000;
   background-color: #000000;
+  background-size: 100% 100%;
+  overflow-x: hidden;
   margin:0px;
   padding:0px
 }
 body{
+  width: 100%;  
   margin:0px;
   padding:0px
 }
