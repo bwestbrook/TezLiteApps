@@ -19,6 +19,7 @@ export default {
             pendingGame: 'NO GAME',
             playerTurn: 'NA',
             playersInGame: '',
+            pointToPlay: 'XXX',
             activeGames: [],
             pendingGames: [],
             pendingGamesOthers: []
@@ -35,6 +36,12 @@ export default {
             //
             console.log('CUs', connectedUsers, socketId)
         });
+        this.socket.on('playedPoint', (playedPoint) => {
+            //
+            console.log('Upp', playedPoint)
+            //this.pointToPlay = playedPoint[0].toString() + playedPoint[1].toString() + playedPoint[2].toString()
+            this.pointToPlay = playedPoint
+        })
     },
     methods: {
         //Wallet Control
@@ -244,7 +251,7 @@ export default {
             Join Game {{ pendingGame }}
         </div>
         <div class="actionButton" @click="submitMoveBC"> 
-            Submit Move
+            Submit Move {{ pointToPlay }}
         </div>
         <div class="actionButton" @click="toggleWallet">
                 {{walletAddress}} 

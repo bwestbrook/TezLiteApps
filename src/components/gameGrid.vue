@@ -81,9 +81,6 @@ let gameWinners = [[[-1, -1, -1], [0, 0, 0], [1, 1, 1], [2, 2, 2]],
  [[2, 2, -1], [2, 2, 0], [2, 2, 1], [2, 2, 2]]]
 
 
-
-
-
 export default {
   name: 'gameGrid',
   data() {
@@ -96,6 +93,7 @@ export default {
       clickY: 0,
       cameraX: 0,
       cameraY: 0,
+      playedPoint: [0, 0, 0],
       moveMade: false,
       playerColor: 'red',
       playerTurn: 2, 
@@ -112,7 +110,7 @@ export default {
 
   created () {
     this.intvl = 0.5
-    this.gameSize = this.windowWidth * 0.6
+    this.gameSize = this.windowWidth * 0.9
     this.board = new Three.Group()
     // Geometry
     this.defaultGeometry = new Three.SphereGeometry(0.06, 32, 16)
@@ -138,15 +136,14 @@ export default {
     this.renderer.setSize(this.gameSize, this.gameSize)
     //Camera
     this.camera = new Three.PerspectiveCamera(45, 1, 1, 5000);
-    this.camera.position.x = 3;
-    this.camera.position.y = 1;
-    this.camera.position.z = 3;
+    this.camera.position.x = 2.5;
+    this.camera.position.y = 0;
+    this.camera.position.z = 2.5;
     this.camera.lookAt(this.scene.position)
   },
   mounted() {
     this.buildBoard()
     this.socket.emit("initGameGrid", 0)
-    
     this.$refs.container.appendChild(this.renderer.domElement);
     this.renderer.render(this.scene, this.camera);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -213,16 +210,8 @@ export default {
     },
     addWinningLines: function() {    
       for (let i in gameWinners) {
-          const start =  new Three.Vector3(
-                  gameWinners[i][0][0] * this.intvl - 0.5 * this.intvl,
-                  gameWinners[i][0][1] * this.intvl - 0.5 * this.intvl,
-                  gameWinners[i][0][2] * this.intvl - 0.5 * this.intvl
-              )
-                const end = new Three.Vector3(
-                  gameWinners[i][3][0] * this.intvl - 0.5 * this.intvl,
-                  gameWinners[i][3][1] * this.intvl - 0.5 * this.intvl,
-                  gameWinners[i][3][2]* this.intvl - 0.5 * this.intvl
-              )
+          const start = this.makeThreeVector(gameWinners[i][0][0], gameWinners[i][0][1], gameWinners[i][0][2])
+          const end = this.makeThreeVector(gameWinners[i][3][0], gameWinners[i][3][1], gameWinners[i][3][2])
           const path = new Three.LineCurve3(start, end);
           const tubeGeometry = new Three.TubeGeometry(path, 20, this.tubeRadius, 10, false);
           const line = new Three.Mesh(tubeGeometry, this.defaultLineMaterial)
@@ -232,7 +221,6 @@ export default {
     createConnectionLinks: function() {
       for (let i in gameWinners) {
         let j = 0
-        //let istemp = false
         for (j; j < 3; j++) {
           const x1 = gameWinners[i][j][0]
           const y1 = gameWinners[i][j][1]
@@ -256,7 +244,6 @@ export default {
       
     },
     highlightMove: function(evt) {
-      this.connectMoves()
       if (!this.gameGrid) {
         return
       }
@@ -265,6 +252,7 @@ export default {
       }
       const intersects = this.findIntersects(evt)
       this.updateGridRender()
+      this.connectMoves()
       if (intersects.length > 0) {
         this.lastMousedVertex = intersects[0]
         if (this.lastMousedVertex.object.owner == 0) {
@@ -301,19 +289,28 @@ export default {
           const k = this.clickedVertex.object.coords[2]
           if (!this.gamePaused) {
             if (this.gameGrid[i][j][k] < 0) { //Already Highlighted by licked
+              this.socket.emit("updatePlayedPoint", this.clickedVertex.object.coords)
               this.gamePaused = true
+              
             } 
           } else {
             if (this.gameGrid[i][j][k] < 0) { //Already owned
+              this.gameGrid[i][j][k] == 0
+              this.gamePaused = false
+            } else if (this.gameGrid[i][j][k] == this.playerTurn) { //Already owned
               this.gameGrid[i][j][k] == 0
               this.gamePaused = false
             } 
           }
       }
       this.lastClickedVertex = this.clickedVertex
+      this.playedPoint = this.lastClickedVertex.object.coords
       this.updateGridRender()
       this.connectMoves(false)
       this.socket.emit("updateGameGrid",this.gameGrid)
+      console.log('emit', this.playedPoint)
+      
+      
     },
     updateGridRender: function() {
       if (!this.gameGrid) {
@@ -334,24 +331,17 @@ export default {
             if (gameGridOwner == 0) {
               thisVertex.material = this.defaultMaterial
               thisVertex.geometry = this.defaultGeometry
-            } else if (gameGridOwner == 1) {
+            } else if (Math.abs(gameGridOwner) == 1) {
               thisVertex.material = this.player1Material
               thisVertex.geometry = this.playedGeometry
-            } else if (gameGridOwner == 2 ) {
+            } else if (Math.abs(gameGridOwner) == 2 ) {
               thisVertex.material = this.player2Material
               thisVertex.geometry = this.playedGeometry
-            } else if (gameGridOwner == -1) {
-              thisVertex.material = this.player1HightlightMaterial
-              thisVertex.geometry = this.playedGeometry
-            } else if (gameGridOwner == -2 ) {
-              thisVertex.material = this.player2HightlightMaterial
-              thisVertex.geometry = this.playedGeometry
-            }
+            } 
           }
-      }    
+        }    
     },
     connectMoves: function() {
-      
       for (let i in gameWinners) {
         let j = 0
         //let istemp = false
@@ -375,7 +365,6 @@ export default {
                 this.allPaths[lineId].visible = false
             }
         } 
-      
     }
     },
     makeConnectingTube: function(tubeGeometry) {  

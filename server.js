@@ -72,16 +72,20 @@ io.on('connection', (socket) => {
     console.log('emitting GGG')
     io.emit("gameGrid", gameGrid, gameId)
   });
+
+  socket.on("updatePlayedPoint", function(playedPoint) {
+    console.log('server sees UPP', playedPoint)
+    io.emit("playedPoint", playedPoint)
+  });
   
   socket.on("newGameGrid", function(gameGrid, gameId) {
-    console.log('NGG')
     io.emit("gameGrid", gameGrid, gameId)
   });
 
   socket.on("resizeGame", function(width) {
-    console.log('rs')
     io.emit("resizeGame", width)
   });
+
   // Contract
   socket.on("updateGames", function(address) {
     console.log('updateGames')
