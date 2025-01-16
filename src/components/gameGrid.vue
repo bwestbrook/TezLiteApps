@@ -178,7 +178,6 @@ export default {
     },
     checkClickUp: function(evt) {
       this.highlightMove(evt)
-      console.log('clickup')
       this.rotate = false
     },
     submitMove: function() {
@@ -251,14 +250,12 @@ export default {
       if (this.gamePaused) {
         return
       }
-      console.log('HM')
       this.updateGridRender()
       const intersects = this.findIntersects(evt)
       if (intersects.length > 0) {
         this.lastMousedVertex = intersects[0]
         this.lastMousedVertex.object.material = this.highlightMaterial
-        this.lastMousedVertex.object.geometry = this.highlightGeometry
-        console.log('i found')
+        this.lastMousedVertex.object.geometry = this.highlightGeometry  
       } else {
           let i = -1
           for (i; i < 3; i++) {
@@ -273,7 +270,7 @@ export default {
               }
             }
           }
-
+   
 
       this.connectMoves()
     },
@@ -284,20 +281,16 @@ export default {
           const i = this.clickedVertex.object.coords[0]
           const j = this.clickedVertex.object.coords[1]
           const k = this.clickedVertex.object.coords[2]
-          console.log(this.gamePaused)
           if (!this.gamePaused) {
             if (this.gameGrid[i][j][k] == 0) { //Not owned
               //this.socket.emit("updatePlayedPoint", this.clickedVertex.object.coords)
               this.gameGrid[i][j][k] = -1 * this.playerTurn
               this.gamePaused = true
-              console.log('pause')
             } 
           } else {
-              console.log(this.gameGrid[i][j][k] )
               if (this.gameGrid[i][j][k] < 0) { //Already owned
                 //this.gameGrid[i][j][k] == 0
                 this.gamePaused = false
-                console.log('upause', evt)
                 this.highlightMove(evt)
               } else if (this.gameGrid[i][j][k] == this.playerTurn) { //Already owned
                 this.gameGrid[i][j][k] == 0
