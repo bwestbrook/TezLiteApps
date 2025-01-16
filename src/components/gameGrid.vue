@@ -114,7 +114,6 @@ export default {
     this.board = new Three.Group()
     // Geometry
     this.defaultGeometry = new Three.SphereGeometry(0.06, 32, 16)
-
     this.highlightGeometry = this.defaultGeometry
     this.playedGeometry = this.defaultGeometry
     // Materials
@@ -177,7 +176,9 @@ export default {
       this.playX = evt.x
       this.playY = evt.y   
     },
-    checkClickUp: function() {
+    checkClickUp: function(evt) {
+      this.highlightMove(evt)
+      console.log('clickup')
       this.rotate = false
     },
     submitMove: function() {
@@ -250,21 +251,15 @@ export default {
       if (this.gamePaused) {
         return
       }
-      const intersects = this.findIntersects(evt)
+      console.log('HM')
       this.updateGridRender()
-      this.connectMoves()
+      const intersects = this.findIntersects(evt)
       if (intersects.length > 0) {
         this.lastMousedVertex = intersects[0]
-        if (this.lastMousedVertex.object.owner == 0) {
-          this.lastMousedVertex.object.material = this.highlightMaterial
-          this.lastMousedVertex.object.geometry = this.highlightGeometry
-          const i = this.lastMousedVertex.object.coords[0]
-          const j = this.lastMousedVertex.object.coords[1]
-          const k = this.lastMousedVertex.object.coords[2]
-          this.gameGrid[i][j][k] = -1 * this.playerTurn         
-        } 
+        this.lastMousedVertex.object.material = this.highlightMaterial
+        this.lastMousedVertex.object.geometry = this.highlightGeometry
+        console.log('i found')
       } else {
-        if (!this.gamePaused){
           let i = -1
           for (i; i < 3; i++) {
               let j = -1
@@ -278,7 +273,9 @@ export default {
               }
             }
           }
-        }
+
+
+      this.connectMoves()
     },
     makeMove: function(evt) {  
       const intersects = this.findIntersects(evt)
@@ -287,30 +284,32 @@ export default {
           const i = this.clickedVertex.object.coords[0]
           const j = this.clickedVertex.object.coords[1]
           const k = this.clickedVertex.object.coords[2]
+          console.log(this.gamePaused)
           if (!this.gamePaused) {
-            if (this.gameGrid[i][j][k] < 0) { //Already Highlighted by licked
-              this.socket.emit("updatePlayedPoint", this.clickedVertex.object.coords)
+            if (this.gameGrid[i][j][k] == 0) { //Not owned
+              //this.socket.emit("updatePlayedPoint", this.clickedVertex.object.coords)
+              this.gameGrid[i][j][k] = -1 * this.playerTurn
               this.gamePaused = true
-              
+              console.log('pause')
             } 
           } else {
-            if (this.gameGrid[i][j][k] < 0) { //Already owned
-              this.gameGrid[i][j][k] == 0
-              this.gamePaused = false
-            } else if (this.gameGrid[i][j][k] == this.playerTurn) { //Already owned
-              this.gameGrid[i][j][k] == 0
-              this.gamePaused = false
-            } 
-          }
+              console.log(this.gameGrid[i][j][k] )
+              if (this.gameGrid[i][j][k] < 0) { //Already owned
+                //this.gameGrid[i][j][k] == 0
+                this.gamePaused = false
+                console.log('upause', evt)
+                this.highlightMove(evt)
+              } else if (this.gameGrid[i][j][k] == this.playerTurn) { //Already owned
+                this.gameGrid[i][j][k] == 0
+                this.gamePaused = false
+              } 
+            }
       }
       this.lastClickedVertex = this.clickedVertex
       this.playedPoint = this.lastClickedVertex.object.coords
       this.updateGridRender()
       this.connectMoves(false)
-      this.socket.emit("updateGameGrid",this.gameGrid)
-      console.log('emit', this.playedPoint)
-      
-      
+      this.socket.emit("updateGameGrid",this.gameGrid) 
     },
     updateGridRender: function() {
       if (!this.gameGrid) {
@@ -336,6 +335,12 @@ export default {
               thisVertex.geometry = this.playedGeometry
             } else if (Math.abs(gameGridOwner) == 2 ) {
               thisVertex.material = this.player2Material
+              thisVertex.geometry = this.playedGeometry
+            } else if (Math.abs(gameGridOwner) == -1 ) {
+              thisVertex.material = this.player1HightlightMaterial
+              thisVertex.geometry = this.playedGeometry
+            }  else if (Math.abs(gameGridOwner) == -2 ) {
+              thisVertex.material = this.player2HightlightMaterial
               thisVertex.geometry = this.playedGeometry
             } 
           }
