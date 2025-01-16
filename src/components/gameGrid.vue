@@ -113,7 +113,7 @@ export default {
     this.gameSize = this.windowWidth * 0.9
     this.board = new Three.Group()
     // Geometry
-    this.defaultGeometry = new Three.SphereGeometry(0.06, 32, 16)
+    this.defaultGeometry = new Three.SphereGeometry(0.08, 32, 16)
     this.highlightGeometry = this.defaultGeometry
     this.playedGeometry = this.defaultGeometry
     // Materials
@@ -319,6 +319,7 @@ export default {
       for (let thl of this.tempHighlights) {
         thl.visible = false
       }
+      this.connectMoves()
       for (let thisVertex of verticies) {
           if (thisVertex.material != this.defaultLineMaterial) {
             const x = thisVertex.coords[0]
