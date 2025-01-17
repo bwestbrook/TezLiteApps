@@ -186,10 +186,12 @@ export default {
                     return op.confirmation(1).then(() => op.hash);
                 })
                 .then((hash) => {
-                
-                console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
+                console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)}).
+                then((gameId) => {
+                    this.socket.emit("updateGames", gameId)
+                })
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-            this.socket.emit("updateGames", gameId)
+          
             
 
 
