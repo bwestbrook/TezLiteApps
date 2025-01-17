@@ -58,7 +58,7 @@ export default {
             );
         try {
             const sub = this.tezos.stream.subscribeEvent({
-              tag: 'ontractUpdated',
+              tag: 'contractUpdated',
               address: CONTRACT_ADDRESS,
               //excludeFailedOperations: true
             });
