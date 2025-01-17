@@ -66,12 +66,12 @@ export default {
 
           try {
             const sub = this.tezos.stream.subscribeEvent({
-              tag: 'tagName',
+              tag: 'ontractUpdated',
               address: CONTRACT_ADDRESS,
               //excludeFailedOperations: true
             });
 
-            sub.on('data', console.log);
+            sub.on('data', console.log('adfad'));
 
           } catch (e) {
             console.log(e);

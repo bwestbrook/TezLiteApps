@@ -1,4 +1,5 @@
 <script>
+import { PollingSubscribeProvider } from '@taquito/taquito';
 import { RemoteSigner } from '@taquito/remote-signer';
 import { NODE_URL, CONTRACT_ADDRESS } from '../constants'
 import { getGamesFromContract } from '../services/tezos-services.js'
@@ -48,6 +49,25 @@ export default {
             //this.pointToPlay = playedPoint[0].toString() + playedPoint[1].toString() + playedPoint[2].toString()
             this.pointToPlay = playedPoint
         })
+        // Listen to contracts for changes
+        this.tezos.setStreamProvider(
+            this.tezos.getFactory(PollingSubscribeProvider)({
+                shouldObservableSubscriptionRetry: true,
+                pollingIntervalMilliseconds: 1500
+            })
+            );
+        try {
+            const sub = this.tezos.stream.subscribeEvent({
+              tag: 'ontractUpdated',
+              address: CONTRACT_ADDRESS,
+              //excludeFailedOperations: true
+            });
+
+            sub.on('data', console.log);
+
+          } catch (e) {
+            console.log(e);
+          }
     },
     methods: {
         //Wallet Control
