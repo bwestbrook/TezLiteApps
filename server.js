@@ -91,9 +91,9 @@ io.on('connection', (socket) => {
       io.emit("resizeGame", width, socketId)
     }
   });
-  socket.on("updatePlayerTurn", function(playerTurn, walletPlayerTurn1, walletPlayerTurn2) {
-    console.log('updatePlayerTurn')
-    io.emit('updatePlayerTurn', playerTurn, walletPlayerTurn1, walletPlayerTurn2)
+  socket.on("gamePlayable", function(gamePlayabe, playerTurn) {
+    console.log('gamePlayable')
+    io.emit('gamePlayable', gamePlayabe, playerTurn)
     
   });
   // Contract

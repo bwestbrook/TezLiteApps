@@ -96,6 +96,7 @@ export default {
       cameraY: 0,
       playedPoint: [0, 0, 0],
       moveMade: false,
+      gamePlayable: true,
       playerColor: 'red',
       playerTurn: 2,
       walletTurn: 0,
@@ -165,12 +166,9 @@ export default {
         this.resizeGameRender(width)
       }
     });
-    this.socket.on('updatePlayerTurn', (playerTurn, walletPlayerTurn1, walletPlayerTurn2) => {
-      if (!this.user) {
-        this.playerTurn = playerTurn
-        this.walletPlayerTurn1 = walletPlayerTurn1
-        this.walletPlayerTurn2 = walletPlayerTurn2
-      }
+    this.socket.on('gamePlayable', (gamePlayable, playerTurn) => {
+      this.gamePlayable = gamePlayable
+      this.playerTurn = playerTurn
     });
   },
   methods: {
@@ -253,6 +251,9 @@ export default {
       
     },
     highlightMove: function(evt) {
+      if (!this.gamePlayable) {
+        return 
+      }
       if (!this.gameGrid) {
         return
       }
@@ -284,6 +285,9 @@ export default {
           
     },
     makeMove: function(evt) {  
+      if (!this.gamePlayable) {
+        return 
+      }
       const intersects = this.findIntersects(evt)
       if (intersects.length == 0) {
         return

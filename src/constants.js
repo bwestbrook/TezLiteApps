@@ -12,7 +12,9 @@ export const NODE_URL = 'https://ghostnet.smartpy.io/'
 
 //export const NODE_URL = 'https://rpc.tzkt.io/ghostnet' 
 
-export const CONTRACT_ADDRESS = 'KT1BHFYWTKyfErwx491rQ3P4c5MuFEXU2Wja'
+//export const CONTRACT_ADDRESS = 'KT1BHFYWTKyfErwx491rQ3P4c5MuFEXU2Wja' // V.1
+
+export const CONTRACT_ADDRESS = 'KT1N1EXuajYjKcNnWAMeH9TgevPUMH61HGEG'
 
 //export const CONTRACT_ADDRESS = 'KT1BvZ1nhgtEMghqTqqz2UG8rDcjvJrQLomx' // V1.0
 

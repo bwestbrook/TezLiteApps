@@ -27,6 +27,7 @@ export default {
     created() {
         this.socket.emit("updateActiveGame", this.activeGameId)
         this.socket.on("updateGames", (address) => {
+            console.log('reggeting games')
             this.getGamesFromContract(address)
         })
             // Set up socket to receive from server
@@ -75,6 +76,10 @@ export default {
             }      
         },
         async updateLoadedGameStatus(gameId) {
+            const activeAccount = await this.wallet.client.getActiveAccount()   
+            if (!activeAccount) {
+                return
+            }  
             const game = this.gamesObject[gameId]
             this.gameId = game.gameId
             if (game.gameStatus == 0 ) {
@@ -86,11 +91,18 @@ export default {
                 this.gameStatus = 'Active'
                 this.gameId = gameId
                 this.walletPlayerTurn1 = await reduceAddress(game.players[0])
-                this.walletPlayerTurn2 = await reduceAddress(game.players[0])
+                this.walletPlayerTurn2 = await reduceAddress(game.players[1])
                 this.playersInGame = [this.walletPlayerTurn1, this.walletPlayerTurn2]
-                console.log(game)
+                console.log('load')
                 this.playerTurn = game.playerTurn
-                this.socket.emit('updatePlayerTurn', this.playerTurn, this.walletPlayerTurn1, this.walletPlayerTurn2)
+                if (game.players[this.playerTurn - 1] == activeAccount.address) {
+
+                
+                    this.socket.emit('gamePlayable', true, this.playerTurn)
+                } else {
+                    this.socket.emit('gamePlayable', false, this.playerTurn)
+                }
+                
             }
         },
         // Interact with Smart Contract
@@ -113,6 +125,7 @@ export default {
                 })
                 .then((hash) => console.log(`Operation injected: https://ghost.tzstats.com/${hash}`))
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
+            this.socket.emit("updateGames")
         },
         async joinGameBC(gameId) {            
             const activeAccount = await this.wallet.client.getActiveAccount()   
@@ -142,7 +155,8 @@ export default {
             const z = pointToPlay[2] + 2 // shift to BC coords
             let bcPoint = x.toString() +  y.toString() + z.toString()
             console.log(Number(bcPoint))
-            bcPoint = Number(bcPoint)
+            const bcNum = parseInt(bcPoint);
+
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
                 return
@@ -150,19 +164,20 @@ export default {
             const signer = new RemoteSigner(activeAccount.address, NODE_URL )
             await this.tezos.setProvider({signer:signer})
             await this.tezos.setWalletProvider(this.wallet)      
-
             this.tezos.wallet
                 .at(CONTRACT_ADDRESS)
                 .then((contract) => {
-                    return contract.methods.makeMove(this.gameId, 444, activeAccount.address);
+                    return contract.methods.makeMove(this.gameId, bcNum, activeAccount.address).send();
                 })
                 .then((op) => {
-                    console.log(`Waiting for ${op.hash} to be conf3irmed...`);
+                    console.log(`Waiting for ${op.hash} to be confirmed...`);
                     return op.confirmation(1).then(() => op.hash);
                 })
                 .then((hash) => console.log(`Operation injected: https://ghost.tzstats.com/${hash}`))
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
             this.socket.emit("updateGames")
+
+
         },
         // Reading Smart Contract
         async loadGameBC(gameId) {
