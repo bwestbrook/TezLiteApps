@@ -102,6 +102,11 @@ io.on('connection', (socket) => {
     io.emit('updateGames', address)
     
   });
+  socket.on("newContractData", function(address) {
+    console.log('newContractData')
+    //io.emit('updateGames', address)
+    
+  });
   // Wallet
   socket.on("walletConnection", function(address) {
     let userId ={}

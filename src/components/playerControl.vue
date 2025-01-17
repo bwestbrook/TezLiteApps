@@ -13,7 +13,7 @@ export default {
     data () {
         return {
             gamesObject: {},
-            gameId: 'No GAME',
+            gameId: -1,
             gameStatus: 'No Players',
             pendingGame: 'NO GAME',
             playerTurn: 'NA',
@@ -28,25 +28,19 @@ export default {
     created() {
         this.socket.emit("updateActiveGame", this.activeGameId)
         this.socket.on("updateGames", (gameId) => {
-
-            console.log('reggeting games', gameId, 'c')
-            console.log('b')
-           
+            console.log('reggeting games', gameId)
             this.getGamesFromContract()
-            if (gameId > 0) {
+            if (gameId > -1) {
+                console.log('updtLGS', gameId)
                 this.updateLoadedGameStatus(gameId)
             }
           
         })
-            // Set up socket to receive from server
+        // Set up socket to receive from server
         this.socket.on('connectedUsers', (connectedUsers, socketId) => {
-            //
             console.log('CUs', connectedUsers, socketId)
         });
         this.socket.on('playedPoint', (playedPoint) => {
-            //
-            console.log('Upp', playedPoint)
-            //this.pointToPlay = playedPoint[0].toString() + playedPoint[1].toString() + playedPoint[2].toString()
             this.pointToPlay = playedPoint
         })
         // Listen to contracts for changes
@@ -63,8 +57,15 @@ export default {
               //excludeFailedOperations: true
             });
 
-            sub.on('data', console.log);
-
+            sub.on('data', () => {
+                console.log('new Contract data', this.gameId)
+                this.getGamesFromContract()
+               
+                const game = this.gamesObject[this.gameId]
+                this.getGameGridBC(game, this.gameId)
+                this.socket.emit("updateGames", this.gameId)
+                //console.log(data);
+            })
           } catch (e) {
             console.log(e);
           }
@@ -125,7 +126,6 @@ export default {
                 this.walletPlayerTurn1 = await reduceAddress(game.players[0])
                 this.walletPlayerTurn2 = await reduceAddress(game.players[1])
                 this.playersInGame = [this.walletPlayerTurn1, this.walletPlayerTurn2]
-                console.log('load')
                 this.playerTurn = game.playerTurn
                 if (game.players[this.playerTurn - 1] == activeAccount.address) {
 
@@ -157,7 +157,6 @@ export default {
                 })
                 .then((hash) => console.log(`Operation injected: https://ghost.tzstats.com/${hash}`))
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-            this.socket.emit("updateGames", this.gameId)
         },
         async joinGameBC(gameId) {            
             const activeAccount = await this.wallet.client.getActiveAccount()   
@@ -206,15 +205,8 @@ export default {
                     return op.confirmation(1).then(() => op.hash);
                 })
                 .then((hash) => {
-                console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)}).
-                then((gameId) => {
-                    this.socket.emit("updateGames", gameId)
-                })
+                console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-          
-            
-
-
         },
         // Reading Smart Contract
         async loadGameBC(gameId) {
@@ -271,6 +263,7 @@ export default {
                 return
             }   
             const games = await getGamesFromContract()         
+            console.log(games)
             const allGames = await games.values()
             let j = 0;
             for (let game of allGames) {
