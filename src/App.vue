@@ -8,7 +8,7 @@ import io from 'socket.io-client'
 import mainBody from "./components/mainBody.vue"
 import { reduceAddress } from "./utilities";
 import { RemoteSigner } from '@taquito/remote-signer';
-import { NODE_URL} from './constants'
+import { CONTRACT_ADDRESS, NODE_URL} from './constants'
 import { TezosToolkit } from '@taquito/taquito'
 const Tezos = new TezosToolkit(NODE_URL);
 
@@ -32,19 +32,13 @@ export default {
     }
   },
   created() {   
-     
       //this.socket = io('localhost:3000')
       this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
       this.tezos = Tezos
       this.getWallet()
-      //console.log(this.socket['id'])
       this.socket.on('socketId', (socketId) => {
-            //
-            console.log('back from server')
             this.user = socketId
-            console.log(this.user)
-        })
-      
+        }) 
   },
   mounted() {
       console.log(this.user, this.socket.id)
@@ -67,6 +61,8 @@ export default {
               this.socket.emit("walletConnection", account.address)  
               this.socket.emit("updateGames", -1)                
           })
+          const contractAbstraction = await Tezos.contract.at(CONTRACT_ADDRESS);
+          console.log(contractAbstraction);
           this.wallet = wallet
         } else {
           this.wallet = globalWallet
