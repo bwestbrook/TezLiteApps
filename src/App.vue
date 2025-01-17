@@ -12,7 +12,6 @@ import { NODE_URL} from './constants'
 import { TezosToolkit } from '@taquito/taquito'
 const Tezos = new TezosToolkit(NODE_URL);
 
-
 let globalWallet = undefined
 
 export default {
@@ -32,16 +31,10 @@ export default {
       gameSize: 500
     }
   },
-<<<<<<< HEAD
   created() {   
      
       this.socket = io('localhost:3000')
       //this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
-=======
-  created() { 
-      //this.socket = io('localhost:3000')
-      this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
->>>>>>> c3ffde03d4f371a4bc7b0622b2a278d2f8e5a6e8
       this.tezos = Tezos
       this.getWallet()
       //console.log(this.socket['id'])
@@ -123,8 +116,6 @@ export default {
 </template>
 
 
-
-
 <style>
 #app {
   text-align: center;
@@ -136,6 +127,7 @@ export default {
 body, html{
   background-color: #000000;
   margin:0px;
+  overflow-x:hidden;
   padding: 0.8em 0;
 }
 .centerMiddle{

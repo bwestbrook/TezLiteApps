@@ -1,4 +1,5 @@
 <script>
+
 import * as Three from 'three'
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
@@ -96,7 +97,10 @@ export default {
       playedPoint: [0, 0, 0],
       moveMade: false,
       playerColor: 'red',
-      playerTurn: 2, 
+      playerTurn: 2,
+      walletTurn: 0,
+      walletPlayerTurn1: '',
+      walletPlayerTurn2: '',
       gamePaused: false,
       halfTurn: false,
       player1Plays: {},
@@ -110,7 +114,7 @@ export default {
 
   created () {
     this.intvl = 0.5
-    this.gameSize = this.windowWidth * 0.9
+    this.gameSize = this.windowWidth * 0.6
     this.board = new Three.Group()
     // Geometry
     this.defaultGeometry = new Three.SphereGeometry(0.08, 32, 16)
@@ -122,6 +126,7 @@ export default {
     this.player1Material = new Three.MeshMatcapMaterial( {color: 'red',  opacity: 0.95, transparent: true} )
     this.player2Material = new Three.MeshMatcapMaterial( {color: 'blue',  opacity: 0.95, transparent: true} )
     this.defaultLineMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.3, transparent:true});
+    this.winningLineMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.3, transparent:true});
     //this.hightlightMaterial = new Three.MeshMatcapMaterial({color: 'red', opacity: 0.5, transparent: true});
     this.player1HightlightMaterial = new Three.MeshMatcapMaterial({color: 'red', opacity: 0.5, transparent: true});
     this.player2HightlightMaterial = new Three.MeshMatcapMaterial({color: 'blue', opacity: 0.5, transparent: true});
@@ -155,15 +160,17 @@ export default {
       this.updateGridRender()
       this.connectMoves(false)
     });
-    this.socket.on('resizeGame', (width, socketId) => {
-      console.log(this.gameSize)
-
-      console.log(this.user == socketId)
+    this.socket.on('resizeGame', (width) => {
       if (!this.user) {
-        //console.log(this.user)
         this.resizeGameRender(width)
       }
-     
+    });
+    this.socket.on('updatePlayerTurn', (playerTurn, walletPlayerTurn1, walletPlayerTurn2) => {
+      if (!this.user) {
+        this.playerTurn = playerTurn
+        this.walletPlayerTurn1 = walletPlayerTurn1
+        this.walletPlayerTurn2 = walletPlayerTurn2
+      }
     });
   },
   methods: {
@@ -185,12 +192,9 @@ export default {
       this.highlightMove(evt)
       this.rotate = false
     },
-    submitMove: function() {
-      if (this.playerColor === 'red') {
-        this.playerColor = 'blue'
-      } else {
-        this.playerColor = 'red'
-      }
+    //
+    submitMoveBC: function(move) {
+      console.log(move)
     },
     // Game Grid Rendering
     buildBoard: function() {
@@ -240,7 +244,7 @@ export default {
           const tubeGeometry = new Three.TubeGeometry(path, 20, this.tubeRadius * 1.2, 10, false)
           const tube = this.makeConnectingTube(tubeGeometry)
           this.allPaths[lineId] = tube
-          tube.visible = false
+          //tube.visible = false
           tube.start = [x1, y1, z1]
           tube.end = [x2, y2, z2]
           this.scene.add(tube)
@@ -263,7 +267,6 @@ export default {
         this.lastMousedVertex.object.geometry = this.highlightGeometry  
       } 
       this.redoGrid()
-      this.connectMoves()
     },
     redoGrid: function(){
       let i = -1
@@ -292,7 +295,6 @@ export default {
           const k = this.clickedVertex.object.coords[2]
           if (!this.gamePaused) {
             if (this.gameGrid[i][j][k] == 0) { //Not owned
-              console.log(this.clickedVertex)
               this.socket.emit("updatePlayedPoint", this.clickedVertex.object.coords)
               this.gameGrid[i][j][k] = -1 * this.playerTurn
               this.gamePaused = true
@@ -301,9 +303,11 @@ export default {
               if (this.gameGrid[i][j][k] < 0) { //Already owned
                 //this.gameGrid[i][j][k] == 0
                 this.gamePaused = false
+                this.socket.emit("updatePlayedPoint", 'NO MOVE')
                 this.highlightMove(evt)
               } else if (this.gameGrid[i][j][k] == this.playerTurn) { //Already owned
                 this.gameGrid[i][j][k] == 0
+                this.socket.emit("updatePlayedPoint", 'NO MOVE')
                 this.gamePaused = false
               } 
             }
@@ -313,7 +317,6 @@ export default {
       this.socket.emit("updateGameGrid",this.gameGrid) 
       this.connectMoves(false)
       this.updateGridRender()
-
     },
     updateGridRender: function() {
       if (!this.gameGrid) {
@@ -324,7 +327,6 @@ export default {
       for (let thl of this.tempHighlights) {
         thl.visible = false
       }
-      this.connectMoves()
       for (let thisVertex of verticies) {
           if (thisVertex.material != this.defaultLineMaterial) {
             const x = thisVertex.coords[0]
@@ -365,25 +367,49 @@ export default {
           let gameGridOwner1 = this.gameGrid[x1][y1][z1]
           let gameGridOwner2 = this.gameGrid[x2][y2][z2]
           const lineId = 's'+ x1.toString()+  y1.toString() + z1.toString()+'e'+ x2.toString()+  y2.toString() + z2.toString()
-          if (Math.abs(gameGridOwner1) == Math.abs(gameGridOwner2)) {
-            if (gameGridOwner1 < 0 || gameGridOwner2 < 0) {
-                this.allPaths[lineId].visible = true
-            } else if (gameGridOwner1 > 0 || gameGridOwner2 > 0) {
-                this.allPaths[lineId].visible = true
-            }  
-          } else {
-                this.allPaths[lineId].visible = false
-            }
+          const tube = this.allPaths[lineId]
+          let color = 'green'
+          if (Math.abs(gameGridOwner1) == Math.abs(gameGridOwner2)) { // Either both played or one played and one temp so toggle the color
+            if (gameGridOwner1 < 0 || gameGridOwner2 < 0) { // One or both is negative (a temp turn but should only be one in game play)
+                tube.visible = true
+                if (this.playerTurn == 1) {
+                  color ='red'
+                } else if (this.playerTurn == 2) {
+                  color = 'blue'
+                } else {
+                  color = 'green'
+                }
+            } else if (gameGridOwner1 > 0 && gameGridOwner2 > 0) { // Both played
+              tube.visible = true
+              if (gameGridOwner1 == 1) {
+                color ='red'
+              } else if (gameGridOwner1 == 2) {
+                color = 'blue'
+              } else {
+                color = 'green'
+              }
+            } 
+          } 
+          // Toggle color based on logic
+          if (color == 'red') {
+                tube.material.color.r = 1
+                tube.material.color.g = 0
+                tube.material.color.b = 0
+              } else if (color == 'blue') {
+                tube.material.color.r = 0
+                tube.material.color.g = 0
+                tube.material.color.b = 1
+              } else if (color == 'green') {
+                tube.material.color.r = 0
+                tube.material.color.g = 0.25
+                tube.material.color.b = 0
+              }  
         } 
-    }
+      }
     },
-    makeConnectingTube: function(tubeGeometry) {  
-      let tube = {}
-      if (this.playerTurn == 1) {
-        tube = new Three.Mesh(tubeGeometry, this.player1HightlightMaterial)
-      } else if (this.playerTurn == 2) {
-        tube = new Three.Mesh(tubeGeometry, this.player2HightlightMaterial)
-      } 
+    makeConnectingTube: function(tubeGeometry) {
+      const material = new Three.MeshMatcapMaterial({color: 'green', opacity:0.3, transparent:true}); // Must crate a new material instance for each tube
+      const tube = new Three.Mesh(tubeGeometry, material)
       return tube
     },
     makeThreeVector: function(x, y, z) {  
@@ -409,19 +435,6 @@ export default {
       raycaster.setFromCamera( pointer, this.camera );     
       intersects = raycaster.intersectObjects(this.board.children)
       return intersects
-    },
-    getTempRange: function(position) {
-      let range = []
-      if (position == -1 ) {
-        range = [-1, 0]
-      } else if (position == 0 ) {
-        range = [-1, 1]
-      } else if (position == 1 ) {
-        range = [0, 2]
-      } else if (position == 2 ) {
-        range = [1, 2]
-      }
-      return range
     },
     // Game Play Utilities
     // Socket

@@ -7,8 +7,6 @@ import { reduceAddress } from "../utilities";
 export default {
     name: "playerControl",
     emits: [
-        "submitMove",
-        "createGameService"
     ],
     props: ["socket", "wallet", "tezos", "walletAddress"],
     data () {
@@ -86,8 +84,13 @@ export default {
                 this.playerTurn = 'NA'
             } else if (game.gameStatus == 1 ) {
                 this.gameStatus = 'Active'
-                this.playersInGame = [await reduceAddress(game.players[0]), await reduceAddress(game.players[1])]
+                this.gameId = gameId
+                this.walletPlayerTurn1 = await reduceAddress(game.players[0])
+                this.walletPlayerTurn2 = await reduceAddress(game.players[0])
+                this.playersInGame = [this.walletPlayerTurn1, this.walletPlayerTurn2]
+                console.log(game)
                 this.playerTurn = game.playerTurn
+                this.socket.emit('updatePlayerTurn', this.playerTurn, this.walletPlayerTurn1, this.walletPlayerTurn2)
             }
         },
         // Interact with Smart Contract
@@ -119,25 +122,6 @@ export default {
             const signer = new RemoteSigner(activeAccount.address, NODE_URL )
             await this.tezos.setProvider({signer:signer})
             await this.tezos.setWalletProvider(this.wallet)      
-            this.tezos.contract
-                .at(CONTRACT_ADDRESS)
-                .then((contract) => {
-                    return contract.methods.joinGame(gameId, activeAccount.address);
-                })
-                .then((op) => {
-                    console.log(`Estimating the smart contract call: `);
-                    return this.tezos.estimate.contractCall(op);
-                })
-                .then((estimate) => {
-                    console.log(`burnFeeMutez : ${estimate.burnFeeMutez},
-                    gasLimit : ${estimate.gasLimit},
-                    minimalFeeMutez : ${estimate.minimalFeeMutez},
-                    storageLimit : ${estimate.storageLimit},
-                    suggestedFeeMutez : ${estimate.suggestedFeeMutez},
-                    totalCost : ${estimate.totalCost},
-                    usingBaseFeeMutez : ${estimate.usingBaseFeeMutez}`);
-                })
-                .catch((error) => console.table(`Error: ${JSON.stringify(error, null, 2)}`));     
             this.tezos.wallet
                 .at(CONTRACT_ADDRESS)
                 .then((contract) => {
@@ -145,6 +129,35 @@ export default {
                 })
                 .then((op) => {
                     console.log(`Waiting for ${op.hash} to be confirmed...`);
+                    return op.confirmation(1).then(() => op.hash);
+                })
+                .then((hash) => console.log(`Operation injected: https://ghost.tzstats.com/${hash}`))
+                .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
+            this.socket.emit("updateGames")
+        },
+        async submitMoveBC(pointToPlay) {          
+            console.log(pointToPlay)  
+            const x = pointToPlay[0] + 2 // shift to BC coords
+            const y = pointToPlay[1] + 2 // shift to BC coords
+            const z = pointToPlay[2] + 2 // shift to BC coords
+            let bcPoint = x.toString() +  y.toString() + z.toString()
+            console.log(Number(bcPoint))
+            bcPoint = Number(bcPoint)
+            const activeAccount = await this.wallet.client.getActiveAccount()   
+            if (!activeAccount) {
+                return
+            }    
+            const signer = new RemoteSigner(activeAccount.address, NODE_URL )
+            await this.tezos.setProvider({signer:signer})
+            await this.tezos.setWalletProvider(this.wallet)      
+
+            this.tezos.wallet
+                .at(CONTRACT_ADDRESS)
+                .then((contract) => {
+                    return contract.methods.makeMove(this.gameId, 444, activeAccount.address);
+                })
+                .then((op) => {
+                    console.log(`Waiting for ${op.hash} to be conf3irmed...`);
                     return op.confirmation(1).then(() => op.hash);
                 })
                 .then((hash) => console.log(`Operation injected: https://ghost.tzstats.com/${hash}`))
@@ -231,6 +244,7 @@ export default {
                     playerList.push(player)
                     }
                 gameData['players'] = playerList
+                gameData['grid'] = await game.grid
                 this.gamesObject[j] = gameData
                 j ++;
             }           
@@ -250,24 +264,24 @@ export default {
         <div class="actionButton" @click="joinGameBC(pendingGame)"> 
             Join Game {{ pendingGame }}
         </div>
-        <div class="actionButton" @click="submitMoveBC"> 
+        <div class="actionButton" @click="submitMoveBC(pointToPlay)"> 
             Submit Move {{ pointToPlay }}
         </div>
         <div class="actionButton" @click="toggleWallet">
                 {{walletAddress}} 
         </div>
      </div>
-     <div class="playerPanel" > My Games: 
+     <div class="playerPanel" > My Active Games: 
         <div v-for="(item) in activeGames" :key="item"> 
             <div class="actionButton" @click="loadGameBC(item)"> {{ item }}</div>
         </div>
      </div>
-     <div class="playerPanel" > My Pending Games:
+     <div class="playerPanel" > My Games Looking for Challengers!:
         <div v-for="(item) in pendingGames" :key="item"> 
             <div class="actionButton" @click="loadGameBC(item)"> {{ item }}</div>
         </div>
      </div>
-     <div class="playerPanel" > Others Pending Games:
+     <div class="playerPanel" > Games Looking for Challengers!
         <div v-for="(item) in pendingGamesOthers" :key="item"> 
             <div class="actionButton" @click="loadGameBC(item)"> {{ item }}</div>
         </div>
