@@ -65,7 +65,7 @@ export default {
           wallet.client.subscribeToEvent(BeaconEvent.ACTIVE_ACCOUNT_SET, (account) => {
               this.brodcastWallet(account)  
               this.socket.emit("walletConnection", account.address)  
-              this.socket.emit("updateGames", account)                
+              this.socket.emit("updateGames", -1)                
           })
           this.wallet = wallet
         } else {

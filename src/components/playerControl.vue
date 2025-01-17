@@ -26,9 +26,16 @@ export default {
     },
     created() {
         this.socket.emit("updateActiveGame", this.activeGameId)
-        this.socket.on("updateGames", (address) => {
-            console.log('reggeting games')
-            this.getGamesFromContract(address)
+        this.socket.on("updateGames", (gameId) => {
+
+            console.log('reggeting games', gameId, 'c')
+            console.log('b')
+           
+            this.getGamesFromContract()
+            if (gameId > 0) {
+                this.updateLoadedGameStatus(gameId)
+            }
+          
         })
             // Set up socket to receive from server
         this.socket.on('connectedUsers', (connectedUsers, socketId) => {
@@ -80,7 +87,12 @@ export default {
             if (!activeAccount) {
                 return
             }  
+            if (!this.gamesObject) {
+                return
+            }
+            console.log(this.gamesObject[gameId])
             const game = this.gamesObject[gameId]
+            console.log(game)
             this.gameId = game.gameId
             if (game.gameStatus == 0 ) {
                 this.pendingGame = gameId
@@ -125,7 +137,7 @@ export default {
                 })
                 .then((hash) => console.log(`Operation injected: https://ghost.tzstats.com/${hash}`))
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-            this.socket.emit("updateGames")
+            this.socket.emit("updateGames", this.gameId)
         },
         async joinGameBC(gameId) {            
             const activeAccount = await this.wallet.client.getActiveAccount()   
@@ -146,10 +158,10 @@ export default {
                 })
                 .then((hash) => console.log(`Operation injected: https://ghost.tzstats.com/${hash}`))
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-            this.socket.emit("updateGames")
+            this.socket.emit("updateGames", gameId)
         },
-        async submitMoveBC(pointToPlay) {          
-            console.log(pointToPlay)  
+        async submitMoveBC(pointToPlay, gameId) {          
+            console.log(pointToPlay, gameId)  
             const x = pointToPlay[0] + 2 // shift to BC coords
             const y = pointToPlay[1] + 2 // shift to BC coords
             const z = pointToPlay[2] + 2 // shift to BC coords
@@ -167,15 +179,18 @@ export default {
             this.tezos.wallet
                 .at(CONTRACT_ADDRESS)
                 .then((contract) => {
-                    return contract.methods.makeMove(this.gameId, bcNum, activeAccount.address).send();
+                    return contract.methods.makeMove(gameId, bcNum, activeAccount.address).send();
                 })
                 .then((op) => {
                     console.log(`Waiting for ${op.hash} to be confirmed...`);
                     return op.confirmation(1).then(() => op.hash);
                 })
-                .then((hash) => console.log(`Operation injected: https://ghost.tzstats.com/${hash}`))
+                .then((hash) => {
+                
+                console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-            this.socket.emit("updateGames")
+            this.socket.emit("updateGames", gameId)
+            
 
 
         },
@@ -279,7 +294,7 @@ export default {
         <div class="actionButton" @click="joinGameBC(pendingGame)"> 
             Join Game {{ pendingGame }}
         </div>
-        <div class="actionButton" @click="submitMoveBC(pointToPlay)"> 
+        <div class="actionButton" @click="submitMoveBC(pointToPlay, gameId)"> 
             Submit Move {{ pointToPlay }}
         </div>
         <div class="actionButton" @click="toggleWallet">

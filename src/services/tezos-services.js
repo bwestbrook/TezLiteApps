@@ -6,11 +6,8 @@ const Tezos = new TezosToolkit(NODE_URL);
 
 
 export const getGamesFromContract = async() => {
-  console.log('gettingGames')
   const contract = await Tezos.wallet.at(CONTRACT_ADDRESS)
-  console.log(CONTRACT_ADDRESS)
   const storage = await contract.storage()
-  console.log(storage)
   return storage.games
     }  
   
