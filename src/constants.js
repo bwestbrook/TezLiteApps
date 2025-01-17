@@ -14,7 +14,7 @@ export const NODE_URL = 'https://ghostnet.smartpy.io/'
 
 //export const CONTRACT_ADDRESS = 'KT1BHFYWTKyfErwx491rQ3P4c5MuFEXU2Wja' // V.1
 
-export const CONTRACT_ADDRESS = 'KT1G56W1sbx7zcBCpw4Gg2kx48ZUXLieXiFG'
+export const CONTRACT_ADDRESS = 'KT1GzgN6PVW2bXdBYvZ3razfG2dSx7i8y8dB'
 
 //export const CONTRACT_ADDRESS = 'KT1BvZ1nhgtEMghqTqqz2UG8rDcjvJrQLomx' // V1.0
 

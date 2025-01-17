@@ -63,6 +63,19 @@ export default {
           })
           const contractAbstraction = await Tezos.contract.at(CONTRACT_ADDRESS);
           console.log(contractAbstraction);
+
+          try {
+            const sub = this.tezos.stream.subscribeEvent({
+              tag: 'tagName',
+              address: CONTRACT_ADDRESS,
+              //excludeFailedOperations: true
+            });
+
+            sub.on('data', console.log);
+
+          } catch (e) {
+            console.log(e);
+          }
           this.wallet = wallet
         } else {
           this.wallet = globalWallet
