@@ -162,9 +162,7 @@ export default {
             if (!activeAccount) {
                 return
             }    
-            const signer = new RemoteSigner(activeAccount.address, NODE_URL )
-            await this.tezos.setProvider({signer:signer})
-            await this.tezos.setWalletProvider(this.wallet)
+            this.getSigner(activeAccount)
             this.tezos.wallet
                 .at(CONTRACT_ADDRESS)
                 .then((contract) => {
@@ -185,9 +183,7 @@ export default {
             if (!activeAccount) {
                 return
             }    
-            const signer = new RemoteSigner(activeAccount.address, NODE_URL )
-            await this.tezos.setProvider({signer:signer})
-            await this.tezos.setWalletProvider(this.wallet)      
+            this.getSigner(activeAccount)  
             this.tezos.wallet
                 .at(CONTRACT_ADDRESS)
                 .then((contract) => {
@@ -221,9 +217,7 @@ export default {
             if (!activeAccount) {
                 return
             }    
-            const signer = new RemoteSigner(activeAccount.address, NODE_URL )
-            await this.tezos.setProvider({signer:signer})
-            await this.tezos.setWalletProvider(this.wallet)      
+            this.getSigner(activeAccount)
             await this.tezos.wallet
                 .at(CONTRACT_ADDRESS)
                 .then((contract) => {
@@ -243,6 +237,13 @@ export default {
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
             this.socket.emit('gamePlayable', true, this.playerTurn)
             //this.loadGameBC(gameId)
+        },
+        async getSigner(activeAccount) { 
+            console.log('fix cancelwall')
+            const signer = new RemoteSigner(activeAccount.address, NODE_URL )
+            await this.tezos.setProvider({signer:signer})
+            await this.tezos.setWalletProvider(this.wallet)  
+            return signer
         },
         // Reading Smart Contract
         async loadGameBC(gameId) {
