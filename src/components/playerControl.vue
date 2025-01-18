@@ -66,7 +66,6 @@ export default {
                 if (this.gameId > -1) {
                     this.delayGetGamesFromContract(transactionBlockLevel)
                 }
-
             })
           } catch (e) {
             console.log(e);
@@ -85,8 +84,6 @@ export default {
                 
             }
             this.blockchainStatus = 'Confirmed!'
-           
-            
         },
         async delayGetGamesFromContract(transactionBlockLevel){
             await this.getNextBlockLevel(transactionBlockLevel)
@@ -210,7 +207,7 @@ export default {
                  })
                 .then(() => this.blockchainStatus = `Joined Game on Smart Contract ${{gameId}}` )
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-            //this.socket.emit("updateGames", gameId)
+            //this.socket.on('gamePlayable', true, this.playerTurn)
         },
         async submitMoveBC(pointToPlay, gameId) {      
             this.blockchainStatus = 'Submitting Move to Smart Contract'        
@@ -244,6 +241,8 @@ export default {
                 .then((hash) => {
                     console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
+            this.socket.on('gamePlayable', true, this.playerTurn)
+            this.loadGameBC(gameId)
         },
         // Reading Smart Contract
         async loadGameBC(gameId) {
