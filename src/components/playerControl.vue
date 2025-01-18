@@ -30,11 +30,8 @@ export default {
     created() {
         this.rpcclient = new RpcClient(NODE_URL, 'NetXnHfVqm9iesp');
         this.socket.emit("updateActiveGame", this.activeGameId)
-        this.socket.on("updateGames", (gameId) => {
+        this.socket.on("updateGames", () => {
             this.getGamesFromContract()
-            if (gameId > -1) {
-                this.updateLoadedGameStatus(gameId)
-            }
         })
         // Set up socket to receive from server
         this.socket.on('connectedUsers', (connectedUsers, socketId) => {
@@ -75,21 +72,20 @@ export default {
         //Wallet Control
         async getNextBlockLevel(transactionBlockLevel){
             let currentBlock = await this.rpcclient.getBlock();
-            let currentBlockLevel = currentBlock.header.level
+            let currentBlockLevel = await currentBlock.header.level
             while (currentBlockLevel == transactionBlockLevel) {
                 console.log('checking block level', currentBlockLevel)
                 this.blockchainStatus = 'Confirming ...'
                 let currentBlock = await this.rpcclient.getBlock();
-                currentBlockLevel = currentBlock.header.level
-                
+                currentBlockLevel = await currentBlock.header.level                
             }
             this.blockchainStatus = 'Confirmed!'
         },
         async delayGetGamesFromContract(transactionBlockLevel){
             await this.getNextBlockLevel(transactionBlockLevel)
             await this.getGamesFromContract()
-            const game = this.gamesObject[this.gameId]
-            this.getGameGridBC(game, this.gameId)
+            const game = await this.gamesObject[this.gameId]
+            await this.getGameGridBC(game, this.gameId)
             this.socket.emit("updateGames", this.gameId)
         },
         async toggleWallet(){
@@ -131,9 +127,7 @@ export default {
             if (!this.gamesObject) {
                 return
             }
-            console.log(this.gamesObject[gameId])
-            const game = this.gamesObject[gameId]
-            console.log(game)
+            const game = await this.gamesObject[gameId]
             this.gameId = game.gameId
             if (game.gameStatus == 0 ) {
                 this.pendingGame = gameId
@@ -142,16 +136,19 @@ export default {
                 this.playerTurn = 'NA'
             } else if (game.gameStatus == 1 ) {
                 this.gameStatus = 'Active'
-                this.gameId = gameId
+                this.gameId = await game.gameId
                 this.walletPlayerTurn1 = await reduceAddress(game.players[0])
                 this.walletPlayerTurn2 = await reduceAddress(game.players[1])
                 this.playersInGame = [this.walletPlayerTurn1, this.walletPlayerTurn2]
-                this.playerTurn = game.playerTurn
+                this.playerTurn = await game.playerTurn
                 this.blockchainStatus = 'Active'
                 if (game.players[this.playerTurn - 1] == activeAccount.address) {
-                    this.socket.emit('gamePlayable', true, this.playerTurn)
+                    console.log('wtf')
+                    this.socket.emit('gamePlayable', true)
+                    this.socket.emit('playerTurn', this.playerTurn)
                 } else {
-                    this.socket.emit('gamePlayable', false, this.playerTurn)
+                    console.log('dog')
+                    //this.socket.emit('gamePlayable', false, this.playerTurn)
                 }
             }
         },
@@ -169,7 +166,6 @@ export default {
                     return contract.methods.startGame(1000, activeAccount.address).send();
                 })
                 .then((op) => {
-                    console.log
                     console.log(`Waiting for ${op.opHash} to be confirmed...`);
                     return op.confirmation().then(() => op.opHash);
                 })
@@ -198,16 +194,13 @@ export default {
                     return op.confirmation().then(() => op.opHash);
                 })
                 .then((op) => {
-                    console.log(op)
                     console.log(`Operation injected: https://ghost.tzstats.com/${op.hash}`)
                  })
                 .then(() => this.blockchainStatus = `Joined Game on Smart Contract ${{gameId}}` )
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-            //this.socket.emit('gamePlayable', true, this.playerTurn)
         },
         async submitMoveBC(pointToPlay, gameId) {      
-            this.blockchainStatus = 'Submitting Move to Smart Contract'        
-            console.log(pointToPlay, gameId)  
+            this.blockchainStatus = 'Submitting Move to Smart Contract'     
             const x = pointToPlay[0] + 2 // shift to BC coords
             const y = pointToPlay[1] + 2 // shift to BC coords
             const z = pointToPlay[2] + 2 // shift to BC coords
@@ -234,12 +227,19 @@ export default {
                 })
                 .then((hash) => {
                     console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
+                .then(() => {
+                    if (this.playerTurn == 1) {
+                        this.socket.emit('playerTurn', 2)
+                        this.playerTurn = 2
+                    } else if (this.playerTurn == 2) {
+                        this.socket.emit('playerTurn', 1)
+                        this.playerTurn = 1
+                    }
+
+                })
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-            this.socket.emit('gamePlayable', true, this.playerTurn)
-            //this.loadGameBC(gameId)
         },
         async getSigner(activeAccount) { 
-            console.log('fix cancelwall')
             const signer = new RemoteSigner(activeAccount.address, NODE_URL )
             await this.tezos.setProvider({signer:signer})
             await this.tezos.setWalletProvider(this.wallet)  
@@ -260,12 +260,14 @@ export default {
             for (let game of allGames) {
                 if (j == gameId) {
                     await this.getGameGridBC(game, j)
-                    await this.updateLoadedGameStatus(j)
+                    await this.updateLoadedGameStatus(j)                    
                     {break ;}
                 }  
                 j ++;
             } 
+            
             this.blockchainStatus = `Game ${gameId} loaded`
+            this.socket.emit('updateGameRoom', gameId, activeAccount.address)
         },
         async getGameGridBC(game, gameId) {
             let loadedGridPoints = []
@@ -297,8 +299,6 @@ export default {
             this.socket.emit("newGameGrid", gameGrid, gameId)
         },
         async getGamesFromContract() {
-
-            console.log(this.wallet)
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
                 return

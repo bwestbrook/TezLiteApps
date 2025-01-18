@@ -111,7 +111,7 @@ export default {
       
     }
   },
-  props: ['socket', 'activeGameId', 'windowWidth', 'windowHeight'],
+  props: ['socket', 'activeGameId', 'wallet', 'windowWidth', 'windowHeight'],
 
   created () {
     this.intvl = 0.5
@@ -170,9 +170,13 @@ export default {
         this.resizeGameRender(width)
       }
     });
-    this.socket.on('gamePlayable', (gamePlayable, playerTurn) => {
+    this.socket.on('gamePlayable', (gamePlayable) => {
       this.gamePlayable = gamePlayable
+      console.log('set GamePlayable', gamePlayable)      
+    });
+    this.socket.on('playerTurn', (playerTurn) => {
       this.playerTurn = playerTurn
+      console.log('set playerTurn', playerTurn)      
     });
   },
   methods: {
@@ -251,10 +255,10 @@ export default {
           tube.end = [x2, y2, z2]
           this.scene.add(tube)
           }
-        }
-      
+        }      
     },
     highlightMove: function(evt) {
+      console.log(this.gamePlayable)
       if (!this.gamePlayable) {
         return 
       }

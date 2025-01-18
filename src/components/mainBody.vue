@@ -10,6 +10,7 @@
       <gameGrid       
           :windowHeight="windowHeight"
           :windowWidth="windowWidth"
+          :wallet="wallet"
           :socket="socket"
       />
       <div class="rules">

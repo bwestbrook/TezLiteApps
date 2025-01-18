@@ -9,7 +9,8 @@ export const getGamesFromContract = async() => {
   console.log('newGFC')
   const contract = await Tezos.wallet.at(CONTRACT_ADDRESS)
   const storage = await contract.storage()
-  return storage.games
+  const games = await storage.games
+  return games
     }  
   
 

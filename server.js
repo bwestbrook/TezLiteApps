@@ -39,6 +39,8 @@ console.log('Server listening on localhost:' + port) // eslint-disable-line no-c
 
 // User
 let gameData = {};
+let gameRoom = {};
+let gameRooms = {}
 let connectedUsers = []
 let usersInGame = []
 let addressesInGame = []
@@ -89,15 +91,20 @@ io.on('connection', (socket) => {
     io.emit("gameGrid", gameGrid, gameId)
   });
 
+  socket.on("playerTurn", function(playerTurn) {
+    console.log('playerTurn', playerTurn)
+    io.emit("playerTurn", playerTurn)
+  });
+
   socket.on("resizeGame", function(width, socketId) {
     console.log('resize request', socketId, socket.id)
     if (socketId == socket.id ) {
       io.emit("resizeGame", width, socketId)
     }
   });
-  socket.on("gamePlayable", function(gamePlayabe, playerTurn) {
-    console.log('gamePlayable')
-    io.emit('gamePlayable', gamePlayabe, playerTurn)
+  socket.on("gamePlayable", function(gamePlayabe) {
+    console.log('gamePlayable', gamePlayabe)
+    io.emit('gamePlayable', gamePlayabe)
     
   });
   // Contract
@@ -106,10 +113,24 @@ io.on('connection', (socket) => {
     io.emit('updateGames', address)
     
   });
+  socket.on("updateGameRoom", function(gameId, address) {
+    console.log('updating Game Room', gameId, address)
+    console.log(gameRooms)
+    if (gameId in gameRooms) {
+      console.log('game room already created')
+
+    } else {
+      console.log('make new game room')
+      socket.join(gameId)
+    }
+    //console.log('b', Object.keys(socket.adapter))
+    
+    //console.log('a', socket)
+    //io.emit('updateGames', address)
+  });
   socket.on("newContractData", function(address) {
     console.log('newContractData')
     //io.emit('updateGames', address)
-    
   });
   // Wallet
   socket.on("walletConnection", function(address) {
