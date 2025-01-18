@@ -41,7 +41,7 @@ console.log('Server listening on localhost:' + port) // eslint-disable-line no-c
 let gameData = {};
 let gameRoom = {};
 let gameRooms = {}
-let connectedUsers = []
+let connectedUsers = {}
 let usersInGame = []
 let addressesInGame = []
 
@@ -49,9 +49,9 @@ let addressesInGame = []
 const messages = []
 io.on('connection', (socket) => {
 
-    console.log("user " + socket.id + " connected");
+    //console.log("user " + socket.id + " connected");
     io.emit("socketId", socket.id)
-
+    socket.join(socket.id) // for self stuff like resize events
     // Game Play
     socket.on("initGameGrid", function(gameId) {
       gameData.gameBalance = 0
@@ -88,7 +88,7 @@ io.on('connection', (socket) => {
   });
   
   socket.on("newGameGrid", function(gameGrid, gameId) {
-    io.emit("gameGrid", gameGrid, gameId)
+    io.to(gameId).emit("gameGrid", gameGrid, gameId)
   });
 
   socket.on("playerTurn", function(playerTurn) {
@@ -97,10 +97,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on("resizeGame", function(width, socketId) {
-    console.log('resize request', socketId, socket.id)
-    if (socketId == socket.id ) {
-      io.emit("resizeGame", width, socketId)
-    }
+    io.to(socket.id).emit("resizeGame", width, socketId)
   });
   socket.on("gamePlayable", function(gamePlayabe) {
     console.log('gamePlayable', gamePlayabe)
@@ -113,48 +110,39 @@ io.on('connection', (socket) => {
     io.emit('updateGames', address)
     
   });
-  socket.on("updateGameRoom", function(gameId, address) {
-    console.log('updating Game Room', gameId, address)
-    console.log(gameRooms)
-    if (gameId in gameRooms) {
-      console.log('game room already created')
-
-    } else {
-      console.log('make new game room')
-      socket.join(gameId)
+  socket.on("addUserToGameRoom", function(gameId, address) {
+    console.log(connectedUsers)
+    console.log('adding user to Game Room', gameId, address, socket.id)
+    for (let wallet in connectedUsers) {
+      if (connectedUsers[wallet].includes(socket.id)) {
+        console.log('wallet/user is connect with socket emitting to', gameId, socket.id)
+        socket.join(gameId)
+        //io.to(gameId).emit("updateGames", gameId)
+        //io.to(socket.id).emit("updatePlayerControl")
+      }
     }
-    //console.log('b', Object.keys(socket.adapter))
-    
-    //console.log('a', socket)
-    //io.emit('updateGames', address)
+   
   });
   socket.on("newContractData", function(address) {
     console.log('newContractData')
     //io.emit('updateGames', address)
   });
-  // Wallet
   socket.on("walletConnection", function(address) {
-    let userId ={}
-    idx = connectedUsers.length
-    userId[socket.id] = address
-    console.log('WC', address)
-    //userId.socketId = socket.id
-    connectedUsers[idx] = userId
-    });
-
-  socket.on("connect", function() {
-    console.log("user " + socket.id + " connected");
-    console.log('seding socketId')
-    io.emit("socketId", socket.id)
+    // Determine all the sockets a single user/wallet is connected to
+    if (connectedUsers.hasOwnProperty(address)) {
+      connectedUsers[address].push(socket.id)
+    } else {
+      connectedUsers[address] = [socket.id]
+    }
   });
 
-  socket.on("reconnect", function() {
-    console.log("user " + socket.id + " connected");
-    console.log('seding socketId')
-    io.emit("socketId", socket.id)
-  });
   socket.on("disconnect", function() {
-    console.log("user333 " + socket.id + " disconnected");
+    for (let wallet in connectedUsers) {
+      if (connectedUsers[wallet].includes(socket.id)) {
+        const index = connectedUsers[wallet].indexOf(socket.id);
+        connectedUsers[wallet].splice(index, 1)
+      }
+    }
   });
 });
   

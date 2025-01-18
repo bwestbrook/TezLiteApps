@@ -30,8 +30,10 @@ export default {
     created() {
         this.rpcclient = new RpcClient(NODE_URL, 'NetXnHfVqm9iesp');
         this.socket.emit("updateActiveGame", this.activeGameId)
+
         this.socket.on("updateGames", () => {
             this.getGamesFromContract()
+            this.updatePlayerControl()
         })
         // Set up socket to receive from server
         this.socket.on('connectedUsers', (connectedUsers, socketId) => {
@@ -43,6 +45,9 @@ export default {
         })
         this.socket.on('updateBCStatus', (bcStatus) => {
             this.blockchainStatus = bcStatus
+        })
+        this.socket.on('updatePlayerControl', () => {
+            this.updatePlayerControl()
         })
         // Listen to contracts for changes
         this.tezos.setStreamProvider(
@@ -107,12 +112,16 @@ export default {
             this.activeGames = []
             this.pendingGames = []
             this.pendingGamesOthers = []
+            console.log('UPC')
             for (i; i < this.gameCount; i++) {
+                console.log(i)
                 if (this.gamesObject[i].players.includes(activeAccount.address)) {
                     if (this.gamesObject[i].gameStatus == 0) {
-                        this.pendingGames.push(this.gamesObject[i].gameId)
+                        this.pendingGames.push(this.gamesObject[i].gameId)                         
+                        //this.socket.emit('addUserToGameRoom', i, activeAccount.address)       
                     } else if (this.gamesObject[i].gameStatus == 1) {
                         this.activeGames.push(this.gamesObject[i].gameId)
+                        //this.socket.emit('addUserToGameRoom', i, activeAccount.address)       
                     }
                 } else if (this.gamesObject[i].gameStatus == 0) {
                     this.pendingGamesOthers.push(this.gamesObject[i].gameId)
@@ -235,7 +244,6 @@ export default {
                         this.socket.emit('playerTurn', 1)
                         this.playerTurn = 1
                     }
-
                 })
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
         },
@@ -247,7 +255,7 @@ export default {
         },
         // Reading Smart Contract
         async loadGameBC(gameId) {
-            this.socket.emit("initGameGrid")
+            //this.socket.emit("initGameGrid")
             this.blockchainStatus = 'Loading Game from Smart Contract'       
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
@@ -333,8 +341,7 @@ export default {
                 this.gamesObject[j] = gameData
                 j ++;
             }           
-            this.gameCount = j
-            this.updatePlayerControl()          
+            this.gameCount = j        
         }
     }
 }

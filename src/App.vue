@@ -89,9 +89,8 @@ export default {
         await this.tezos.wallet.transfer({amount:amount, to:'tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w'}).send()
     },
     async onResize() {
-        console.log(this.user, this.socket.id)
         this.windowWidth = window.innerWidth
-        //this.socket.emit("resizeGame", window.innerWidth, this.socket.id)
+        this.socket.emit("resizeGame", window.innerWidth, this.socket.id)
     } 
   }        
 }

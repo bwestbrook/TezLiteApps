@@ -152,7 +152,6 @@ export default {
   },
   mounted() {
     this.buildBoard()
-    this.socket.emit("initGameGrid", 0)
     this.$refs.container.appendChild(this.renderer.domElement);
     this.renderer.render(this.scene, this.camera);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
