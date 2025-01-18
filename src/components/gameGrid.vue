@@ -98,7 +98,7 @@ export default {
       moveMade: false,
       gamePlayable: true,
       playerColor: 'red',
-      playerTurn: 2,
+      playerTurn: 1,
       walletTurn: 0,
       walletPlayerTurn1: '',
       walletPlayerTurn2: '',
@@ -116,6 +116,10 @@ export default {
   created () {
     this.intvl = 0.5
     this.gameSize = this.windowWidth * 0.6
+    if (this.gameSize > 1000) {
+      this.gameSize = 1000
+    }
+    console.log(this.gameSize)
     this.board = new Three.Group()
     // Geometry
     this.defaultGeometry = new Three.SphereGeometry(0.08, 32, 16)
@@ -126,12 +130,12 @@ export default {
     this.highlightMaterial = new Three.MeshMatcapMaterial( {color:'black', opacity: 0.75, transparent: true} )
     this.player1Material = new Three.MeshMatcapMaterial( {color: 'red',  opacity: 0.95, transparent: true} )
     this.player2Material = new Three.MeshMatcapMaterial( {color: 'blue',  opacity: 0.95, transparent: true} )
-    this.defaultLineMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.3, transparent:true});
-    this.winningLineMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.3, transparent:true});
-    //this.hightlightMaterial = new Three.MeshMatcapMaterial({color: 'red', opacity: 0.5, transparent: true});
-    this.player1HightlightMaterial = new Three.MeshMatcapMaterial({color: 'red', opacity: 0.5, transparent: true});
-    this.player2HightlightMaterial = new Three.MeshMatcapMaterial({color: 'blue', opacity: 0.5, transparent: true});
-    //this.player2HightlightMaterial
+
+    this.player1HightlightMaterial = new Three.MeshMatcapMaterial({color: 'red', opacity: 0.6, transparent: true});
+    this.player2HightlightMaterial = new Three.MeshMatcapMaterial({color: 'blue', opacity: 0.6, transparent: true});
+
+    this.defaultLineMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.5, transparent:true});
+    this.winningLineMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.5, transparent:true});
     this.playedLineMaterial = new Three.MeshMatcapMaterial({color: 'red', opacity: 0.8, transparent: true});   
     this.playedMaterial = this.playedLineMaterial
     this.tubeRadius = 0.012
@@ -299,19 +303,20 @@ export default {
           const k = this.clickedVertex.object.coords[2]
           if (!this.gamePaused) {
             if (this.gameGrid[i][j][k] == 0) { //Not owned
-              this.socket.emit("updatePlayedPoint", this.clickedVertex.object.coords)
+              this.socket.emit("updatePlayedPoint", this.clickedVertex.object.coords, "Move Selected")
               this.gameGrid[i][j][k] = -1 * this.playerTurn
               this.gamePaused = true
+              console.log(-1 * this.playerTurn)
             } 
           } else {
               if (this.gameGrid[i][j][k] < 0) { //Already owned
                 //this.gameGrid[i][j][k] == 0
                 this.gamePaused = false
-                this.socket.emit("updatePlayedPoint", 'NO MOVE')
+                this.socket.emit("updatePlayedPoint", 'NO MOVE', 'Active')
                 this.highlightMove(evt)
               } else if (this.gameGrid[i][j][k] == this.playerTurn) { //Already owned
                 this.gameGrid[i][j][k] == 0
-                this.socket.emit("updatePlayedPoint", 'NO MOVE')
+                this.socket.emit("updatePlayedPoint", 'NO MOVE', 'Active')
                 this.gamePaused = false
               } 
             }
@@ -341,16 +346,18 @@ export default {
             if (gameGridOwner == 0) {
               thisVertex.material = this.defaultMaterial
               thisVertex.geometry = this.defaultGeometry
-            } else if (Math.abs(gameGridOwner) == 1) {
+            } else if (gameGridOwner == 1) {
               thisVertex.material = this.player1Material
               thisVertex.geometry = this.playedGeometry
-            } else if (Math.abs(gameGridOwner) == 2 ) {
+            } else if (gameGridOwner == 2 ) {
               thisVertex.material = this.player2Material
               thisVertex.geometry = this.playedGeometry
-            } else if (Math.abs(gameGridOwner) == -1 ) {
+            } else if (gameGridOwner == -1 ) {
+              console.log('highlight 1')
               thisVertex.material = this.player1HightlightMaterial
               thisVertex.geometry = this.playedGeometry
-            }  else if (Math.abs(gameGridOwner) == -2 ) {
+            }  else if (gameGridOwner == -2 ) {
+              console.log
               thisVertex.material = this.player2HightlightMaterial
               thisVertex.geometry = this.playedGeometry
             } 

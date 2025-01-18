@@ -1,6 +1,7 @@
 <script>
 import { PollingSubscribeProvider } from '@taquito/taquito';
 import { RemoteSigner } from '@taquito/remote-signer';
+import { RpcClient } from '@taquito/rpc';
 import { NODE_URL, CONTRACT_ADDRESS } from '../constants'
 import { getGamesFromContract } from '../services/tezos-services.js'
 import { reduceAddress } from "../utilities";
@@ -18,6 +19,7 @@ export default {
             pendingGame: 'NO GAME',
             playerTurn: 'NA',
             playersInGame: '',
+            blockchainStatus: 'No Activity',
             pointToPlay: 'XXX',
             activeGames: [],
             pendingGames: [],
@@ -26,22 +28,21 @@ export default {
         }
     },
     created() {
+        this.rpcclient = new RpcClient(NODE_URL, 'NetXnHfVqm9iesp');
         this.socket.emit("updateActiveGame", this.activeGameId)
         this.socket.on("updateGames", (gameId) => {
-            console.log('reggeting games', gameId)
             this.getGamesFromContract()
             if (gameId > -1) {
-                console.log('updtLGS', gameId)
                 this.updateLoadedGameStatus(gameId)
             }
-          
         })
         // Set up socket to receive from server
         this.socket.on('connectedUsers', (connectedUsers, socketId) => {
             console.log('CUs', connectedUsers, socketId)
         });
-        this.socket.on('playedPoint', (playedPoint) => {
+        this.socket.on('playedPoint', (playedPoint, bcStatus) => {
             this.pointToPlay = playedPoint
+            this.blockchainStatus = bcStatus
         })
         // Listen to contracts for changes
         this.tezos.setStreamProvider(
@@ -56,15 +57,13 @@ export default {
               address: CONTRACT_ADDRESS,
               //excludeFailedOperations: true
             });
+            sub.on('data', (data) => {
+                console.log('transaction level', data.level)
+                const transactionBlockLevel = data.level
+                if (this.gameId > -1) {
+                    this.delayGetGamesFromContract(transactionBlockLevel)
+                }
 
-            sub.on('data', () => {
-                console.log('new Contract data', this.gameId)
-                this.getGamesFromContract()
-               
-                const game = this.gamesObject[this.gameId]
-                this.getGameGridBC(game, this.gameId)
-                this.socket.emit("updateGames", this.gameId)
-                //console.log(data);
             })
           } catch (e) {
             console.log(e);
@@ -72,6 +71,26 @@ export default {
     },
     methods: {
         //Wallet Control
+        async getNextBlockLevel(transactionBlockLevel){
+            let currentBlock = await this.rpcclient.getBlock();
+            let currentBlockLevel = currentBlock.header.level
+            while (currentBlockLevel == transactionBlockLevel) {
+                console.log('checking block level', currentBlockLevel)
+                this.blockchainStatus = 'confirming move'
+                let currentBlock = await this.rpcclient.getBlock();
+                currentBlockLevel = currentBlock.header.level
+            }
+            console.log('block level is ', currentBlockLevel)
+           
+            
+        },
+        async delayGetGamesFromContract(transactionBlockLevel){
+            await this.getNextBlockLevel(transactionBlockLevel)
+            await this.getGamesFromContract()
+            const game = this.gamesObject[this.gameId]
+            this.getGameGridBC(game, this.gameId)
+            this.socket.emit("updateGames", this.gameId)
+        },
         async toggleWallet(){
             const activeAccount = await this.wallet.client.getActiveAccount()              
             if (activeAccount) {                  
@@ -127,18 +146,17 @@ export default {
                 this.walletPlayerTurn2 = await reduceAddress(game.players[1])
                 this.playersInGame = [this.walletPlayerTurn1, this.walletPlayerTurn2]
                 this.playerTurn = game.playerTurn
+                this.blockchainStatus = 'Active'
                 if (game.players[this.playerTurn - 1] == activeAccount.address) {
-
-                
                     this.socket.emit('gamePlayable', true, this.playerTurn)
                 } else {
                     this.socket.emit('gamePlayable', false, this.playerTurn)
                 }
-                
             }
         },
         // Interact with Smart Contract
         async createGameBC() {            
+            this.blockchainStatus = 'Creating Game on Smart Contract'
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
                 return
@@ -152,13 +170,16 @@ export default {
                     return contract.methods.startGame(1000, activeAccount.address).send();
                 })
                 .then((op) => {
-                    console.log(`Waiting for ${op.hash} to be confirmed...`);
-                    return op.confirmation(1).then(() => op.hash);
+                    console.log
+                    console.log(`Waiting for ${op.opHash} to be confirmed...`);
+                    return op.confirmation().then(() => op.opHash);
                 })
                 .then((hash) => console.log(`Operation injected: https://ghost.tzstats.com/${hash}`))
+                .then(() => this.blockchainStatus = 'Created Game on Smart Contract' )
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
         },
-        async joinGameBC(gameId) {            
+        async joinGameBC(gameId) {     
+            this.blockchainStatus = 'Joining Game on Smart Contract'       
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
                 return
@@ -169,15 +190,23 @@ export default {
             this.tezos.wallet
                 .at(CONTRACT_ADDRESS)
                 .then((contract) => {
-                    return contract.methods.joinGame(gameId, activeAccount.address).send();
+                    return contract.methodsObject.joinGame({
+                            gameId: gameId,
+                            player: activeAccount.address,
+                        })
+                        .send()
                 })
                 .then((op) => {
-                    console.log(`Waiting for ${op.hash} to be confirmed...`);
-                    return op.confirmation(1).then(() => op.hash);
+                    console.log(`Waiting for ${op.opHash} to be confirmed...`);
+                    return op.confirmation().then(() => op.opHash);
                 })
-                .then((hash) => console.log(`Operation injected: https://ghost.tzstats.com/${hash}`))
+                .then((op) => {
+                    console.log(op)
+                    console.log(`Operation injected: https://ghost.tzstats.com/${op.hash}`)
+                 })
+                .then(() => this.blockchainStatus = `Joined Game on Smart Contract ${{gameId}}` )
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-            this.socket.emit("updateGames", gameId)
+            //this.socket.emit("updateGames", gameId)
         },
         async submitMoveBC(pointToPlay, gameId) {          
             console.log(pointToPlay, gameId)  
@@ -185,9 +214,7 @@ export default {
             const y = pointToPlay[1] + 2 // shift to BC coords
             const z = pointToPlay[2] + 2 // shift to BC coords
             let bcPoint = x.toString() +  y.toString() + z.toString()
-            console.log(Number(bcPoint))
-            const bcNum = parseInt(bcPoint);
-
+            this.bcNum = parseInt(bcPoint);
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
                 return
@@ -195,17 +222,22 @@ export default {
             const signer = new RemoteSigner(activeAccount.address, NODE_URL )
             await this.tezos.setProvider({signer:signer})
             await this.tezos.setWalletProvider(this.wallet)      
-            this.tezos.wallet
+            await this.tezos.wallet
                 .at(CONTRACT_ADDRESS)
                 .then((contract) => {
-                    return contract.methods.makeMove(gameId, bcNum, activeAccount.address).send();
+                    return contract.methodsObject.makeMove({
+                            gameId: gameId,
+                            player: activeAccount.address,
+                            move: this.bcNum
+                        })
+                        .send()
                 })
                 .then((op) => {
-                    console.log(`Waiting for ${op.hash} to be confirmed...`);
-                    return op.confirmation(1).then(() => op.hash);
+                    console.log(`Waiting for ${op.opHash} to be confirmed...`);
+                    return op.confirmation().then(() => op.opHash)
                 })
                 .then((hash) => {
-                console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
+                    console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
         },
         // Reading Smart Contract
@@ -258,12 +290,13 @@ export default {
             this.socket.emit("newGameGrid", gameGrid, gameId)
         },
         async getGamesFromContract() {
+
+            console.log(this.wallet)
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
                 return
             }   
             const games = await getGamesFromContract()         
-            console.log(games)
             const allGames = await games.values()
             let j = 0;
             for (let game of allGames) {
@@ -343,6 +376,9 @@ export default {
         </div>
         <div> 
             <div class="actionButton" > Player Turn: {{ playerTurn }}</div>
+        </div>
+        <div> 
+            <div class="actionButton" > Status: {{ blockchainStatus }}</div>
         </div>
      </div>
 </template>

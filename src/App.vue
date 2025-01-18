@@ -55,7 +55,8 @@ export default {
               name: 'TezTacToe', network: {
               type: NetworkType.GHOSTNET
             }
-          })           
+          })     
+          this.wallet = wallet      
           wallet.client.subscribeToEvent(BeaconEvent.ACTIVE_ACCOUNT_SET, (account) => {
               this.brodcastWallet(account)  
               this.socket.emit("walletConnection", account.address)  
@@ -63,9 +64,7 @@ export default {
           })
           const contractAbstraction = await Tezos.contract.at(CONTRACT_ADDRESS);
           console.log(contractAbstraction);
-
           
-          this.wallet = wallet
         } else {
           this.wallet = globalWallet
         }

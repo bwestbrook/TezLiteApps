@@ -76,9 +76,9 @@ io.on('connection', (socket) => {
     io.emit("gameGrid", gameGrid, gameId)
   });
 
-  socket.on("updatePlayedPoint", function(playedPoint) {
-    console.log('server sees UPP', playedPoint)
-    io.emit("playedPoint", playedPoint)
+  socket.on("updatePlayedPoint", function(playedPoint, bcStatus) {
+    console.log('server sees UPP', playedPoint, bcStatus)
+    io.emit("playedPoint", playedPoint, bcStatus)
   });
   
   socket.on("newGameGrid", function(gameGrid, gameId) {
@@ -112,6 +112,7 @@ io.on('connection', (socket) => {
     let userId ={}
     idx = connectedUsers.length
     userId[socket.id] = address
+    console.log('WC', address)
     //userId.socketId = socket.id
     connectedUsers[idx] = userId
     });
