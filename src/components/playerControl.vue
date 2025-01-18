@@ -242,7 +242,7 @@ export default {
                     console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
             this.socket.emit('gamePlayable', true, this.playerTurn)
-            this.loadGameBC(gameId)
+            //this.loadGameBC(gameId)
         },
         // Reading Smart Contract
         async loadGameBC(gameId) {
