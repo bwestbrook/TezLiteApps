@@ -76,11 +76,12 @@ export default {
             let currentBlockLevel = currentBlock.header.level
             while (currentBlockLevel == transactionBlockLevel) {
                 console.log('checking block level', currentBlockLevel)
-                this.blockchainStatus = 'confirming move'
+                this.blockchainStatus = 'Confirming ...'
                 let currentBlock = await this.rpcclient.getBlock();
                 currentBlockLevel = currentBlock.header.level
+                
             }
-            console.log('block level is ', currentBlockLevel)
+            this.blockchainStatus = 'Confirmed!'
            
             
         },
@@ -208,7 +209,8 @@ export default {
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
             //this.socket.emit("updateGames", gameId)
         },
-        async submitMoveBC(pointToPlay, gameId) {          
+        async submitMoveBC(pointToPlay, gameId) {      
+            this.blockchainStatus = 'Submitting Move to Smart Contract'        
             console.log(pointToPlay, gameId)  
             const x = pointToPlay[0] + 2 // shift to BC coords
             const y = pointToPlay[1] + 2 // shift to BC coords
@@ -243,6 +245,7 @@ export default {
         // Reading Smart Contract
         async loadGameBC(gameId) {
             this.socket.emit("initGameGrid")
+            this.blockchainStatus = 'Loading Game from Smart Contract'       
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
                 return
@@ -258,7 +261,8 @@ export default {
                     {break ;}
                 }  
                 j ++;
-            }           
+            } 
+            this.blockchainStatus = `Game ${gameId} loaded`
         },
         async getGameGridBC(game, gameId) {
             let loadedGridPoints = []
@@ -367,9 +371,6 @@ export default {
      <div class="playerPanel" > Game INFO: 
         <div> 
             <div class="actionButton" > Game ID: {{ gameId }}</div>
-        </div>
-        <div> 
-            <div class="actionButton" > Game Status {{ gameStatus }}</div>
         </div>
         <div> 
             <div class="actionButton" > Players: {{ playersInGame }}</div>
