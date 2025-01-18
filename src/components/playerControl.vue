@@ -207,7 +207,7 @@ export default {
                  })
                 .then(() => this.blockchainStatus = `Joined Game on Smart Contract ${{gameId}}` )
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-            //this.socket.on('gamePlayable', true, this.playerTurn)
+            //this.socket.emit('gamePlayable', true, this.playerTurn)
         },
         async submitMoveBC(pointToPlay, gameId) {      
             this.blockchainStatus = 'Submitting Move to Smart Contract'        
@@ -241,7 +241,7 @@ export default {
                 .then((hash) => {
                     console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-            this.socket.on('gamePlayable', true, this.playerTurn)
+            this.socket.emit('gamePlayable', true, this.playerTurn)
             this.loadGameBC(gameId)
         },
         // Reading Smart Contract
