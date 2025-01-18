@@ -264,6 +264,7 @@ export default {
       if (this.gamePaused) {
         return
       }
+      this.socket.emit("updateBCStatus", `${this.playerTurn} Making move`)
       this.updateGridRender()
       const intersects = this.findIntersects(evt)
       if (intersects.length > 0) {

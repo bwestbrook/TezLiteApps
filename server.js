@@ -80,6 +80,10 @@ io.on('connection', (socket) => {
     console.log('server sees UPP', playedPoint, bcStatus)
     io.emit("playedPoint", playedPoint, bcStatus)
   });
+
+  socket.on("updateBCStatus", function(bcStatus) {
+    io.emit("updateBCStatus", bcStatus)
+  });
   
   socket.on("newGameGrid", function(gameGrid, gameId) {
     io.emit("gameGrid", gameGrid, gameId)

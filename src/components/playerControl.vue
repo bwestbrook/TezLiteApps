@@ -44,6 +44,9 @@ export default {
             this.pointToPlay = playedPoint
             this.blockchainStatus = bcStatus
         })
+        this.socket.on('updateBCStatus', (bcStatus) => {
+            this.blockchainStatus = bcStatus
+        })
         // Listen to contracts for changes
         this.tezos.setStreamProvider(
             this.tezos.getFactory(PollingSubscribeProvider)({
