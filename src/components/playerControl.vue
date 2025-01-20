@@ -422,25 +422,25 @@ export default {
                 {{walletAddress}} 
         </div>
      </div>
-     <div class="playerPanel" > My Active Games: 
+     <div class="playerPanel" > My Active Games (Click to Load/Refresh)
         <div v-for="(item) in activeGames" :key="item"> 
             <div class="actionButton" @click="loadGameBC(item)"> {{ item }}</div>
         </div>
      </div>
-     <div class="playerPanel" > My Games Looking for Challengers!:
+     <div class="playerPanel" > My Pending Games (Click to Load/Refresh)
         <div v-for="(item) in pendingGames" :key="item"> 
             <div class="actionButton" @click="loadGameBC(item)"> {{ item }}</div>
         </div>
      </div>
-     <div class="playerPanel" > Games Looking for Challengers!
+     <div class="playerPanel" > Games to Join (Click to Load/Refresh)
         <div v-for="(item) in pendingGamesOthers" :key="item"> 
             <div class="actionButton" @click="loadGameBC(item)"> {{ item }}</div>
         </div>
      </div>
-     <div class="playerPanel" > My Past Games: 
+     <div class="playerPanel" > My Past Games (Click to Load/Refresh) 
         <div v-for="(item) in pastGames" :key="item"> 
             <div class="actionButton" @click="loadGameBC(item)"> {{ item }}</div>
-        </div>
+        </div> 
      </div>
      <div class="playerPanel" >
         <div> 
@@ -463,10 +463,8 @@ export default {
 .playerPanel {
 
     display: flex;
-    align-content: center;
-    flex-direction: row;
     justify-content: center;
-    vertical-align: center;
+    align-items: center;
     background-color: #000000;
     color: #fff;
     padding: 5px;
