@@ -165,6 +165,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on("updateGamePlayable", function(gamePlayabe, gameId) {
+    console.log('lock')
     io.to(gameId).emit('gamePlayable', gamePlayabe)
   });
   // Contract

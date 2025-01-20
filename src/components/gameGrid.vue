@@ -173,6 +173,7 @@ export default {
         this.playerTurn = playerTurn 
     });
     this.socket.on('updateGamePlayable', (gamePlayable) => {
+      console.log('post lok')
       this.gamePlayable = gamePlayable
       this.gamePaused = !gamePlayable
     });

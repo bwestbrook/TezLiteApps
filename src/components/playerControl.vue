@@ -25,6 +25,7 @@ export default {
             pointToPlay: 'XXX',
             activeGames: [],
             pendingGames: [],
+            pastGames: [],
             pendingGamesOthers: []
 
         }
@@ -59,9 +60,22 @@ export default {
         this.tezos.setStreamProvider(
             this.tezos.getFactory(PollingSubscribeProvider)({
                 shouldObservableSubscriptionRetry: true,
-                pollingIntervalMilliseconds: 1500
+                pollingIntervalMilliseconds: 250
             })
-            );
+        );
+        try {
+        const sub = this.tezos.stream.subscribeEvent({
+            tag: 'gameNotActiveError',
+            address: CONTRACT_ADDRESS,
+            //excludeFailedOperations: true
+        });
+        sub.on('data', (data) => {
+            //const transactionBlockLevel = data.level
+            console.log('gameNotActiveError: ', data)
+        })
+        } catch (e) {
+        console.log(e);
+        }
         try {
             const sub = this.tezos.stream.subscribeEvent({
               tag: 'contractUpdated',
@@ -70,9 +84,8 @@ export default {
             });
             sub.on('data', (data) => {
                 const transactionBlockLevel = data.level
-                if (this.gameId > -1) {
-                    this.delayGetGamesFromContract(transactionBlockLevel)
-                }
+                this.delayGetGamesFromContract(transactionBlockLevel)
+                
             })
           } catch (e) {
             console.log(e);
@@ -85,17 +98,25 @@ export default {
         async getNextBlockLevel(transactionBlockLevel){
             let currentBlock = await this.rpcclient.getBlock();
             let currentBlockLevel = await currentBlock.header.level
-            while (currentBlockLevel == transactionBlockLevel) {
+            while (currentBlockLevel > transactionBlockLevel + 2) {
                 this.blockchainStatus = 'Confirming ...'
                 let currentBlock = await this.rpcclient.getBlock();
-                currentBlockLevel = await currentBlock.header.level                
+                
+                currentBlockLevel = await currentBlock.header.level        
+                console.log(currentBlockLevel)        
             }
             this.blockchainStatus = 'Confirmed!'
             this.togglePlayer()
+            this.updatePlayerControl()
             
         },
         async delayGetGamesFromContract(transactionBlockLevel){
             await this.getNextBlockLevel(transactionBlockLevel)
+            //console.log(this.gameId, this.gameCount)
+            if (this.gameId == -1) {
+                this.gameId = this.gameCount - 1
+            }
+            console.log(this.gameId == -1)
             await this.getGameGrid(this.gameId)
         },
         async toggleWallet(){
@@ -132,6 +153,7 @@ export default {
             let i = 0
             this.activeGames = []
             this.pendingGames = []
+            this.pastGames = []
             this.pendingGamesOthers = []
             for (i; i < this.gameCount; i++) {
                 if (gamesObject[i].players.includes(activeAccount.address)) {
@@ -139,6 +161,8 @@ export default {
                         this.pendingGames.push(gamesObject[i].gameId)      
                     } else if (gamesObject[i].gameStatus == 1) {
                         this.activeGames.push(gamesObject[i].gameId)     
+                    } else if (gamesObject[i].gameStatus == 2) {
+                        this.pastGames.push(gamesObject[i].gameId)     
                     }
                 } else if (gamesObject[i].gameStatus == 0) {
                     this.pendingGamesOthers.push(gamesObject[i].gameId)
@@ -176,6 +200,9 @@ export default {
                 if (game.players[this.playerTurn - 1] == activeAccount.address) {
                     this.socket.emit('updateGamePlayable', true, this.gameId)
                 } 
+            } else if (game.gameStatus == 2) {
+                console.log('locking game')
+                this.socket.emit('updateGamePlayable', false, this.gameId)
             }
         },
         async updateConnectedUsers(connectedUsers) {
@@ -211,8 +238,8 @@ export default {
                     return op.confirmation().then(() => op.opHash);
                 })
                 .then((hash) => console.log(`Operation injected: https://ghost.tzstats.com/${hash}`))
-                .then(() => this.blockchainStatus = 'Created Game on Smart Contract' )
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
+            
         },
         async joinGameBC(gameId) {     
             this.blockchainStatus = 'Joining Game on Smart Contract'       
@@ -405,6 +432,11 @@ export default {
      </div>
      <div class="playerPanel" > Games Looking for Challengers!
         <div v-for="(item) in pendingGamesOthers" :key="item"> 
+            <div class="actionButton" @click="loadGameBC(item)"> {{ item }}</div>
+        </div>
+     </div>
+     <div class="playerPanel" > My Past Games: 
+        <div v-for="(item) in pastGames" :key="item"> 
             <div class="actionButton" @click="loadGameBC(item)"> {{ item }}</div>
         </div>
      </div>
