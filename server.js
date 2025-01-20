@@ -18,10 +18,6 @@ app.get('/', (req, res) => {
   res.render('pages/index')
 })
 
-app.get('/cool', (req, res) => {
-  console.log(`Rendering a cool ascii face for route '/cool'`)
-  res.send(cool())
-})
 
 const server = http.createServer(app)
 const io = require('socket.io')(server, {
@@ -49,9 +45,10 @@ let addressesInGame = []
 const messages = []
 io.on('connection', (socket) => {
 
-    //console.log("user " + socket.id + " connected");
     io.emit("socketId", socket.id)
     socket.join(socket.id) // for self stuff like resize events
+    //console.log(io.sockets.adapter.rooms)
+
     // Game Play
     socket.on("initGameGrid", function(gameId) {
       gameData.gameBalance = 0
@@ -74,59 +71,115 @@ io.on('connection', (socket) => {
               }
           }
       }
-    console.log('emitting GGG')
     io.emit("gameGrid", gameGrid, gameId)
   });
 
-  socket.on("updatePlayedPoint", function(playedPoint, bcStatus) {
-    console.log('server sees UPP', playedPoint, bcStatus)
-    io.emit("playedPoint", playedPoint, bcStatus)
+
+  socket.on("updateBCStatus", function(bcStatus, gameId) {
+    io.to(gameId).emit("updateBCStatus", bcStatus)
   });
 
-  socket.on("updateBCStatus", function(bcStatus) {
-    io.emit("updateBCStatus", bcStatus)
+  socket.on("updateGameId", function(gameId) {
+    io.to(gameId).emit("updateGameId", gameId)
   });
+
+
   
-  socket.on("newGameGrid", function(gameGrid, gameId) {
-    io.to(gameId).emit("gameGrid", gameGrid, gameId)
+  socket.on("updateGameGrid", function(gameGrid, gameId, updateGrid) {
+    if (updateGrid) {
+      io.to(gameId).emit("updateGameGrid", gameGrid)
+    } else {
+      io.to(socket.id).emit("updateGameGrid", gameGrid)
+    }
   });
 
-  socket.on("playerTurn", function(playerTurn) {
-    console.log('playerTurn', playerTurn)
-    io.emit("playerTurn", playerTurn)
-  });
-
-  socket.on("resizeGame", function(width, socketId) {
-    io.to(socket.id).emit("resizeGame", width, socketId)
-  });
-  socket.on("gamePlayable", function(gamePlayabe) {
-    console.log('gamePlayable', gamePlayabe)
-    io.emit('gamePlayable', gamePlayabe)
-    
-  });
-  // Contract
-  socket.on("updateGames", function(address) {
-    console.log('updateGames')
-    io.emit('updateGames', address)
-    
-  });
-  socket.on("addUserToGameRoom", function(gameId, address) {
-    console.log(connectedUsers)
-    console.log('adding user to Game Room', gameId, address, socket.id)
-    for (let wallet in connectedUsers) {
-      if (connectedUsers[wallet].includes(socket.id)) {
-        console.log('wallet/user is connect with socket emitting to', gameId, socket.id)
-        socket.join(gameId)
-        //io.to(gameId).emit("updateGames", gameId)
-        //io.to(socket.id).emit("updatePlayerControl")
+  socket.on("updatePlayerTurn", function(playerTurn, playersInGame, address, gameId) {
+    let socketsInRoom = io.sockets.adapter.rooms.get(gameId) 
+    socketsInRoom = Array.from(socketsInRoom)
+    const walletSocketConnections = connectedUsers[address]
+    for (let walletSocketConnect in walletSocketConnections) {
+      const walletConnection = walletSocketConnections[walletSocketConnect]
+      const index = socketsInRoom.indexOf(walletConnection);
+      socketsInRoom.splice(index, 1)
+    }
+    if (address == playersInGame[playerTurn - 1]) {
+      for (let socketToUnlock in walletSocketConnections) {
+        io.to(walletSocketConnections[socketToUnlock]).emit('updateGamePlayable', true)
+      }
+      for (let socketToLock in socketsInRoom) {
+        io.to(socketsInRoom[socketToLock]).emit('updateGamePlayable', false)
+      }
+    } else {
+      for (let socketToUnlock in socketsInRoom) {
+        io.to(socketsInRoom[socketToUnlock]).emit('gamePlayable', true)
+      }
+      for (let socketToLock in walletSocketConnections) {
+        io.to(walletSocketConnections[socketToLock]).emit('gamePlayable', false)
       }
     }
-   
+    io.to(gameId).emit("updatePlayerTurn", playerTurn, address)
   });
+
+  socket.on("setUserActiveGameRoom", function(address, gameCount, gameId) { // Each user can only be in one game at a time
+    for (let i = 0; i < gameCount; i++ ) {
+      if (i == gameId) {
+        socket.join(i)
+      } else {
+        socket.leave(i)
+      }
+    }
+  });
+
+  socket.on("updateConnectedUsersInGame", function(address, gameId) {
+    let socketsInRoom = io.sockets.adapter.rooms.get(gameId) 
+    socketsInRoom = Array.from(socketsInRoom)
+    let activeUsers = []
+    let i = 0
+    for (let connectedUser in connectedUsers) {
+      for (let socketConnection in connectedUsers[connectedUser]) {
+        if (socketsInRoom.includes(connectedUsers[connectedUser][socketConnection])) {
+          activeUsers.push(connectedUser)
+          i++;
+        }
+      }
+    }
+    io.to(gameId).emit("updateConnectedUsers", activeUsers)
+    io.to(gameId).emit("updateGameId", gameId)
+  });
+
+
+  socket.on("resizeGame", function(width) {
+    io.to(socket.id).emit("resizeGame", width)
+  });
+
+  socket.on("updatePlayedPoint", function(playedPoint, bcStatus, gameId) {
+    io.to(socket.id).emit("playedPoint", playedPoint, bcStatus)
+  });
+
+  socket.on("updateGamePaused", function(gamePaused, gameId) {
+    io.to(gameId).emit('updateGamePaused', gamePaused)
+  });
+
+  socket.on("updatePlayersInGame", function(playersInGame, gameId) {
+    io.to(gameId).emit('updatePlayersInGame', playersInGame)
+  });
+
+  socket.on("updateGamePlayable", function(gamePlayabe, gameId) {
+    io.to(gameId).emit('gamePlayable', gamePlayabe)
+  });
+  // Contract
+  socket.on("updateGames", function() {
+    io.to(socket.id).emit('updateGames')
+  });
+
+  socket.on("loadGame", function(gameId, updateGrid) {
+    io.to(socket.id).emit('loadGame', gameId, updateGrid)
+  });
+
   socket.on("newContractData", function(address) {
     console.log('newContractData')
-    //io.emit('updateGames', address)
   });
+
   socket.on("walletConnection", function(address) {
     // Determine all the sockets a single user/wallet is connected to
     if (connectedUsers.hasOwnProperty(address)) {

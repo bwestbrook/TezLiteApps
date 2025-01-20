@@ -32,8 +32,8 @@ export default {
     }
   },
   created() {   
-      //this.socket = io('localhost:3000')
-      this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
+      this.socket = io('localhost:3000')
+      //this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
       this.tezos = Tezos
       this.getWallet()
       this.socket.on('socketId', (socketId) => {
@@ -60,7 +60,7 @@ export default {
           wallet.client.subscribeToEvent(BeaconEvent.ACTIVE_ACCOUNT_SET, (account) => {
               this.brodcastWallet(account)  
               this.socket.emit("walletConnection", account.address)  
-              this.socket.emit("updateGames", -1)                
+              this.socket.emit("updateGames")
           })
           const contractAbstraction = await Tezos.contract.at(CONTRACT_ADDRESS);
           console.log(contractAbstraction);

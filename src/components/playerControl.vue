@@ -3,7 +3,6 @@ import { PollingSubscribeProvider } from '@taquito/taquito';
 import { RemoteSigner } from '@taquito/remote-signer';
 import { RpcClient } from '@taquito/rpc';
 import { NODE_URL, CONTRACT_ADDRESS } from '../constants'
-import { getGamesFromContract } from '../services/tezos-services.js'
 import { reduceAddress } from "../utilities";
 
 export default {
@@ -19,6 +18,9 @@ export default {
             pendingGame: 'NO GAME',
             playerTurn: 'NA',
             playersInGame: '',
+            player1Connected: 'inactive',
+            player2Connected: 'inactive',
+            addressesInGame: [],
             blockchainStatus: 'No Activity',
             pointToPlay: 'XXX',
             activeGames: [],
@@ -29,10 +31,17 @@ export default {
     },
     created() {
         this.rpcclient = new RpcClient(NODE_URL, 'NetXnHfVqm9iesp');
-        this.socket.emit("updateActiveGame", this.activeGameId)
-
         this.socket.on("updateGames", () => {
-            this.getGamesFromContract()
+            this.getGamesFromContractAsync()
+        })
+        this.socket.on("updatePlayerControl", (gamesObject) => {
+            this.updatePlayerControl(gamesObject)
+        })
+        this.socket.on("updateConnectedUsers", (address) => {
+            this.updateConnectedUsers(address)
+        })
+        this.socket.on("loadGame", (gameId, updateGrid) => {
+            this.getGameGrid(gameId, updateGrid)
             this.updatePlayerControl()
         })
         // Set up socket to receive from server
@@ -45,9 +54,6 @@ export default {
         })
         this.socket.on('updateBCStatus', (bcStatus) => {
             this.blockchainStatus = bcStatus
-        })
-        this.socket.on('updatePlayerControl', () => {
-            this.updatePlayerControl()
         })
         // Listen to contracts for changes
         this.tezos.setStreamProvider(
@@ -63,7 +69,6 @@ export default {
               //excludeFailedOperations: true
             });
             sub.on('data', (data) => {
-                console.log('transaction level', data.level)
                 const transactionBlockLevel = data.level
                 if (this.gameId > -1) {
                     this.delayGetGamesFromContract(transactionBlockLevel)
@@ -73,25 +78,25 @@ export default {
             console.log(e);
           }
     },
+    mounted() {
+    },
     methods: {
         //Wallet Control
         async getNextBlockLevel(transactionBlockLevel){
             let currentBlock = await this.rpcclient.getBlock();
             let currentBlockLevel = await currentBlock.header.level
             while (currentBlockLevel == transactionBlockLevel) {
-                console.log('checking block level', currentBlockLevel)
                 this.blockchainStatus = 'Confirming ...'
                 let currentBlock = await this.rpcclient.getBlock();
                 currentBlockLevel = await currentBlock.header.level                
             }
             this.blockchainStatus = 'Confirmed!'
+            this.togglePlayer()
+            
         },
         async delayGetGamesFromContract(transactionBlockLevel){
             await this.getNextBlockLevel(transactionBlockLevel)
-            await this.getGamesFromContract()
-            const game = await this.gamesObject[this.gameId]
-            await this.getGameGridBC(game, this.gameId)
-            this.socket.emit("updateGames", this.gameId)
+            await this.getGameGrid(this.gameId)
         },
         async toggleWallet(){
             const activeAccount = await this.wallet.client.getActiveAccount()              
@@ -102,8 +107,24 @@ export default {
                 this.tezos.setWalletProvider(this.wallet)
             }
         },
+        async togglePlayer(){
+            const activeAccount = await this.wallet.client.getActiveAccount()              
+            if (!activeAccount) {                  
+                return         
+            } 
+            if (this.playerTurn == 1) {
+                this.socket.emit('updatePlayerTurn', 2, this.addressesInGame, activeAccount.address, this.gameId)
+                this.playerTurn = 2
+            } else if (this.playerTurn == 2) {
+                this.socket.emit('updatePlayerTurn', 1, this.addressesInGame, activeAccount.address, this.gameId)
+                this.playerTurn = 1
+            }
+        },
         // Populating the page
-        async updatePlayerControl() {
+        async updatePlayerControl(gamesObject) {
+            if (!gamesObject) {
+                gamesObject = await this.getGamesFromContract()
+            }
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
                 return
@@ -112,19 +133,15 @@ export default {
             this.activeGames = []
             this.pendingGames = []
             this.pendingGamesOthers = []
-            console.log('UPC')
             for (i; i < this.gameCount; i++) {
-                console.log(i)
-                if (this.gamesObject[i].players.includes(activeAccount.address)) {
-                    if (this.gamesObject[i].gameStatus == 0) {
-                        this.pendingGames.push(this.gamesObject[i].gameId)                         
-                        //this.socket.emit('addUserToGameRoom', i, activeAccount.address)       
-                    } else if (this.gamesObject[i].gameStatus == 1) {
-                        this.activeGames.push(this.gamesObject[i].gameId)
-                        //this.socket.emit('addUserToGameRoom', i, activeAccount.address)       
+                if (gamesObject[i].players.includes(activeAccount.address)) {
+                    if (gamesObject[i].gameStatus == 0) {
+                        this.pendingGames.push(gamesObject[i].gameId)      
+                    } else if (gamesObject[i].gameStatus == 1) {
+                        this.activeGames.push(gamesObject[i].gameId)     
                     }
-                } else if (this.gamesObject[i].gameStatus == 0) {
-                    this.pendingGamesOthers.push(this.gamesObject[i].gameId)
+                } else if (gamesObject[i].gameStatus == 0) {
+                    this.pendingGamesOthers.push(gamesObject[i].gameId)
                 }
             }      
         },
@@ -138,6 +155,9 @@ export default {
             }
             const game = await this.gamesObject[gameId]
             this.gameId = game.gameId
+            this.socket.emit("updateGameId", this.gameId)
+            this.socket.emit("updatePlayersInGame", game.players, this.gameId)
+            this.addressesInGame = game.players
             if (game.gameStatus == 0 ) {
                 this.pendingGame = gameId
                 this.gameStatus = 'Pending'
@@ -150,14 +170,26 @@ export default {
                 this.walletPlayerTurn2 = await reduceAddress(game.players[1])
                 this.playersInGame = [this.walletPlayerTurn1, this.walletPlayerTurn2]
                 this.playerTurn = await game.playerTurn
+                this.socket.emit('updatePlayerTurn', this.playerTurn, game.players, activeAccount.address, this.gameId)
+                this.socket.emit('updateConnectedUsersInGame', activeAccount.address, this.gameId)
                 this.blockchainStatus = 'Active'
                 if (game.players[this.playerTurn - 1] == activeAccount.address) {
-                    console.log('wtf')
-                    this.socket.emit('gamePlayable', true)
-                    this.socket.emit('playerTurn', this.playerTurn)
-                } else {
-                    console.log('dog')
-                    //this.socket.emit('gamePlayable', false, this.playerTurn)
+                    this.socket.emit('updateGamePlayable', true, this.gameId)
+                } 
+            }
+        },
+        async updateConnectedUsers(connectedUsers) {
+            if (connectedUsers.length == 1 ) { // reset
+                this.player1Connected = 'inactive'
+                this.player2Connected = 'inactive'
+            }
+            for (let user in connectedUsers) {
+                if (this.addressesInGame.includes(connectedUsers[user])) {
+                    if (this.addressesInGame.indexOf(connectedUsers[user]) == 0) {
+                        this.player1Connected = 'active'
+                    } else if (this.addressesInGame.indexOf(connectedUsers[user]) == 1) {
+                        this.player2Connected = 'active'
+                    }
                 }
             }
         },
@@ -236,15 +268,6 @@ export default {
                 })
                 .then((hash) => {
                     console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
-                .then(() => {
-                    if (this.playerTurn == 1) {
-                        this.socket.emit('playerTurn', 2)
-                        this.playerTurn = 2
-                    } else if (this.playerTurn == 2) {
-                        this.socket.emit('playerTurn', 1)
-                        this.playerTurn = 1
-                    }
-                })
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
         },
         async getSigner(activeAccount) { 
@@ -254,65 +277,24 @@ export default {
             return signer
         },
         // Reading Smart Contract
-        async loadGameBC(gameId) {
-            //this.socket.emit("initGameGrid")
-            this.blockchainStatus = 'Loading Game from Smart Contract'       
+        async getGamesFromContractBC() {
+            const contract = await this.tezos.wallet.at(CONTRACT_ADDRESS)
+            const storage = await contract.storage()
+            const games = await storage.games
+            return games
+        },
+        async getGamesFromContractAsync() {
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
                 return
-            }    
-            const games = await getGamesFromContract(activeAccount.address)  
-            const allGames = await games.values()
-            let j = 0;
-            //
-            for (let game of allGames) {
-                if (j == gameId) {
-                    await this.getGameGridBC(game, j)
-                    await this.updateLoadedGameStatus(j)                    
-                    {break ;}
-                }  
-                j ++;
-            } 
-            
-            this.blockchainStatus = `Game ${gameId} loaded`
-            this.socket.emit('updateGameRoom', gameId, activeAccount.address)
+            }  
+            const gamesObject = await this.getGamesFromContract()   
+            this.updatePlayerControl(gamesObject)        
         },
-        async getGameGridBC(game, gameId) {
-            let loadedGridPoints = []
-            const gridPoints = await game.grid.values()
-            let n = 0;
-            for (let gridPoint of gridPoints) {
-                loadedGridPoints[n] = gridPoint.toNumber()
-                n ++;
-            }
-            let gameGrid = {}
-            let i = -1;
-            n = 0
-            for (i; i < 3; i++) {
-                let j = -1
-                if (!gameGrid[i]) {
-                gameGrid[i] = {}
-                }
-                for (j; j < 3; j++) {
-                    if (!gameGrid[i][j]) {
-                    gameGrid[i][j] = {}
-                    }
-                    let k = -1
-                    for (k; k < 3; k++) {  
-                        gameGrid[i][j][k] = loadedGridPoints[n]
-                        n ++;
-                    }
-                }
-            }
-            this.socket.emit("newGameGrid", gameGrid, gameId)
-        },
-        async getGamesFromContract() {
-            const activeAccount = await this.wallet.client.getActiveAccount()   
-            if (!activeAccount) {
-                return
-            }   
-            const games = await getGamesFromContract()         
+        async getGamesFromContract() {          
+            const games = await this.getGamesFromContractBC() 
             const allGames = await games.values()
+            let gamesObject = {}
             let j = 0;
             for (let game of allGames) {
                 const players = await game.players.values()
@@ -338,10 +320,58 @@ export default {
                     }
                 gameData['players'] = playerList
                 gameData['grid'] = await game.grid
-                this.gamesObject[j] = gameData
+                gamesObject[j] = gameData
                 j ++;
             }           
-            this.gameCount = j        
+        this.gameCount = j 
+        this.gamesObject = await gamesObject
+        return gamesObject
+        },
+        async loadGameBC(gameId) {
+            this.blockchainStatus = 'Loading Game from Smart Contract'       
+            const activeAccount = await this.wallet.client.getActiveAccount()   
+            if (!activeAccount) {
+                return
+            }           
+            this.socket.emit("setUserActiveGameRoom", activeAccount.address, this.gameCount, gameId)
+            await this.updateLoadedGameStatus(gameId)   
+            const game = await this.gamesObject[gameId]
+            const playerTurn = game.playerTurn
+            const players = game.players
+            const updateGrid = players[playerTurn - 1] == activeAccount.address
+            this.socket.emit("updatePlayedPoint", 'NO MOVE', 'Active', this.gameId)
+            this.socket.emit('loadGame', gameId, updateGrid)   
+            this.blockchainStatus = `Game ${gameId} loaded`  
+        },
+        async getGameGrid(gameId, updateGrid=true) {
+            let loadedGridPoints = []
+            await this.getGamesFromContract()
+            const game = await this.gamesObject[gameId].grid
+            let n = 0;
+            for (let gridPoint of game.valueMap) {
+                loadedGridPoints[n] = gridPoint[1.].c[0]
+                n ++;
+            }
+            let gameGrid = {}
+            let i = -1;
+            n = 0
+            for (i; i < 3; i++) {
+                let j = -1
+                if (!gameGrid[i]) {
+                gameGrid[i] = {}
+                }
+                for (j; j < 3; j++) {
+                    if (!gameGrid[i][j]) {
+                    gameGrid[i][j] = {}
+                    }
+                    let k = -1
+                    for (k; k < 3; k++) {  
+                        gameGrid[i][j][k] = loadedGridPoints[n]
+                        n ++;
+                    }
+                }
+            }
+            this.socket.emit("updateGameGrid", gameGrid, gameId, updateGrid)
         }
     }
 }
@@ -378,12 +408,12 @@ export default {
             <div class="actionButton" @click="loadGameBC(item)"> {{ item }}</div>
         </div>
      </div>
-     <div class="playerPanel" > Game INFO: 
+     <div class="playerPanel" >
         <div> 
             <div class="actionButton" > Game ID: {{ gameId }}</div>
         </div>
         <div> 
-            <div class="actionButton" > Players: {{ playersInGame }}</div>
+            <div class="actionButton" > {{ playersInGame[0] }} {{player1Connected}} vs. {{ playersInGame[1]}} {{player2Connected}} </div>
         </div>
         <div> 
             <div class="actionButton" > Player Turn: {{ playerTurn }}</div>

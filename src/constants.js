@@ -4,9 +4,9 @@ export const PORT = 3000
 
 //export const NODE_URL ='https://rpc.pariscnet.teztnets.com'
 
-export const NODE_URL = 'https://ghostnet.smartpy.io/'
+//export const NODE_URL = 'https://ghostnet.smartpy.io/'
 
-//export const NODE_URL = 'https://ghostnet.tezos.ecadinfra.com/'
+export const NODE_URL = 'https://ghostnet.tezos.ecadinfra.com/'
 
 //export const NODE_URL = 'https://rpc.ghostnet.teztnets.com/'
 

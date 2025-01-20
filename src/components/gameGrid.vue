@@ -100,6 +100,7 @@ export default {
       playerColor: 'red',
       playerTurn: 1,
       walletTurn: 0,
+      gameId: -1,
       walletPlayerTurn1: '',
       walletPlayerTurn2: '',
       gamePaused: false,
@@ -107,6 +108,7 @@ export default {
       player1Plays: {},
       player2Plays: {},
       tempHighlights: [],
+      playersInGame: [],
       allPaths: {}
       
     }
@@ -119,7 +121,6 @@ export default {
     if (this.gameSize > 1000) {
       this.gameSize = 1000
     }
-    console.log(this.gameSize)
     this.board = new Three.Group()
     // Geometry
     this.defaultGeometry = new Three.SphereGeometry(0.08, 32, 16)
@@ -134,11 +135,12 @@ export default {
     this.player1HightlightMaterial = new Three.MeshMatcapMaterial({color: 'red', opacity: 0.6, transparent: true});
     this.player2HightlightMaterial = new Three.MeshMatcapMaterial({color: 'blue', opacity: 0.6, transparent: true});
 
-    this.defaultLineMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.5, transparent:true});
-    this.winningLineMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.5, transparent:true});
-    this.playedLineMaterial = new Three.MeshMatcapMaterial({color: 'red', opacity: 0.8, transparent: true});   
+    this.defaultLineMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.9, transparent:true});
+    this.winningLineMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.9, transparent:true});
+    this.playedLineMaterial = new Three.MeshMatcapMaterial({color: 'red', opacity: 0.9});   
+
     this.playedMaterial = this.playedLineMaterial
-    this.tubeRadius = 0.012
+    this.tubeRadius = 0.005
     // General 
     this.scene = new Three.Scene();
     this.renderer = new Three.WebGLRenderer({antialias: true});
@@ -157,9 +159,7 @@ export default {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.animate()
     // Set up socket to receive from server
-    this.socket.on('gameGrid', (gameGrid) => {
-      //
-      this.gamePaused = false
+    this.socket.on('updateGameGrid', (gameGrid) => {
       this.gameGrid = gameGrid
       this.updateGridRender()
       this.connectMoves(false)
@@ -169,13 +169,21 @@ export default {
         this.resizeGameRender(width)
       }
     });
-    this.socket.on('gamePlayable', (gamePlayable) => {
-      this.gamePlayable = gamePlayable
-      console.log('set GamePlayable', gamePlayable)      
+    this.socket.on('updatePlayerTurn', (playerTurn) => {
+        this.playerTurn = playerTurn 
     });
-    this.socket.on('playerTurn', (playerTurn) => {
-      this.playerTurn = playerTurn
-      console.log('set playerTurn', playerTurn)      
+    this.socket.on('updateGamePlayable', (gamePlayable) => {
+      this.gamePlayable = gamePlayable
+      this.gamePaused = !gamePlayable
+    });
+    this.socket.on('updateGamePaused', (gamePaused) => {
+      this.gamePaused = gamePaused
+    });
+    this.socket.on('updateGameId', (gameId) => {
+      this.gameId = gameId   
+    });
+    this.socket.on('updatePlayersInGame', (playersInGame) => {
+      this.playersInGame = playersInGame   
     });
   },
   methods: {
@@ -197,10 +205,6 @@ export default {
       this.highlightMove(evt)
       this.rotate = false
     },
-    //
-    submitMoveBC: function(move) {
-      console.log(move)
-    },
     // Game Grid Rendering
     buildBoard: function() {
         let i = -1
@@ -218,7 +222,7 @@ export default {
                 }
             }
         }
-      this.addWinningLines()
+      //this.addWinningLines()
       this.createConnectionLinks()
       this.scene.add(this.board)
     },
@@ -257,7 +261,6 @@ export default {
         }      
     },
     highlightMove: function(evt) {
-      console.log(this.gamePlayable)
       if (!this.gamePlayable) {
         return 
       }
@@ -267,7 +270,6 @@ export default {
       if (this.gamePaused) {
         return
       }
-      this.socket.emit("updateBCStatus", `${this.playerTurn} Making move`)
       this.updateGridRender()
       const intersects = this.findIntersects(evt)
       if (intersects.length > 0) {
@@ -307,27 +309,29 @@ export default {
           const k = this.clickedVertex.object.coords[2]
           if (!this.gamePaused) {
             if (this.gameGrid[i][j][k] == 0) { //Not owned
-              this.socket.emit("updatePlayedPoint", this.clickedVertex.object.coords, "Move Selected")
+              this.socket.emit("updatePlayedPoint", this.clickedVertex.object.coords, "Move Selected", this.gameId)
               this.gameGrid[i][j][k] = -1 * this.playerTurn
+              this.socket.emit("updateGamePaused", true, this.gameId)
               this.gamePaused = true
-              console.log(-1 * this.playerTurn)
             } 
           } else {
-              if (this.gameGrid[i][j][k] < 0) { //Already owned
+              if (this.gameGrid[i][j][k] < 0) { //Already Temp owned
                 //this.gameGrid[i][j][k] == 0
                 this.gamePaused = false
-                this.socket.emit("updatePlayedPoint", 'NO MOVE', 'Active')
+                this.socket.emit("updateGamePaused", false, this.gameId)
+                this.socket.emit("updatePlayedPoint", 'NO MOVE', 'Active', this.gameId)
                 this.highlightMove(evt)
-              } else if (this.gameGrid[i][j][k] == this.playerTurn) { //Already owned
+              } else if (this.gameGrid[i][j][k] == this.playerTurn) { //Already Owned owned
                 this.gameGrid[i][j][k] == 0
-                this.socket.emit("updatePlayedPoint", 'NO MOVE', 'Active')
+                this.socket.emit("updatePlayedPoint", 'NO MOVE', 'Active', this.gameId)
+                this.socket.emit("updateGamePaused", false, this.gameId)
                 this.gamePaused = false
               } 
             }
       }
       this.lastClickedVertex = this.clickedVertex
       this.playedPoint = this.lastClickedVertex.object.coords
-      this.socket.emit("updateGameGrid",this.gameGrid) 
+      this.socket.emit("updateGameGrid", this.gameGrid, this.gameId, true) 
       this.connectMoves(false)
       this.updateGridRender()
     },
@@ -357,11 +361,9 @@ export default {
               thisVertex.material = this.player2Material
               thisVertex.geometry = this.playedGeometry
             } else if (gameGridOwner == -1 ) {
-              console.log('highlight 1')
               thisVertex.material = this.player1HightlightMaterial
               thisVertex.geometry = this.playedGeometry
             }  else if (gameGridOwner == -2 ) {
-              console.log
               thisVertex.material = this.player2HightlightMaterial
               thisVertex.geometry = this.playedGeometry
             } 
@@ -423,7 +425,7 @@ export default {
       }
     },
     makeConnectingTube: function(tubeGeometry) {
-      const material = new Three.MeshMatcapMaterial({color: 'green', opacity:0.3, transparent:true}); // Must crate a new material instance for each tube
+      const material = new Three.MeshMatcapMaterial({color: 'green', opacity:0.6, transparent:true}); // Must crate a new material instance for each tube
       const tube = new Three.Mesh(tubeGeometry, material)
       return tube
     },

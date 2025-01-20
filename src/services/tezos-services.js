@@ -4,17 +4,6 @@ import { NODE_URL, CONTRACT_ADDRESS } from '../constants'
 //const cors = require('cors');
 const Tezos = new TezosToolkit(NODE_URL);
 
-
-export const getGamesFromContract = async() => {
-  console.log('newGFC')
-  const contract = await Tezos.wallet.at(CONTRACT_ADDRESS)
-  const storage = await contract.storage()
-  const games = await storage.games
-  return games
-    }  
-  
-
-
 export const getContractService = async(nft_contract_address) => {
   const contract = await Tezos.wallet.at(nft_contract_address);
   return contract
