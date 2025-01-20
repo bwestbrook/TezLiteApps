@@ -60,7 +60,7 @@ export default {
         this.tezos.setStreamProvider(
             this.tezos.getFactory(PollingSubscribeProvider)({
                 shouldObservableSubscriptionRetry: true,
-                pollingIntervalMilliseconds: 250
+                pollingIntervalMilliseconds: 1000
             })
         );
         try {
@@ -113,8 +113,10 @@ export default {
         async delayGetGamesFromContract(transactionBlockLevel){
             await this.getNextBlockLevel(transactionBlockLevel)
             //console.log(this.gameId, this.gameCount)
-            if (this.gameId == -1) {
+            if (this.gameId == -1 && this.gameCount > 0) {
                 this.gameId = this.gameCount - 1
+            } else if (this.gameId == -1 && this.gameCount == 0) {
+                this.gameId = 0
             }
             console.log(this.gameId == -1)
             await this.getGameGrid(this.gameId)

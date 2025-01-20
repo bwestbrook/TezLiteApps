@@ -91,24 +91,24 @@ def main():
                 "currentGameIndex": 0,
                 "pendingGames": 0
             }
-
-
-
+            self.data.setSum = 0
+            self.data.gameWon = 0
+            
             
         @sp.entrypoint()
         def startGame(self, params):
             '''
             '''
+            sp.emit(1, tag="contractUpdated")
             sp.cast(params.player, sp.address)
-            sp.cast(params.mutezPerMove, sp.nat)
             new_game_grid = {
                     111: 0,
-                    112: 1,
-                    113: 2,
-                    114: 1,
+                    112: 0,
+                    113: 0,
+                    114: 0,
                     121: 0,
                     122: 0,
-                    123: 2,
+                    123: 0,
                     124: 0,
                     131: 0,
                     132: 0,
@@ -167,13 +167,16 @@ def main():
                     443: 0,
                     444: 0
                     }
+            
             idx = self.data.metadata["currentGameIndex"]
             players = {1: params.player, 2: params.player}
             metadata = {
                 "mutezPerMove": params.mutezPerMove,
                 "playerTurn": 1, 
                 "gameStatus": 0,
+                "winningPlayer": 0,
                 "gameBalance": 0,
+                "winningsCollected": 0
             }      
             new_game = sp.record(
                 grid = new_game_grid,
@@ -182,6 +185,8 @@ def main():
             )           
             self.data.games[idx] = new_game
             self.data.metadata["currentGameIndex"] += 1
+            
+
             
         @sp.entry_point()    
         def joinGame(self, params):
@@ -192,28 +197,46 @@ def main():
                 sp.cast(params.gameId, sp.int)
                 self.data.games[params.gameId].players[2] = params.player
                 self.data.games[params.gameId].metadata['gameStatus'] = 1
+            
+            sp.emit(params.gameId, tag="contractUpdated")
 
         @sp.entry_point()
         def makeMove(self, params):
             '''
             '''
-            sp.cast(params.player, sp.address)
-            sp.cast(params.gameId, sp.int)
-            sp.cast(params.move, sp.int)
-            #sp.cast(params.caddress, sp.address)
-            #caddress = sp.self_address
-            #sp.send(params.caddress, sp.mutez(10))
-            if self.data.games[params.gameId].metadata["gameStatus"] == 0:
-                player_turn = self.data.games[params.gameId].metadata["playerTurn"]
-                if self.data.games[params.gameId].players[player_turn] == params.player:
-                    self.data.games[params.gameId].grid[params.move] = player_turn
-                    if player_turn == 1:
-                        self.data.games[params.gameId].metadata["playerTurn"] = 2
-                    else:
-                        self.data.games[params.gameId].metadata["playerTurn"] = 1
+            self.data.gameWon = 0
+            sp.emit(params.move, tag="contractUpdated")
+            if self.data.games[params.gameId].metadata["gameStatus"] == 1:
+                sp.cast(params.player, sp.address)
+                sp.cast(params.gameId, sp.int)
+                sp.cast(params.move, sp.int)
+                if self.data.games[params.gameId].metadata["gameStatus"] == 1:
+                    player_turn = self.data.games[params.gameId].metadata["playerTurn"]
+                    if self.data.games[params.gameId].players[player_turn] == params.player:
+                        self.data.games[params.gameId].grid[params.move] = player_turn
+                        if player_turn == 1:
+                            self.data.games[params.gameId].metadata["playerTurn"] = 2
+                        else:
+                            self.data.games[params.gameId].metadata["playerTurn"] = 1
+                
+                for gameWinnningSet in self.data.game_winners.values():
+                    self.data.setSum = 0
+                    for coord in gameWinnningSet:
+                        owner = self.data.games[params.gameId].grid[coord]
+                        self.data.setSum += owner
+                    if self.data.setSum == 4:
+                        self.data.gameWon = 1
+                    if self.data.setSum == 8:
+                        self.data.gameWon = 2
 
+                if self.data.gameWon > 0:
+                    sp.emit(self.data.gameWon, tag="gameWonBy")
+                    self.data.games[params.gameId].metadata["gameStatus"] = 2
+            else:
+                sp.emit('game not active', tag="gameNotActiveError")
+                #sp.emit(params.move, tag="contractUpdated")
 
-
+                    
 @sp.add_test()
 def test():
     s = sp.test_scenario("my first test", main)
@@ -223,13 +246,19 @@ def test():
     player1 = sp.test_account("player1")
     player2 = sp.test_account("player2")
     player3 = sp.test_account("player3")
+    print(player1.address)
     a = main.TezTacToe(player1.address, player2.address)
     s += a
     mutezPerMove = 10000
+    mutezPerMove2 = sp.mutez(10000)
     values = [player1.address, mutezPerMove]
+    caddress = sp.address('KT1TezoooozzSmartPyzzSTATiCzzzwwBFA1')
     #params = sp.cast(values, sp.record)
     a.startGame(player= player1.address, mutezPerMove=mutezPerMove)
+    a.startGame(player= player1.address, mutezPerMove=mutezPerMove)
     a.joinGame(player = player2.address, gameId=0)
-    a.joinGame(player = player3.address, gameId=0)
+    a.makeMove(player = player1.address, gameId=0, move=121)
     a.makeMove(player = player2.address, gameId=0, move=111)
+    a.makeMove(player = player1.address, gameId=0, move=131)
+    #a.makeMove(player = player2.address, gameId=0, move=111, caddress=caddress, mutezPerMove=mutezPerMove2)
     
