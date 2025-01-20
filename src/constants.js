@@ -4,9 +4,9 @@ export const PORT = 3000
 
 //export const NODE_URL ='https://rpc.pariscnet.teztnets.com'
 
-export const NODE_URL = 'https://ghostnet.smartpy.io/'
+//export const NODE_URL = 'https://ghostnet.smartpy.io/'
 
-//export const NODE_URL = 'https://ghostnet.tezos.ecadinfra.com/'
+export const NODE_URL = 'https://ghostnet.tezos.ecadinfra.com/'
 
 //export const NODE_URL = 'https://rpc.ghostnet.teztnets.com/'
 
@@ -16,7 +16,7 @@ export const NODE_URL = 'https://ghostnet.smartpy.io/'
 
 //export const CONTRACT_ADDRESS = 'KT1HppAwogv3bd7zoaoB9mFtEuKtxa6qEA1R' // v.1.2
 
-export const CONTRACT_ADDRESS = 'KT1VRFqMxKAc7biQ9Jzw1M2dDD2JZybELW55' // v1.3
+export const CONTRACT_ADDRESS = 'KT1WFdNe5yLfBCoXWNhTQmHFubYdPLLmKCn2' // v1.3
 
 //export const CONTRACT_ADDRESS = 'KT1BvZ1nhgtEMghqTqqz2UG8rDcjvJrQLomx' // V1.0
 
