@@ -98,7 +98,7 @@ export default {
         async getNextBlockLevel(transactionBlockLevel){
             let currentBlock = await this.rpcclient.getBlock();
             let currentBlockLevel = await currentBlock.header.level
-            while (currentBlockLevel > transactionBlockLevel + 2) {
+            while (currentBlockLevel > transactionBlockLevel + 4) {
                 this.blockchainStatus = 'Confirming ...'
                 let currentBlock = await this.rpcclient.getBlock();
                 
