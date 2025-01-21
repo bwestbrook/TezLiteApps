@@ -2,8 +2,9 @@
 import { PollingSubscribeProvider } from '@taquito/taquito';
 import { RemoteSigner } from '@taquito/remote-signer';
 import { RpcClient } from '@taquito/rpc';
-import { NODE_URL, CONTRACT_ADDRESS, ID_LOOKUP, TZKT_API_BASE_URL } from '../constants'
+import { NODE_URL, CONTRACT_ADDRESS, ID_LOOKUP, TZKT_API_BASE_URL, OBJECT_CONTRACT, ADMIN_ADDRESS} from '../constants'
 import { reduceAddress } from "../utilities";
+
 //import { transferToContract } from "../services/tezos-services"
 
 export default {
@@ -369,23 +370,40 @@ export default {
                     console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
         },
-        async claimNFTEarningsBC() {    
-            
-            TZKT_API_BASE_URL = 'https://api.tzkt.io/v1/bigmaps/857/keys?active=true&value.eq=1&select=key&key.nat.eq='
-            // 
+        async claimNFTEarningsBC() {  
+            let ownersToPay = {}  
+            let i = 0
             for (let Id in ID_LOOKUP) {
-                console.log(TZKT_API_BASE_URL + ID_LOOKUP[Id])
+                const apiUrl = TZKT_API_BASE_URL+ ID_LOOKUP[Id]
+                const response = await fetch(apiUrl);
+                const addressJson = await response.json();
+                let ownerAddress = addressJson[0]['address']
+                //console.log(ownerAddress, 'v', OBJECT_CONTRACT)
+                if (ownerAddress.toString() == OBJECT_CONTRACT) {
+                    ownerAddress = ADMIN_ADDRESS
+                }
+                this.blockchainStatus = 'checking Id ' + (i + 1).toString() + ' of 273'
+                if (ownerAddress in ownersToPay) {
+                    console.log('onwer found')
+                    ownersToPay[ownerAddress] += 1
+                } else {
+                    ownersToPay[ownerAddress] = 1
+
+                }
+                i ++;
             }
-            //apiUrl = TZKT_API_BASE_URL + '60227'
-            console.log(apiUrl)
+            console.log(ownersToPay)
+            i = 0
+            let uniqueOwners  = []
+            for (let uniqueOwner in uniqueOwners) {
+                console.log([ownersToPay].filter(x => x==uniqueOwner).length)
+                console.log(i, uniqueOwner, uniqueOwners[i])
+                i ++;
+            }
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
                 return
-            }    
-            const objectUrlBase = 'https://objkt.com/tokens/kalamint/'
-            //console.log(ID_LOOKUP)
-            
-
+            }            
         },
         async getSigner(activeAccount) { 
             const signer = new RemoteSigner(activeAccount.address, NODE_URL )
