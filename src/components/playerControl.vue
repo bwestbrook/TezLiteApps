@@ -2,7 +2,7 @@
 import { PollingSubscribeProvider } from '@taquito/taquito';
 import { RemoteSigner } from '@taquito/remote-signer';
 import { RpcClient } from '@taquito/rpc';
-import { NODE_URL, CONTRACT_ADDRESS } from '../constants'
+import { NODE_URL, CONTRACT_ADDRESS, ID_LOOKUP, TZKT_API_BASE_URL } from '../constants'
 import { reduceAddress } from "../utilities";
 //import { transferToContract } from "../services/tezos-services"
 
@@ -340,7 +340,7 @@ export default {
             await this.tezos.wallet
                 .at(CONTRACT_ADDRESS)
                 .then((contract) => {
-                    return contract.methodsObject.claimWinningsBC().send()
+                    return contract.methodsObject.claimWinnings().send()
                 })
                 .then((op) => {
                     console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -350,7 +350,7 @@ export default {
                     console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
         },
-        async surrenderBC() {      
+        async surrenderGameBC() {      
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
                 return
@@ -359,7 +359,7 @@ export default {
             await this.tezos.wallet
                 .at(CONTRACT_ADDRESS)
                 .then((contract) => {
-                    return contract.methodsObject.surrenderBC().send()
+                    return contract.methodsObject.surrenderGame().send()
                 })
                 .then((op) => {
                     console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -368,6 +368,24 @@ export default {
                 .then((hash) => {
                     console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
+        },
+        async claimNFTEarningsBC() {    
+            
+            TZKT_API_BASE_URL = 'https://api.tzkt.io/v1/bigmaps/857/keys?active=true&value.eq=1&select=key&key.nat.eq='
+            // 
+            for (let Id in ID_LOOKUP) {
+                console.log(TZKT_API_BASE_URL + ID_LOOKUP[Id])
+            }
+            //apiUrl = TZKT_API_BASE_URL + '60227'
+            console.log(apiUrl)
+            const activeAccount = await this.wallet.client.getActiveAccount()   
+            if (!activeAccount) {
+                return
+            }    
+            const objectUrlBase = 'https://objkt.com/tokens/kalamint/'
+            //console.log(ID_LOOKUP)
+            
+
         },
         async getSigner(activeAccount) { 
             const signer = new RemoteSigner(activeAccount.address, NODE_URL )
