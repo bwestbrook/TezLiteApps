@@ -4,6 +4,7 @@ import { RemoteSigner } from '@taquito/remote-signer';
 import { RpcClient } from '@taquito/rpc';
 import { NODE_URL, CONTRACT_ADDRESS } from '../constants'
 import { reduceAddress } from "../utilities";
+//import { transferToContract } from "../services/tezos-services"
 
 export default {
     name: "playerControl",
@@ -64,17 +65,30 @@ export default {
             })
         );
         try {
-        const sub = this.tezos.stream.subscribeEvent({
-            tag: 'gameNotActiveError',
-            address: CONTRACT_ADDRESS,
-            //excludeFailedOperations: true
-        });
-        sub.on('data', (data) => {
-            //const transactionBlockLevel = data.level
-            console.log('gameNotActiveError: ', data)
-        })
-        } catch (e) {
-        console.log(e);
+            const sub = this.tezos.stream.subscribeEvent({
+                tag: 'notPlayerTurnError',
+                address: CONTRACT_ADDRESS,
+                //excludeFailedOperations: true
+            });
+            sub.on('data', (data) => {
+                //const transactionBlockLevel = data.level
+                console.log('notPlayerTurnError: ', data)
+            })
+            } catch (e) {
+            console.log(e);
+        }
+        try {
+            const sub = this.tezos.stream.subscribeEvent({
+                tag: 'gameNotActiveError',
+                address: CONTRACT_ADDRESS,
+                //excludeFailedOperations: true
+            });
+            sub.on('data', (data) => {
+                //const transactionBlockLevel = data.level
+                console.log('gameNotActiveError: ', data)
+            })
+            } catch (e) {
+            console.log(e);
         }
         try {
             const sub = this.tezos.stream.subscribeEvent({
@@ -84,8 +98,7 @@ export default {
             });
             sub.on('data', (data) => {
                 const transactionBlockLevel = data.level
-                this.delayGetGamesFromContract(transactionBlockLevel)
-                
+                this.delayGetGamesFromContract(transactionBlockLevel)                
             })
           } catch (e) {
             console.log(e);
@@ -98,7 +111,7 @@ export default {
         async getNextBlockLevel(transactionBlockLevel){
             let currentBlock = await this.rpcclient.getBlock();
             let currentBlockLevel = await currentBlock.header.level
-            while (currentBlockLevel > transactionBlockLevel + 1) {
+            while (currentBlockLevel > transactionBlockLevel + 4) {
                 this.blockchainStatus = 'Confirming ...'
                 let currentBlock = await this.rpcclient.getBlock();
                 
@@ -289,7 +302,64 @@ export default {
                             player: activeAccount.address,
                             move: this.bcNum
                         })
-                        .send()
+                        .send({ amount: 1 })
+                })
+                .then((op) => {
+                    console.log(`Waiting for ${op.opHash} to be confirmed...`);
+                    return op.confirmation().then(() => op.opHash)
+                })
+                .then((hash) => {
+                    console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
+                .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
+        },
+        async payAdminBC() {      
+            const activeAccount = await this.wallet.client.getActiveAccount()   
+            if (!activeAccount) {
+                return
+            }    
+            this.getSigner(activeAccount)
+            await this.tezos.wallet
+                .at(CONTRACT_ADDRESS)
+                .then((contract) => {
+                    return contract.methodsObject.payAdmin().send()
+                })
+                .then((op) => {
+                    console.log(`Waiting for ${op.opHash} to be confirmed...`);
+                    return op.confirmation().then(() => op.opHash)
+                })
+                .then((hash) => {
+                    console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
+                .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
+        },
+        async claimWinningsBC() {      
+            const activeAccount = await this.wallet.client.getActiveAccount()   
+            if (!activeAccount) {
+                return
+            }    
+            this.getSigner(activeAccount)
+            await this.tezos.wallet
+                .at(CONTRACT_ADDRESS)
+                .then((contract) => {
+                    return contract.methodsObject.claimWinningsBC().send()
+                })
+                .then((op) => {
+                    console.log(`Waiting for ${op.opHash} to be confirmed...`);
+                    return op.confirmation().then(() => op.opHash)
+                })
+                .then((hash) => {
+                    console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
+                .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
+        },
+        async surrenderBC() {      
+            const activeAccount = await this.wallet.client.getActiveAccount()   
+            if (!activeAccount) {
+                return
+            }    
+            this.getSigner(activeAccount)
+            await this.tezos.wallet
+                .at(CONTRACT_ADDRESS)
+                .then((contract) => {
+                    return contract.methodsObject.surrenderBC().send()
                 })
                 .then((op) => {
                     console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -454,6 +524,15 @@ export default {
         </div>
         <div> 
             <div class="actionButton" > Status: {{ blockchainStatus }}</div>
+        </div>
+        <div> 
+            <div class="actionButton" @click="claimWinningsBC(gameId)"> Claim Winnings: {{ gameId }}</div>
+        </div>
+        <div> 
+            <div class="actionButton" @click="surrenderBC"> Surrender  </div>
+        </div>       
+        <div> 
+            <div class="actionButton" @click="claimNFTEarningsBC"> Claim NFT Earnings  </div>
         </div>
      </div>
 </template>

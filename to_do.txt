@@ -1,2 +1,8 @@
-Add full game check on smart contract
-Add is player turn to smart contract 
+Add withdraw bet before challenger comes (leaveGame)
+Add payout to winner entry point
+Add cats game scenario/entry point to contract
+Add surrender scenario
+Verify user can update contract when submitting move
+Verify user during payout of win or cats game
+Verify user payAdmin
+Add total admin allowed to withdraw limit 

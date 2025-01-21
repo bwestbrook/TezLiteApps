@@ -1,6 +1,6 @@
 import { TezosToolkit } from '@taquito/taquito'
 //import { RemoteSigner } from '@taquito/remote-signer';
-import { NODE_URL, CONTRACT_ADDRESS } from '../constants'
+import { NODE_URL } from '../constants'
 //const cors = require('cors');
 const Tezos = new TezosToolkit(NODE_URL);
 
@@ -14,3 +14,27 @@ export const createGameService = async() => {
 }
 
 
+export const transferToContract = (key, amount) => {
+  return [
+    { prim: 'DROP' },
+    { prim: 'NIL', args: [{ prim: 'operation' }] },
+    {
+      prim: 'PUSH',
+      args: [{ prim: 'address' }, { string: key }],
+    },
+    { prim: 'CONTRACT', args: [{ prim: 'unit' }] },
+    [
+      {
+        prim: 'IF_NONE',
+        args: [[[{ prim: 'UNIT' }, { prim: 'FAILWITH' }]], []],
+      },
+    ],
+    {
+      prim: 'PUSH',
+      args: [{ prim: 'mutez' }, { int: `${amount}` }],
+    },
+    { prim: 'UNIT' },
+    { prim: 'TRANSFER_TOKENS' },
+    { prim: 'CONS' },
+  ];
+};

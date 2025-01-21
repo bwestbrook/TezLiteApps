@@ -2,44 +2,40 @@ from pprint import pprint
 gameWinners = []
 count = 0
 if True:
-    corner = [-1, -1, -1]  
+    corner = [1, 1, 1]  
     gameWinnerSet = []
-    for i in range(0, 4):
+    for i in range(1, 5):
         coord = [corner[0] + i, corner[1] + i, corner[2] + i]
-        print(coord)
         gameWinnerSet.append(coord)
         count += 1
         if count == 4:
             gameWinners.append(gameWinnerSet)
             gameWinnerSet = []
             count = 0
-    corner = [-1, -1, 2]  
+    corner = [1, 1, 4]  
     gameWinnerSet = []
-    for i in range(0, 4):
+    for i in range(1, 5):
         coord = [corner[0] + i, corner[1] + i, corner[2] - i]
-        print(coord)
         gameWinnerSet.append(coord)
         count += 1
         if count == 4:
             gameWinners.append(gameWinnerSet)
             gameWinnerSet = []
             count = 0
-    corner = [2, -1, -1]  
+    corner = [4, 1, 1]  
     gameWinnerSet = []
-    for i in range(0, 4):
+    for i in range(1, 5):
         coord = [corner[0] - i, corner[1] + i, corner[2] + i]
-        print(coord)
         gameWinnerSet.append(coord)
         count += 1
         if count == 4:
             gameWinners.append(gameWinnerSet)
             gameWinnerSet = []
             count = 0
-    corner = [2, -1, 2]  
+    corner = [4, 1, 4]  
     gameWinnerSet = []
-    for i in range(0, 4):
+    for i in range(1, 5):
         coord = [corner[0] - i, corner[1] + i, corner[2] - i]
-        print(coord)
         gameWinnerSet.append(coord)
         count += 1
         if count == 4:
@@ -47,9 +43,9 @@ if True:
             gameWinnerSet = []
             count = 0
 if True:
-    for i in range(-1, 3):
+    for i in range(1, 5):
         gameWinnerSet = []
-        for j in range(-1, 3):
+        for j in range(1, 5):
             coord = [i, j, j]
             gameWinnerSet.append(coord)
             count += 1
@@ -57,9 +53,9 @@ if True:
                 gameWinners.append(gameWinnerSet)
                 gameWinnerSet = []
                 count = 0
-    for i in (range(-1, 3)):
+    for i in (range(1, 5)):
         gameWinnerSet = []
-        for j in reversed(range(-1, 3)):
+        for j in reversed(range(1, 5)):
             coord = [i, -j + 1, j]
             gameWinnerSet.append(coord)
             count += 1
@@ -67,9 +63,9 @@ if True:
                 gameWinners.append(gameWinnerSet)
                 gameWinnerSet = []
                 count = 0
-    for i in range(-1, 3):
+    for i in range(1, 5):
         gameWinnerSet = []
-        for j in range(-1, 3):
+        for j in range(1, 5):
             coord = [j, i, j]
             gameWinnerSet.append(coord)
             count += 1
@@ -77,9 +73,9 @@ if True:
                 gameWinners.append(gameWinnerSet)
                 gameWinnerSet = []
                 count = 0
-    for i in (range(-1, 3)):
+    for i in (range(1, 5)):
         gameWinnerSet = []
-        for j in reversed(range(-1, 3)):
+        for j in reversed(range(1, 5)):
             coord = [-j + 1, i, j]
             gameWinnerSet.append(coord)
             count += 1
@@ -87,9 +83,9 @@ if True:
                 gameWinners.append(gameWinnerSet)
                 gameWinnerSet = []
                 count = 0
-    for i in range(-1, 3):
+    for i in range(1, 5):
         gameWinnerSet = []
-        for j in range(-1, 3):
+        for j in range(1, 5):
             coord = [j, j, i]
             gameWinnerSet.append(coord)
             count += 1
@@ -98,9 +94,9 @@ if True:
                 gameWinnerSet = []
                 count = 0
     count = 0
-    for i in (range(-1, 3)):
+    for i in (range(1, 5)):
         gameWinnerSet = []
-        for j in reversed(range(-1, 3)):
+        for j in reversed(range(1, 5)):
             coord = [j, -j + 1, i]
             gameWinnerSet.append(coord)
             count += 1
@@ -109,12 +105,11 @@ if True:
                 gameWinnerSet = []
                 count = 0
     count = 0
-    for j in range(-1, 3):
+    for j in range(1, 5):
         gameWinnerSet = []
-        for k in range(-1, 3):
-            for i in range(-1, 3):
+        for k in range(1, 5):
+            for i in range(1, 5):
                 coord = [i, j, k]
-                print(count, coord)
                 gameWinnerSet.append(coord)
                 count += 1
                 if count == 4:
@@ -122,12 +117,11 @@ if True:
                     gameWinnerSet = []
                     count = 0
     count = 0
-    for k in range(-1, 3):
+    for k in range(1, 5):
         gameWinnerSet = []
-        for i in range(-1, 3):
-            for j in range(-1, 3):
+        for i in range(1, 5):
+            for j in range(1, 5):
                 coord = [i, j, k]
-                print(count, coord)
                 gameWinnerSet.append(coord)
                 count += 1
                 if count == 4:
@@ -135,24 +129,30 @@ if True:
                     gameWinnerSet = []
                     count = 0
     count = 0
-    for i in range(-1, 3):
+    for i in range(1, 5):
         gameWinnerSet = []
-        for j in range(-1, 3):
-            for k in range(-1, 3):
+        for j in range(1, 5):
+            for k in range(1, 5):
                 coord = [i, j, k]
-                print(count, coord)
                 gameWinnerSet.append(coord)
                 count += 1
                 if count == 4:
                     gameWinners.append(gameWinnerSet)
                     gameWinnerSet = []
                     count = 0
-pprint(gameWinners)
-print(len(gameWinners))
+#pprint(gameWinners)
+#print(len(gameWinners))
+for gameWinner in gameWinners:
+    print(gameWinner)
+    winningStr = ''
+    for i, coord in enumerate(gameWinner):
+        print(i, coord)
+        winningStr += str(coord)
+    #print(winningStr)
 
 
 
-export const data.game_winners = {
+game_winners = {
     0: [111, 112, 113, 114],
     1: [121, 122, 123, 124],
     2: [131, 132, 133, 134],
