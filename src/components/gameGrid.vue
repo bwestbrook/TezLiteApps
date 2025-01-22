@@ -118,7 +118,7 @@ export default {
 
   created () {
     this.intvl = 0.5
-    this.gameSize = this.windowWidth * 0.6
+    this.gameSize = this.windowWidth
     if (this.gameSize > 1000) {
       this.gameSize = 1000
     }
@@ -458,7 +458,7 @@ export default {
     // Game Play Utilities
     // Socket
     resizeGameRender: function(width) {
-        this.gameSize = width * 0.65
+        this.gameSize = width * 0.95
         this.renderer.setSize(this.gameSize, this.gameSize)
     },
   }
@@ -467,8 +467,8 @@ export default {
 
 
 <template>
-  <div class="canvas-container" >     
-      <div class="gameBox"
+    
+      <div class="playerPanel"
           @mousedown="checkClickDown"
           @mouseup="checkClickUp"   
           @mousemove="highlightMove"
@@ -476,29 +476,10 @@ export default {
           ref="container"
       >
       </div>
-  </div>
+
 </template>
 
 
-<style scoped>
-.canvas-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-style: inset;
-  border-radius: 2px;
-  border-width: 5px;
-  border-color: #fff;
-}
-.gameBox {
-    justify-content: center;
-    padding: 5px;
-    margin: 5px;
-    border-style: solid;
-    border-radius: 2px;
-    border-width: 0px;
-    color: #fff;
-    border-color: #fff;
-}
+<style >
+
 </style>

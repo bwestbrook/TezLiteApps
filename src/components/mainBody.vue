@@ -88,7 +88,7 @@ export default {
 <style>
 .mainBody{
   margin:0px;
-  padding:0px;
+  padding:2px;
   display: flex;
   flex-direction: column;
   margin: auto;
@@ -135,5 +135,15 @@ export default {
   border-width: 3px;
   color: #fff;
   border-color: #9f2929;
+}
+.canvas-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-style: inset;
+  border-radius: 2px;
+  border-width: 5px;
+  border-color: #fff;
 }
 </style>
