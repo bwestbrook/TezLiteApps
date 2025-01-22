@@ -1,13 +1,28 @@
 <template>
   <div class="mainBody">     
     <div class="centerBody">
-      <playerControl 
+      <div class="playerPanel" > 
+        <div @click="selectGame('TezTacToe')" class="actionButton">
+           Play TezTacToe!
+        </div>
+        <div @click="selectGame('AceyDuecey')" class="actionButton">
+           CLICK ME FOR SURPRISE
+        </div>
+        <div class="actionButton" @click="claimNFTEarningsBC"> 
+          Claim NFT Earnings 
+        </div>
+        <div class="actionButton" @click="toggleWallet">
+                {{walletAddress}} 
+        </div>
+     </div>    
+      <playerControl v-if="showTezTactoe"
           :socket="socket"
           :wallet="wallet"
           :tezos="tezos"
           :walletAddress="walletAddress"
       />
-      <gameGrid       
+      <aceyDuecey  v-if="showAceyDuecy" />
+      <gameGrid  v-if="showTezTactoe"     
           :windowHeight="windowHeight"
           :windowWidth="windowWidth"
           :wallet="wallet"
@@ -23,6 +38,7 @@
 
 <script>
 
+import aceyDuecey from "./aceyDuecey.vue"
 import gameGrid from "./gameGrid.vue"
 import playerControl from "./playerControl.vue"
 
@@ -30,15 +46,38 @@ export default {
   name: 'HelloWorld',
   props: ['wallet', 'walletAddress', 'socket', 'tezos', 'windowWidth', 'windowHeight'],
   components: { 
+        aceyDuecey,
         gameGrid,
         playerControl
   },
   data () {
     return {
+      showTezTactoe: true,
+      showAceyDuecy: false
     }
   },
   methods: {
-
+    async selectGame(game) {
+      console.log('toggleGame')
+      if (game == 'AceyDuecey') {
+        this.showTezTactoe = false
+        this.showAceyDuecy = true
+      } else if (game == 'TezTacToe') {
+        this.showTezTactoe = true
+        this.showAceyDuecy = false
+        this.socket.emit('updatePlayerControl')
+        console.log('update UPC')
+      } 
+    },
+    async toggleWallet(){
+            const activeAccount = await this.wallet.client.getActiveAccount()              
+            if (activeAccount) {                  
+                await this.wallet.clearActiveAccount()           
+            } else {
+                await this.wallet.client.requestPermissions()
+                this.tezos.setWalletProvider(this.wallet)
+            }
+        },
   },
   created () {
   
@@ -46,14 +85,14 @@ export default {
 }
 </script>
 
-<!-- Add "scoped" attribute to limit CSS to this component only -->
-<style scoped>
+<style>
 .mainBody{
   margin:0px;
   padding:0px;
   display: flex;
   flex-direction: column;
   margin: auto;
+  color: rgb(255, 255, 255);
 }
 .centerBody{
   display: flex;
@@ -73,5 +112,28 @@ export default {
   border-style: inset;
   border-width: 5px;
   border-color: #fff;
+}
+.playerPanel {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #000000;
+  color: #fff;
+  padding: 5px;
+  border-style: inset;
+  border-width: 5px;
+  border-color: #298899;
+}
+.actionButton {
+  display: flex;
+  align-content: center;
+  justify-content: center;
+  padding: 5px;
+  margin: auto;
+  border-style: ridge;
+  border-radius: 2px;
+  border-width: 3px;
+  color: #fff;
+  border-color: #9f2929;
 }
 </style>

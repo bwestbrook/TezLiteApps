@@ -481,17 +481,6 @@ export default {
 
 
 <style scoped>
-.gameContainer {
-  display: flex;
-  flex-direction: column;
-  align-content: center;
-  justify-content: center;
-  border-style: inset;
-  border: 5px;
-  color: aliceblue;
-  background-color: #000000;
-  font-size: 20px;
-}
 .canvas-container {
   display: flex;
   flex-direction: column;
@@ -501,16 +490,6 @@ export default {
   border-radius: 2px;
   border-width: 5px;
   border-color: #fff;
-}
-.actionButton {
-    justify-content: center;
-    padding: 5px;
-    margin: auto;
-    border-style: inset;
-    border-radius: 2px;
-    border-width: 5px;
-    color: #fff;
-    border-color: #fff;
 }
 .gameBox {
     justify-content: center;

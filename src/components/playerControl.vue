@@ -38,6 +38,7 @@ export default {
             this.getGamesFromContractAsync()
         })
         this.socket.on("updatePlayerControl", (gamesObject) => {
+            console.log('pcd', gamesObject)
             this.updatePlayerControl(gamesObject)
         })
         this.socket.on("updateConnectedUsers", (address) => {
@@ -134,15 +135,6 @@ export default {
             }
             console.log(this.gameId == -1)
             await this.getGameGrid(this.gameId)
-        },
-        async toggleWallet(){
-            const activeAccount = await this.wallet.client.getActiveAccount()              
-            if (activeAccount) {                  
-                await this.wallet.clearActiveAccount()           
-            } else {
-                await this.wallet.client.requestPermissions()
-                this.tezos.setWalletProvider(this.wallet)
-            }
         },
         async togglePlayer(){
             const activeAccount = await this.wallet.client.getActiveAccount()              
@@ -476,6 +468,8 @@ export default {
             const updateGrid = players[playerTurn - 1] == activeAccount.address
             this.socket.emit("updatePlayedPoint", 'NO MOVE', 'Active', this.gameId)
             this.socket.emit('loadGame', gameId, updateGrid)   
+            console.log(updateGrid)
+            this.socket.emit('updateGamePlayable', updateGrid)
             this.blockchainStatus = `Game ${gameId} loaded`  
         },
         async getGameGrid(gameId, updateGrid=true) {
@@ -514,41 +508,32 @@ export default {
 </script>
 
 <template>
-    <div class="playerPanel" > 
-        <div class="actionButton" @click="createGameBC" > 
-            Create Game
-        </div>
-        <div class="actionButton" @click="joinGameBC(pendingGame)"> 
-            Join Game {{ pendingGame }}
-        </div>
-        <div class="actionButton" @click="submitMoveBC(pointToPlay, gameId)"> 
-            Submit Move {{ pointToPlay }}
-        </div>
-        <div class="actionButton" @click="toggleWallet">
-                {{walletAddress}} 
-        </div>
-     </div>
-     <div class="playerPanel" > My Active Games (Click to Load/Refresh)
+     <div class="playerPanel" > 
         <div v-for="(item) in activeGames" :key="item"> 
-            <div class="actionButton" @click="loadGameBC(item)"> {{ item }}</div>
+            <div class="actionButton" @click="loadGameBC(item)"> Load Game: {{ item }}</div>
         </div>
-     </div>
-     <div class="playerPanel" > My Pending Games (Click to Load/Refresh)
-        <div v-for="(item) in pendingGames" :key="item"> 
-            <div class="actionButton" @click="loadGameBC(item)"> {{ item }}</div>
-        </div>
-     </div>
-     <div class="playerPanel" > Games to Join (Click to Load/Refresh)
-        <div v-for="(item) in pendingGamesOthers" :key="item"> 
-            <div class="actionButton" @click="loadGameBC(item)"> {{ item }}</div>
-        </div>
-     </div>
-     <div class="playerPanel" > My Past Games (Click to Load/Refresh) 
-        <div v-for="(item) in pastGames" :key="item"> 
-            <div class="actionButton" @click="loadGameBC(item)"> {{ item }}</div>
-        </div> 
      </div>
      <div class="playerPanel" >
+        <div v-for="(item) in pendingGames" :key="item"> 
+            <div class="actionButton" @click="loadGameBC(item)"> Leave Game: {{ item }}</div>
+        </div>
+     </div>
+     <div class="playerPanel" >
+        
+     </div>
+     <div class="playerPanel" > 
+        
+     </div>
+     <div class="playerPanel" >
+        <div v-for="(item) in pendingGamesOthers" :key="item"> 
+            <div class="actionButton" @click="joinGameBC(item)"> Join Game: {{ item }}</div>
+        </div>
+        <div v-for="(item) in pastGames" :key="item"> 
+            <div class="actionButton" @click="loadGameBC(item)"> Claim Win {{ item }}</div>
+        </div> 
+        <div>
+            <div class="actionButton" @click="createGameBC" > Create New Game  </div>
+        </div>
         <div> 
             <div class="actionButton" > Game ID: {{ gameId }}</div>
         </div>
@@ -559,45 +544,20 @@ export default {
             <div class="actionButton" > Player Turn: {{ playerTurn }}</div>
         </div>
         <div> 
-            <div class="actionButton" > Status: {{ blockchainStatus }}</div>
-        </div>
-        <div> 
-            <div class="actionButton" @click="claimWinningsBC(gameId)"> Claim Winnings: {{ gameId }}</div>
-        </div>
+            <div class="actionButton" @click="submitMoveBC(pointToPlay, gameId)"> Submit Move </div>
+        </div>  
         <div> 
             <div class="actionButton" @click="surrenderBC"> Surrender  </div>
-        </div>       
+        </div>  
         <div> 
-            <div class="actionButton" @click="claimNFTEarningsBC"> Claim NFT Earnings  </div>
-        </div>
+            <div class="actionButton" @click="claimWinningsBC"> Claim Win!  </div>
+        </div>  
+        <div> 
+            <div class="actionButton" > Status: {{ blockchainStatus }}</div>
+        </div>     
      </div>
 </template>
 
 
-<style scoped>
-.playerPanel {
-
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background-color: #000000;
-    color: #fff;
-    padding: 5px;
-    border-style: inset;
-    border-width: 5px;
-    border-color: #fff;
-}
-.actionButton {
-    display: flex;
-    align-content: center;
-    justify-content: center;
-    padding: 5px;
-    margin: auto;
-    border-style: ridge;
-    border-radius: 2px;
-    border-width: 3px;
-    color: #fff;
-    border-color: #fff;
-}
-
+<style>
 </style>

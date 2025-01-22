@@ -32,8 +32,8 @@ export default {
     }
   },
   created() {   
-      //this.socket = io('localhost:3000')
-      this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
+      this.socket = io('localhost:3000')
+      //this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
       this.tezos = Tezos
       this.getWallet()
       this.socket.on('socketId', (socketId) => {
@@ -98,7 +98,7 @@ export default {
 
 <template>
   <div class="body">
-      <mainBody class="centerMiddle"
+      <mainBody
           :wallet="wallet"
           :walletAddress="walletAddress"
           :socket="socket"
@@ -108,7 +108,6 @@ export default {
           :windowHeight="windowHeight"
       />
   </div>
-  
 </template>
 
 
@@ -125,10 +124,5 @@ body, html{
   margin:0px;
   overflow-x:hidden;
   padding: 0.8em 0;
-}
-.centerMiddle{
-  margin:20px;
-  overflow-x: hidden;
-  padding: 10px;
 }
 </style>

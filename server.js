@@ -160,6 +160,11 @@ io.on('connection', (socket) => {
     io.to(gameId).emit('updateGamePaused', gamePaused)
   });
 
+  socket.on("updatePlayerControl", function() {
+    console.log('update UPC')
+    io.emit('updatePlayerControl')
+  });
+
   socket.on("updatePlayersInGame", function(playersInGame, gameId) {
     io.to(gameId).emit('updatePlayersInGame', playersInGame)
   });
