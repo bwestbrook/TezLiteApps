@@ -1,14 +1,14 @@
 <script>
 
 import aceyDuecey from "./aceyDuecey.vue"
-import playerControl from "./playerControl.vue"
+import tezTacToe from "./tezTacToe.vue"
 
 export default {
   name: 'HelloWorld',
   props: ['wallet', 'walletAddress', 'socket', 'tezos', 'windowWidth', 'windowHeight'],
   components: { 
         aceyDuecey,
-        playerControl
+        tezTacToe
   },
   data () {
     return {
@@ -62,12 +62,13 @@ export default {
                 {{walletAddress}} 
         </div>
      </div>    
-      <playerControl v-if="showTezTactoe"
+      <tezTacToe v-if="showTezTactoe"
           :socket="socket"
           :wallet="wallet"
           :tezos="tezos"
       />
-      <aceyDuecey v-if="showAceyDuecy" />
+      <aceyDuecey v-if="showAceyDuecy" 
+      />
       <div class="rules">
         Load a Game!  When you click on a move, click again to search for anther move, when you are ready with you move submit it to the blockchain!
       </div>
@@ -105,9 +106,9 @@ export default {
   border-color: #fff;
 }
 .rowFlex {
+  width: 98%;
   display: flex;
   justify-content: center;
-  grid-template-columns: 1fr 1fr;
   align-items: center;
   color: #fff;
   padding: 5px;
@@ -116,18 +117,19 @@ export default {
   border-color: #ffffff;
 }
 .gridFlex4x2 {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   justify-content: center;
-  grid-template-columns: 1fr repeat(2, 1fr) 1fr;
   align-items: center;
   color: #fff;
   padding: 5px;
 
 }
 .gameManagement {
-  width: 25%;
+  display: flex;
+  flex-direction: column;
+  width: 10%;
   justify-content: center;
-  grid-template-columns: 1fr 1fr;
   align-items: center;
   color: #fff;
   padding: 5px;
@@ -148,6 +150,7 @@ export default {
   border-color: #9f2929;
 }
 .canvas-container {
+  width: 50%;
   display: flex;
   flex-direction: column;
   align-items: center;

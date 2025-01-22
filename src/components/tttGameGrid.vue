@@ -118,7 +118,7 @@ export default {
 
   created () {
     this.intvl = 0.5
-    this.gameSize = window.innerWidth * 0.8
+    this.gameSize = window.innerWidth * 0.3
     if (this.gameSize > 1000) {
       this.gameSize = 1000
     }
@@ -469,7 +469,7 @@ export default {
 
 <template>
     
-      <div class="playerPanel"
+      <div class="rowFlex"
           @mousedown="checkClickDown"
           @mouseup="checkClickUp"   
           @mousemove="highlightMove"
