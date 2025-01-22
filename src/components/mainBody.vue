@@ -149,7 +149,7 @@ export default {
   border-radius: 2px;
   border-width: 3px;
   color: #fff;
-  border-color: #9f2929;
+  border-color: #a7a5a5;
 }
 .canvas-container {
   width: 50%;
