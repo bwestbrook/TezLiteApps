@@ -118,11 +118,13 @@ export default {
   background-color: #000000;
   margin:0px;
   padding:0px
+  
 }
 body, html{
   background-color: #000000;
   margin:0px;
   overflow-x:hidden;
   padding: 0.8em 0;
+  
 }
 </style>

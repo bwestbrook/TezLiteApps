@@ -1,41 +1,3 @@
-<template>
-  <div class="mainBody">     
-    <div class="centerBody">
-      <div class="playerPanel" > 
-        <div @click="selectGame('TezTacToe')" class="actionButton">
-           Play TezTacToe!
-        </div>
-        <div @click="selectGame('AceyDuecey')" class="actionButton">
-           CLICK ME FOR SURPRISE
-        </div>
-        <div class="actionButton" @click="claimNFTEarningsBC"> 
-          Claim NFT Earnings 
-        </div>
-        <div class="actionButton" @click="toggleWallet">
-                {{walletAddress}} 
-        </div>
-     </div>    
-      <playerControl v-if="showTezTactoe"
-          :socket="socket"
-          :wallet="wallet"
-          :tezos="tezos"
-          :walletAddress="walletAddress"
-      />
-      <aceyDuecey  v-if="showAceyDuecy" />
-      <gameGrid  v-if="showTezTactoe"     
-          :windowHeight="windowHeight"
-          :windowWidth="windowWidth"
-          :wallet="wallet"
-          :socket="socket"
-      />
-      <div class="rules">
-        Load a Game!  When you click on a move, click again to search for anther move, when you are ready with you move submit it to the blockchain!
-      </div>
-      
-    </div>
-  </div>
-</template>
-
 <script>
 
 import aceyDuecey from "./aceyDuecey.vue"
@@ -85,6 +47,44 @@ export default {
 }
 </script>
 
+<template>
+  <div class="mainBody">     
+    <div class="centerBody">
+      <div class="rowFlex" > 
+        <div @click="selectGame('TezTacToe')" class="actionButton">
+           Play TezTacToe!
+        </div>
+        <div @click="selectGame('AceyDuecey')" class="actionButton">
+           CLICK ME FOR SURPRISE
+        </div>
+        <div class="actionButton" @click="claimNFTEarningsBC"> 
+          Claim NFT Earnings 
+        </div>
+        <div class="actionButton" @click="toggleWallet">
+                {{walletAddress}} 
+        </div>
+     </div>    
+      <playerControl v-if="showTezTactoe"
+          :socket="socket"
+          :wallet="wallet"
+          :tezos="tezos"
+          :walletAddress="walletAddress"
+      />
+      <aceyDuecey v-if="showAceyDuecy" />
+      <gameGrid v-if="showTezTactoe"     
+          :windowHeight="windowHeight"
+          :windowWidth="windowWidth"
+          :wallet="wallet"
+          :socket="socket"
+      />
+      <div class="rules">
+        Load a Game!  When you click on a move, click again to search for anther move, when you are ready with you move submit it to the blockchain!
+      </div>
+      
+    </div>
+  </div>
+</template>
+
 <style>
 .mainBody{
   margin:0px;
@@ -113,16 +113,36 @@ export default {
   border-width: 5px;
   border-color: #fff;
 }
-.playerPanel {
+.rowFlex {
   display: flex;
   justify-content: center;
+  grid-template-columns: 1fr 1fr;
   align-items: center;
-  background-color: #000000;
   color: #fff;
   padding: 5px;
   border-style: inset;
   border-width: 5px;
-  border-color: #298899;
+  border-color: #ffffff;
+}
+.gridFlex2xN {
+  display: grid;
+  justify-content: center;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  color: #fff;
+  padding: 5px;
+
+}
+.gameManagement {
+  width: 25%;
+  justify-content: center;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  color: #fff;
+  padding: 5px;
+  border-style: inset;
+  border-width: 5px;
+  border-color: #ffffff;
 }
 .actionButton {
   display: flex;

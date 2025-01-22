@@ -468,8 +468,8 @@ export default {
             const updateGrid = players[playerTurn - 1] == activeAccount.address
             this.socket.emit("updatePlayedPoint", 'NO MOVE', 'Active', this.gameId)
             this.socket.emit('loadGame', gameId, updateGrid)   
-            console.log(updateGrid)
             this.socket.emit('updateGamePlayable', updateGrid)
+            this.socket.emit('resizeGameGrid', window.innerWidth)
             this.blockchainStatus = `Game ${gameId} loaded`  
         },
         async getGameGrid(gameId, updateGrid=true) {
@@ -508,54 +508,70 @@ export default {
 </script>
 
 <template>
-     <div class="playerPanel" > 
-        <div v-for="(item) in activeGames" :key="item"> 
-            <div class="actionButton" @click="loadGameBC(item)"> Load Game: {{ item }}</div>
+    
+
+     <div class="rowFlex" >
+        <div class="gameManagement"> Game Center 
+            <div class="gridFlex2xN" >
+        
+                <div>
+                    <div class="actionButton" @click="createGameBC" > Create New Game  </div>
+                </div>
+                <div> 
+                    <div class="actionButton" > Game ID: {{ gameId }}</div>
+                </div>
+                <div> 
+                    <div class="actionButton" > {{ playersInGame[0] }} {{player1Connected}} vs. {{ playersInGame[1]}} {{player2Connected}} </div>
+                </div>
+                <div> 
+                    <div class="actionButton" > Player Turn: {{ playerTurn }}</div>
+                </div>
+                <div> 
+                    <div class="actionButton" @click="submitMoveBC(pointToPlay, gameId)"> Submit Move </div>
+                </div>  
+                <div> 
+                    <div class="actionButton" @click="surrenderBC"> Surrender  </div>
+                </div>  
+                <div> 
+                    <div class="actionButton" @click="claimWinningsBC"> Claim Win!  </div>
+                </div>  
+                <div> 
+                    <div class="actionButton" > Status: {{ blockchainStatus }}</div>
+                </div>     
+            </div>
         </div>
-     </div>
-     <div class="playerPanel" >
-        <div v-for="(item) in pendingGames" :key="item"> 
-            <div class="actionButton" @click="loadGameBC(item)"> Leave Game: {{ item }}</div>
+        <div class="gameManagement"> Load Game 
+            <div class="gridFlex2xN" > 
+                <div v-for="(item) in activeGames" :key="item"> 
+                    <div class="actionButton" @click="loadGameBC(item)">  {{ item }}</div>
+                </div>
+            </div>
         </div>
-     </div>
-     <div class="playerPanel" >
+        <div class="gameManagement"> Leave Game 
+            <div class="gridFlex2xN" > 
+                <div v-for="(item) in pendingGames" :key="item"> 
+                    <div class="actionButton" @click="loadGameBC(item)"> Game: {{ item }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="gameManagement"> Join Game 
+            <div class="gridFlex2xN" > 
+                <div v-for="(item) in pendingGamesOthers" :key="item"> 
+                    <div class="actionButton" @click="joinGameBC(item)"> Game: {{ item }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="gameManagement"> View Past Games 
+            <div class="gridFlex2xN" > 
+                <div v-for="(item) in pastGames" :key="item"> 
+                    <div class="actionButton" @click="joinGameBC(item)"> Game: {{ item }}</div>
+                </div>
+            </div>
+        </div>
         
      </div>
-     <div class="playerPanel" > 
-        
-     </div>
-     <div class="playerPanel" >
-        <div v-for="(item) in pendingGamesOthers" :key="item"> 
-            <div class="actionButton" @click="joinGameBC(item)"> Join Game: {{ item }}</div>
-        </div>
-        <div v-for="(item) in pastGames" :key="item"> 
-            <div class="actionButton" @click="loadGameBC(item)"> Claim Win {{ item }}</div>
-        </div> 
-        <div>
-            <div class="actionButton" @click="createGameBC" > Create New Game  </div>
-        </div>
-        <div> 
-            <div class="actionButton" > Game ID: {{ gameId }}</div>
-        </div>
-        <div> 
-            <div class="actionButton" > {{ playersInGame[0] }} {{player1Connected}} vs. {{ playersInGame[1]}} {{player2Connected}} </div>
-        </div>
-        <div> 
-            <div class="actionButton" > Player Turn: {{ playerTurn }}</div>
-        </div>
-        <div> 
-            <div class="actionButton" @click="submitMoveBC(pointToPlay, gameId)"> Submit Move </div>
-        </div>  
-        <div> 
-            <div class="actionButton" @click="surrenderBC"> Surrender  </div>
-        </div>  
-        <div> 
-            <div class="actionButton" @click="claimWinningsBC"> Claim Win!  </div>
-        </div>  
-        <div> 
-            <div class="actionButton" > Status: {{ blockchainStatus }}</div>
-        </div>     
-     </div>
+     
+     
 </template>
 
 <style>
