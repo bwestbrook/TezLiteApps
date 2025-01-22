@@ -5,7 +5,7 @@ import tezTacToe from "./tezTacToe.vue"
 import { reduceAddress } from "../utilities";
 
 export default {
-  props: ['wallet', 'socket', 'tezos', 'windowWidth', 'windowHeight'],
+  props: ['wallet', 'socket', 'tezos'],
   components: { 
         aceyDuecey,
         tezTacToe
@@ -105,18 +105,17 @@ export default {
   color: white;
   margin:auto;
   border-style: inset;
-  border-width: 5px;
+  border-width: 1px;
   border-color: #fff;
 }
 .rowFlex {
-  width: 98%;
   display: flex;
   justify-content: center;
   align-items: center;
   color: #fff;
   padding: 5px;
   border-style: inset;
-  border-width: 5px;
+  border-width: 1px;
   border-color: #ffffff;
 }
 .gridFlex4x2 {
@@ -136,7 +135,7 @@ export default {
   color: #fff;
   padding: 5px;
   border-style: inset;
-  border-width: 5px;
+  border-width: 1px;
   border-color: #ffffff;
 }
 .actionButton {
@@ -147,7 +146,7 @@ export default {
   margin: auto;
   border-style: ridge;
   border-radius: 2px;
-  border-width: 3px;
+  border-width: 1px;
   color: #fff;
   border-color: #a7a5a5;
 }
@@ -159,7 +158,7 @@ export default {
   justify-content: center;
   border-style: inset;
   border-radius: 2px;
-  border-width: 5px;
+  border-width: 1px;
   border-color: #fff;
 }
 </style>

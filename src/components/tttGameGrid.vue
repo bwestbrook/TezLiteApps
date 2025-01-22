@@ -87,7 +87,6 @@ export default {
   name: 'gameGrid',
   data() {
     return {
-      width: 10,
       rotate: false,
       playX: 0,
       playY: 0,
@@ -115,7 +114,7 @@ export default {
       
     }
   },
-  props: ['socket', 'activeGameId', 'wallet', 'windowWidth', 'windowHeight'],
+  props: ['socket', 'activeGameId', 'wallet'],
 
   created () {
     this.intvl = 0.5
