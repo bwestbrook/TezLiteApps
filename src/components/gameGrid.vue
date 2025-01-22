@@ -118,7 +118,7 @@ export default {
 
   created () {
     this.intvl = 0.5
-    this.gameSize = this.windowWidth
+    this.gameSize = window.innerWidth * 0.8
     if (this.gameSize > 1000) {
       this.gameSize = 1000
     }
@@ -220,7 +220,8 @@ export default {
                     vertex.position.set(i * this.intvl - 0.5 * this.intvl, j * this.intvl - 0.5 * this.intvl, k * this.intvl - 0.5 * this.intvl);
                     vertex.coords = [i, j, k]
                     vertex.owner = 0
-                    this.board.add(vertex)                  
+                    this.board.add(vertex)   
+                                  
                 }
             }
         }

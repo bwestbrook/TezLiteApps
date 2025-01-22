@@ -21,8 +21,6 @@ export default {
   },
   data () {
     return {
-      windowHeight: window.innerHeight,
-      windowWidth: window.innerWidth,
       wallet: this.wallet,
       tezos: this.tezos,
       walletAddress: this.walletAddress,
@@ -100,12 +98,9 @@ export default {
   <div class="body">
       <mainBody
           :wallet="wallet"
-          :walletAddress="walletAddress"
           :socket="socket"
           :tezos="tezos"
           :gameSize="gameSize"
-          :windowWidth="windowWidth"
-          :windowHeight="windowHeight"
       />
   </div>
 </template>
@@ -118,7 +113,6 @@ export default {
   background-color: #000000;
   margin:0px;
   padding:0px
-  
 }
 body, html{
   background-color: #000000;

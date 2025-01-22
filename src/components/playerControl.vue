@@ -1,6 +1,7 @@
 <script>
 import { PollingSubscribeProvider } from '@taquito/taquito';
 import { RemoteSigner } from '@taquito/remote-signer';
+import gameGrid  from './gameGrid.vue'
 import { RpcClient } from '@taquito/rpc';
 import { NODE_URL, CONTRACT_ADDRESS, ID_LOOKUP, TZKT_API_BASE_URL, OBJECT_CONTRACT, ADMIN_ADDRESS} from '../constants'
 import { reduceAddress } from "../utilities";
@@ -11,9 +12,14 @@ export default {
     name: "playerControl",
     emits: [
     ],
+    components: { 
+        gameGrid
+    },
     props: ["socket", "wallet", "tezos", "walletAddress"],
     data () {
         return {
+            showTezTactoe: true,
+            showAceyDuecey: false,
             gamesObject: {},
             gameId: -1,
             gameStatus: 'No Players',
@@ -508,12 +514,14 @@ export default {
 </script>
 
 <template>
-    
-
+    <gameGrid 
+          :wallet="wallet"
+          :socket="socket"
+          :tezos="tezos"
+     />
      <div class="rowFlex" >
         <div class="gameManagement"> Game Center 
-            <div class="gridFlex2xN" >
-        
+            <div class="gridFlex4x2" >     
                 <div>
                     <div class="actionButton" @click="createGameBC" > Create New Game  </div>
                 </div>
@@ -540,29 +548,30 @@ export default {
                 </div>     
             </div>
         </div>
+        
         <div class="gameManagement"> Load Game 
-            <div class="gridFlex2xN" > 
+            <div class="gridFlex4x2" > 
                 <div v-for="(item) in activeGames" :key="item"> 
                     <div class="actionButton" @click="loadGameBC(item)">  {{ item }}</div>
                 </div>
             </div>
         </div>
         <div class="gameManagement"> Leave Game 
-            <div class="gridFlex2xN" > 
+            <div class="gridFlex4x2" > 
                 <div v-for="(item) in pendingGames" :key="item"> 
                     <div class="actionButton" @click="loadGameBC(item)"> Game: {{ item }}</div>
                 </div>
             </div>
         </div>
         <div class="gameManagement"> Join Game 
-            <div class="gridFlex2xN" > 
+            <div class="gridFlex4x2" > 
                 <div v-for="(item) in pendingGamesOthers" :key="item"> 
                     <div class="actionButton" @click="joinGameBC(item)"> Game: {{ item }}</div>
                 </div>
             </div>
         </div>
         <div class="gameManagement"> View Past Games 
-            <div class="gridFlex2xN" > 
+            <div class="gridFlex4x2" > 
                 <div v-for="(item) in pastGames" :key="item"> 
                     <div class="actionButton" @click="joinGameBC(item)"> Game: {{ item }}</div>
                 </div>

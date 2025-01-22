@@ -1,7 +1,6 @@
 <script>
 
 import aceyDuecey from "./aceyDuecey.vue"
-import gameGrid from "./gameGrid.vue"
 import playerControl from "./playerControl.vue"
 
 export default {
@@ -9,7 +8,6 @@ export default {
   props: ['wallet', 'walletAddress', 'socket', 'tezos', 'windowWidth', 'windowHeight'],
   components: { 
         aceyDuecey,
-        gameGrid,
         playerControl
   },
   data () {
@@ -32,14 +30,14 @@ export default {
       } 
     },
     async toggleWallet(){
-            const activeAccount = await this.wallet.client.getActiveAccount()              
-            if (activeAccount) {                  
-                await this.wallet.clearActiveAccount()           
-            } else {
-                await this.wallet.client.requestPermissions()
-                this.tezos.setWalletProvider(this.wallet)
-            }
-        },
+        const activeAccount = await this.wallet.client.getActiveAccount()              
+        if (activeAccount) {                  
+            await this.wallet.clearActiveAccount()           
+        } else {
+            await this.wallet.client.requestPermissions()
+            this.tezos.setWalletProvider(this.wallet)
+        }
+    },
   },
   created () {
   
@@ -68,15 +66,8 @@ export default {
           :socket="socket"
           :wallet="wallet"
           :tezos="tezos"
-          :walletAddress="walletAddress"
       />
       <aceyDuecey v-if="showAceyDuecy" />
-      <gameGrid v-if="showTezTactoe"     
-          :windowHeight="windowHeight"
-          :windowWidth="windowWidth"
-          :wallet="wallet"
-          :socket="socket"
-      />
       <div class="rules">
         Load a Game!  When you click on a move, click again to search for anther move, when you are ready with you move submit it to the blockchain!
       </div>
@@ -124,10 +115,10 @@ export default {
   border-width: 5px;
   border-color: #ffffff;
 }
-.gridFlex2xN {
+.gridFlex4x2 {
   display: grid;
   justify-content: center;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr repeat(2, 1fr) 1fr;
   align-items: center;
   color: #fff;
   padding: 5px;
