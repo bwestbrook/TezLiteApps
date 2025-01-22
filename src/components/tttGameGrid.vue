@@ -119,7 +119,7 @@ export default {
 
   created () {
     this.intvl = 0.5
-    this.gameSize = window.innerWidth * 0.5
+    this.gameSize = window.innerWidth * 0.95
     if (this.gameSize > 1000) {
       this.gameSize = 1000
     }
