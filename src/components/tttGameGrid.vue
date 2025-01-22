@@ -97,7 +97,8 @@ export default {
       cameraY: 0,
       playedPoint: [0, 0, 0],
       moveMade: false,
-      gamePlayable: true,
+      gamePlayable: false,
+      gameRefreshed: true,
       playerColor: 'red',
       playerTurn: 1,
       walletTurn: 0,
@@ -118,7 +119,7 @@ export default {
 
   created () {
     this.intvl = 0.5
-    this.gameSize = window.innerWidth * 0.3
+    this.gameSize = window.innerWidth * 0.5
     if (this.gameSize > 1000) {
       this.gameSize = 1000
     }
@@ -174,7 +175,6 @@ export default {
         this.playerTurn = playerTurn 
     });
     this.socket.on('updateGamePlayable', (gamePlayable) => {
-      console.log('post lok')
       this.gamePlayable = gamePlayable
       this.gamePaused = !gamePlayable
     });

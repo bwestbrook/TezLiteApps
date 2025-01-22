@@ -15,19 +15,20 @@ export default {
     components: { 
         tttGameGrid
     },
-    props: ["socket", "wallet", "tezos", "walletAddress"],
+    props: ["socket", "wallet", "tezos"],
     data () {
         return {
             showTezTactoe: true,
             showAceyDuecey: false,
             gamesObject: {},
-            gameId: -1,
+            gameId: '',
             gameStatus: 'No Players',
             pendingGame: 'NO GAME',
-            playerTurn: 'NA',
+            playerTurnStr: '',
+            playerTurn: -1, 
             playersInGame: '',
-            player1Connected: 'inactive',
-            player2Connected: 'inactive',
+            player1Connected: '',
+            player2Connected: '',
             addressesInGame: [],
             blockchainStatus: 'No Activity',
             pointToPlay: 'XXX',
@@ -65,6 +66,7 @@ export default {
         this.socket.on('updateBCStatus', (bcStatus) => {
             this.blockchainStatus = bcStatus
         })
+
         // Listen to contracts for changes
         this.tezos.setStreamProvider(
             this.tezos.getFactory(PollingSubscribeProvider)({
@@ -116,6 +118,7 @@ export default {
     },
     methods: {
         //Wallet Control
+        
         async getNextBlockLevel(transactionBlockLevel){
             let currentBlock = await this.rpcclient.getBlock();
             let currentBlockLevel = await currentBlock.header.level
@@ -175,7 +178,7 @@ export default {
                         this.pendingGames.push(gamesObject[i].gameId)      
                     } else if (gamesObject[i].gameStatus == 1) {
                         this.activeGames.push(gamesObject[i].gameId)     
-                    } else if (gamesObject[i].gameStatus == 2) {
+                    } else if (gamesObject[i].gameStatus == 4) {
                         this.pastGames.push(gamesObject[i].gameId)     
                     }
                 } else if (gamesObject[i].gameStatus == 0) {
@@ -200,7 +203,7 @@ export default {
                 this.pendingGame = gameId
                 this.gameStatus = 'Pending'
                 this.playersInGame = [await reduceAddress(game.players[0]), 'None']
-                this.playerTurn = 'NA'
+                this.playerTurnStr = 'NA'
             } else if (game.gameStatus == 1 ) {
                 this.gameStatus = 'Active'
                 this.gameId = await game.gameId
@@ -212,8 +215,11 @@ export default {
                 this.socket.emit('updateConnectedUsersInGame', activeAccount.address, this.gameId)
                 this.blockchainStatus = 'Active'
                 if (game.players[this.playerTurn - 1] == activeAccount.address) {
+                    this.playerTurnStr = 'YOUR TURN'
                     this.socket.emit('updateGamePlayable', true, this.gameId)
-                } 
+                } else {
+                    this.playerTurnStr = 'OPP TURN'
+                }
             } else if (game.gameStatus == 2) {
                 console.log('locking game')
                 this.socket.emit('updateGamePlayable', false, this.gameId)
@@ -513,14 +519,10 @@ export default {
 
 </script>
 
-<template>
-   
-     <div class="rowFlex" >
-        <div class="gameManagement"> Game Center 
-            <div class="gridFlex4x2" >     
-                <div>
-                    <div class="actionButton" @click="createGameBC" > Create New Game  </div>
-                </div>
+<template>   
+     <div class="gameManagement" >
+        <div class="rowFlex"> Game Center 
+            <div class="rowFlex" >     
                 <div> 
                     <div class="actionButton" > Game ID: {{ gameId }}</div>
                 </div>
@@ -528,56 +530,57 @@ export default {
                     <div class="actionButton" > {{ playersInGame[0] }} {{player1Connected}} vs. {{ playersInGame[1]}} {{player2Connected}} </div>
                 </div>
                 <div> 
-                    <div class="actionButton" > Player Turn: {{ playerTurn }}</div>
+                    <div class="actionButton" > {{ playerTurnStr }}</div>
                 </div>
-                <div> 
-                    <div class="actionButton" @click="submitMoveBC(pointToPlay, gameId)"> Submit Move </div>
-                </div>  
-                <div> 
-                    <div class="actionButton" @click="surrenderBC"> Surrender  </div>
-                </div>  
-                <div> 
-                    <div class="actionButton" @click="claimWinningsBC"> Claim Win!  </div>
-                </div>  
-                <div> 
-                    <div class="actionButton" > Status: {{ blockchainStatus }}</div>
-                </div>     
             </div>
         </div>
-        <tttGameGrid 
-            :wallet="wallet"
-            :socket="socket"
-            :tezos="tezos"
-        />
-        <div class="gameManagement"> Load Game 
-            <div class="gridFlex4x2" > 
+    <div class="gameManagement"> 
+        <div class="rowFlex"> Game Hub 
+            <div> 
+                <div class="actionButton" @click="createGameBC" > Create New Game  </div>
+            </div>
+            Load 
+            <div class="rowFlex" > 
                 <div v-for="(item) in activeGames" :key="item"> 
                     <div class="actionButton" @click="loadGameBC(item)">  {{ item }}</div>
                 </div>
             </div>
-            Leave Game 
-            <div class="gridFlex4x2" > 
+            Leave  
+            <div class="rowFlex" > 
                 <div v-for="(item) in pendingGames" :key="item"> 
                     <div class="actionButton" @click="loadGameBC(item)"> {{ item }}</div>
                 </div>
             </div>
-            Join Game 
-            <div class="gridFlex4x2" > 
+            Join  
+            <div class="rowFlex" > 
                 <div v-for="(item) in pendingGamesOthers" :key="item"> 
                     <div class="actionButton" @click="joinGameBC(item)"> {{ item }}</div>
                 </div>
             </div>
-             View Past Games 
+            View 
             <div class="gridFlex4x2" > 
                 <div v-for="(item) in pastGames" :key="item"> 
                     <div class="actionButton" @click="joinGameBC(item)"> {{ item }}</div>
                 </div>
             </div>
-        </div>
-        
+        </div>      
+    </div>   
      </div>
-     
-     
+    <tttGameGrid 
+        :wallet="wallet"
+        :socket="socket"
+        :tezos="tezos"
+    />
+    
+     <div> 
+        <div class="actionButton" @click="submitMoveBC(pointToPlay, gameId)"> Submit Move </div>
+     </div>  
+     <div> 
+        <div class="actionButton" @click="surrenderBC"> Surrender  </div>
+    </div>  
+    <div> 
+         <div class="actionButton" > BC Status: {{ blockchainStatus }}</div>
+    </div> 
 </template>
 
 <style>

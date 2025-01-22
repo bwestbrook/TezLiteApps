@@ -2,10 +2,10 @@
 
 import aceyDuecey from "./aceyDuecey.vue"
 import tezTacToe from "./tezTacToe.vue"
+import { reduceAddress } from "../utilities";
 
 export default {
-  name: 'HelloWorld',
-  props: ['wallet', 'walletAddress', 'socket', 'tezos', 'windowWidth', 'windowHeight'],
+  props: ['wallet', 'socket', 'tezos', 'windowWidth', 'windowHeight'],
   components: { 
         aceyDuecey,
         tezTacToe
@@ -13,8 +13,15 @@ export default {
   data () {
     return {
       showTezTactoe: true,
-      showAceyDuecy: false
+      showAceyDuecy: false,
+      walletAddress: 'SYNC WALLET'
     }
+  },
+  created () {
+    this.socket.on("newWallet", (address) => {
+      console.log(address)
+      this.walletAddress = 'UNSYNC: ' + reduceAddress(address)
+    })
   },
   methods: {
     async selectGame(game) {
@@ -38,9 +45,6 @@ export default {
             this.tezos.setWalletProvider(this.wallet)
         }
     },
-  },
-  created () {
-  
   }
 }
 </script>
@@ -50,16 +54,16 @@ export default {
     <div class="centerBody">
       <div class="rowFlex" > 
         <div @click="selectGame('TezTacToe')" class="actionButton">
-           Play TezTacToe!
+            Play TezTacToe!
         </div>
         <div @click="selectGame('AceyDuecey')" class="actionButton">
-           CLICK ME FOR SURPRISE
+            CLICK ME FOR SURPRISE
         </div>
         <div class="actionButton" @click="claimNFTEarningsBC"> 
-          Claim NFT Earnings 
+            Claim NFT Earnings 
         </div>
         <div class="actionButton" @click="toggleWallet">
-                {{walletAddress}} 
+            {{walletAddress}} 
         </div>
      </div>    
       <tezTacToe v-if="showTezTactoe"
@@ -72,7 +76,6 @@ export default {
       <div class="rules">
         Load a Game!  When you click on a move, click again to search for anther move, when you are ready with you move submit it to the blockchain!
       </div>
-      
     </div>
   </div>
 </template>
@@ -128,7 +131,6 @@ export default {
 .gameManagement {
   display: flex;
   flex-direction: column;
-  width: 10%;
   justify-content: center;
   align-items: center;
   color: #fff;

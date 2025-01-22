@@ -170,7 +170,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on("updateGamePlayable", function(gamePlayabe, gameId) {
-    console.log('lock')
+    console.log('lock', gamePlayabe)
     io.to(gameId).emit('gamePlayable', gamePlayabe)
   });
   // Contract
@@ -193,6 +193,8 @@ io.on('connection', (socket) => {
     } else {
       connectedUsers[address] = [socket.id]
     }
+    console.log(address)
+    io.to(socket.id).emit('newWallet', address)
   });
 
   socket.on("disconnect", function() {
