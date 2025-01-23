@@ -23,6 +23,7 @@ export default {
             showAceyDuecey: false,
             gamesObject: {},
             gameId: -1,
+            blockWaits: 2,
             gameStatus: 'No Players',
             playerTurnStr: '',
             playerTurn: -1, 
@@ -124,10 +125,12 @@ export default {
         async getNextBlockLevel(transactionBlockLevel){
             let currentBlock = await this.rpcclient.getBlock();
             let currentBlockLevel = await currentBlock.header.level
-            while (currentBlockLevel > transactionBlockLevel + 4) {
-                this.blockchainStatus = 'Confirming ...'
-                let currentBlock = await this.rpcclient.getBlock();                
-                currentBlockLevel = await currentBlock.header.level   
+            const finalBlockLevel = transactionBlockLevel + this.blockWaits
+            while (currentBlockLevel < finalBlockLevel) {
+                let currentBlock = await this.rpcclient.getBlock();                              
+                currentBlockLevel = await currentBlock.header.level 
+                let bcString = 'Waiting 2 blocks at block ' + currentBlockLevel.toString() + ' / ' + finalBlockLevel.toString()
+                this.blockchainStatus = bcString
             }
             this.blockchainStatus = 'Confirmed!'
             
@@ -143,7 +146,7 @@ export default {
             }
             
             await this.getGameGrid(this.gameId)
-            this.loadGameBC(this.gameId)
+            await this.loadGameBC(this.gameId)
         },
         async togglePlayer(){
             const activeAccount = await this.wallet.client.getActiveAccount()    
