@@ -442,21 +442,18 @@ export default {
         return gamesObject
         },
         async loadGameBC(gameId) {
+            console.log(gameId)
             this.blockchainStatus = 'Loading Game from Smart Contract'       
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
                 return
             }      
             this.socket.emit("setUserActiveGameRoom", activeAccount.address, this.gameCount, gameId)
-            await this.updateLoadedGameStatus(gameId)   
-            const game = await this.gamesObject[gameId]
-            const playerTurn = game.playerTurn
-            const players = game.players
-            const doUpdateGrid = players[playerTurn - 1] == activeAccount.address
-            this.playerTurn = playerTurn
+            await this.updateLoadedGameStatus(gameId)
             this.socket.emit("updatePlayedPoint", 'NO MOVE', 'Active', this.gameId)
-            this.socket.emit('loadGame', gameId, doUpdateGrid)   
+            this.socket.emit('loadGame', gameId, false)   
             this.socket.emit('resizeGameGrid', window.inner)
+            
             this.blockchainStatus = `Game ${gameId} loaded`  
         },
         async getGameGrid(gameId, updateGrid=true) {
