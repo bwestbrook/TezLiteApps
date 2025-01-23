@@ -43,13 +43,13 @@ export default {
             this.getGamesFromContractAsync()
         })
         this.socket.on("updatePlayerControl", (gamesObject) => {
-            console.log('pcd', gamesObject)
             this.updatePlayerControl(gamesObject)
         })
         this.socket.on("updateConnectedUsers", (address) => {
             this.updateConnectedUsers(address)
         })
         this.socket.on("loadGame", (gameId, updateGrid) => {
+            console.log('LG')
             this.getGameGrid(gameId, updateGrid)
             this.updatePlayerControl()
         })
@@ -63,6 +63,10 @@ export default {
         })
         this.socket.on('updateBCStatus', (bcStatus) => {
             this.blockchainStatus = bcStatus
+        })
+        this.socket.on('updateGamePlayable', (gamePlayable, gameId) => {
+            console.log('new player', gamePlayable, gameId, this.gamePlayable)
+            this.gamePlayable = gamePlayable
         })
 
         // Listen to contracts for changes
@@ -126,22 +130,24 @@ export default {
                 currentBlockLevel = await currentBlock.header.level   
             }
             this.blockchainStatus = 'Confirmed!'
-            this.togglePlayer()
-            this.updatePlayerControl()
+            
             
         },
         async delayGetGamesFromContract(transactionBlockLevel){
             await this.getNextBlockLevel(transactionBlockLevel)
-            //console.log(this.gameId, this.gameCount)
+            this.updatePlayerControl()
             if (this.gameId == -1 && this.gameCount > 0) {
                 this.gameId = this.gameCount - 1
             } else if (this.gameId == -1 && this.gameCount == 0) {
                 this.gameId = 0
             }
+            
             await this.getGameGrid(this.gameId)
+            this.loadGameBC(this.gameId)
         },
         async togglePlayer(){
-            const activeAccount = await this.wallet.client.getActiveAccount()              
+            const activeAccount = await this.wallet.client.getActiveAccount()    
+            console.log('oggle player', this.playerTurn)          
             if (!activeAccount) {                  
                 return         
             } 
@@ -198,7 +204,7 @@ export default {
                 this.walletPlayerTurn2 = await reduceAddress(game.players[1])
                 this.playersInGame = [this.walletPlayerTurn1, this.walletPlayerTurn2]
                 this.playerTurn = await game.playerTurn
-                this.socket.emit('updatePlayerTurn', this.playerTurn, game.players, activeAccount.address, this.gameId)
+                this.socket.emit('updatePlayerTurn', this.playerTurn, this.gameId)
                 this.socket.emit('updateConnectedUsersInGame', activeAccount.address, this.gameId)
                 this.blockchainStatus = 'Active'
                 if (game.players[this.playerTurn - 1] == activeAccount.address) {
@@ -206,6 +212,8 @@ export default {
                     this.socket.emit('updateGamePlayable', true, this.gameId)
                 } else {
                     this.playerTurnStr = 'OPP TURN'
+                    console.log('locking self')
+                    this.socket.emit('updateGamePlayable', false, this.gameId)
                 }
             } else if (game.gameStatus > 2) {
                 console.log('locking game')
@@ -292,7 +300,8 @@ export default {
                 .then(() => this.blockchainStatus = `Joined Game on Smart Contract ${{gameId}}` )
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
         },
-        async submitMoveBC(pointToPlay, gameId) {      
+        async submitMoveBC(pointToPlay, gameId) {
+            this.socket.emit("updateGamePlayable", false, gameId)   
             this.blockchainStatus = 'Submitting Move to Smart Contract'     
             const x = pointToPlay[0] + 2 // shift to BC coords
             const y = pointToPlay[1] + 2 // shift to BC coords
@@ -442,8 +451,7 @@ export default {
                 let playerList = []
                 for (let player of players) {
                     playerList.push(player)
-                }           
-                console.log(gameData)            
+                }                     
                 gameData['players'] = playerList
                 gameData['grid'] = await game.grid
                 gamesObject[j] = gameData
@@ -463,15 +471,11 @@ export default {
             await this.updateLoadedGameStatus(gameId)   
             const game = await this.gamesObject[gameId]
             const playerTurn = game.playerTurn
-            console.log('GO', game)
             const players = game.players
-            const updateGrid = players[playerTurn - 1] == activeAccount.address
-            console.log(game)
-            console.log(playerTurn, 'ccc', game.players)
+            const doUpdateGrid = players[playerTurn - 1] == activeAccount.address
             this.playerTurn = playerTurn
             this.socket.emit("updatePlayedPoint", 'NO MOVE', 'Active', this.gameId)
-            this.socket.emit('loadGame', gameId, updateGrid)   
-            this.socket.emit('updateGamePlayable', updateGrid)
+            this.socket.emit('loadGame', gameId, doUpdateGrid)   
             this.socket.emit('resizeGameGrid', window.inner)
             this.blockchainStatus = `Game ${gameId} loaded`  
         },

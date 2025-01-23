@@ -93,31 +93,8 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on("updatePlayerTurn", function(playerTurn, playersInGame, address, gameId) {
-    let socketsInRoom = io.sockets.adapter.rooms.get(gameId) 
-    socketsInRoom = Array.from(socketsInRoom)
-    const walletSocketConnections = connectedUsers[address]
-    for (let walletSocketConnect in walletSocketConnections) {
-      const walletConnection = walletSocketConnections[walletSocketConnect]
-      const index = socketsInRoom.indexOf(walletConnection);
-      socketsInRoom.splice(index, 1)
-    }
-    if (address == playersInGame[playerTurn - 1]) {
-      for (let socketToUnlock in walletSocketConnections) {
-        io.to(walletSocketConnections[socketToUnlock]).emit('updateGamePlayable', true)
-      }
-      for (let socketToLock in socketsInRoom) {
-        io.to(socketsInRoom[socketToLock]).emit('updateGamePlayable', false)
-      }
-    } else {
-      for (let socketToUnlock in socketsInRoom) {
-        io.to(socketsInRoom[socketToUnlock]).emit('gamePlayable', true)
-      }
-      for (let socketToLock in walletSocketConnections) {
-        io.to(walletSocketConnections[socketToLock]).emit('gamePlayable', false)
-      }
-    }
-    io.to(gameId).emit("updatePlayerTurn", playerTurn, address)
+  socket.on("updatePlayerTurn", function(playerTurn, gameId) {
+    io.to(gameId).emit("updatePlayerTurn", playerTurn, gameId)
   });
 
   socket.on("setUserActiveGameRoom", function(address, gameCount, gameId) { // Each user can only be in one game at a time
@@ -170,8 +147,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on("updateGamePlayable", function(gamePlayabe, gameId) {
-    console.log('lock', gamePlayabe)
-    io.to(gameId).emit('gamePlayable', gamePlayabe)
+    console.log('GP', gamePlayabe)
+    io.to(socket.id).emit('updateGamePlayable', gamePlayabe, gameId)
   });
   // Contract
   socket.on("updateGames", function() {
@@ -180,10 +157,6 @@ io.on('connection', (socket) => {
 
   socket.on("loadGame", function(gameId, updateGrid) {
     io.to(socket.id).emit('loadGame', gameId, updateGrid)
-  });
-
-  socket.on("newContractData", function(address) {
-    console.log('newContractData')
   });
 
   socket.on("walletConnection", function(address) {
