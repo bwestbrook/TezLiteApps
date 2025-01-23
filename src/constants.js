@@ -18,7 +18,7 @@ export const NODE_URL = 'https://ghostnet.tezos.ecadinfra.com/'
 
 //export const CONTRACT_ADDRESS = 'KT1RxAUU7GXn2xqrAhLH9Eu8MCFnC8Zt9bjT' // v1.3
 
-export const CONTRACT_ADDRESS = 'KT1EnFDvGJ5TpuLe9rUgSbxshVhW7QoLx11m'
+export const CONTRACT_ADDRESS = 'KT1HJG2wUokgbrmEcXmJrGFwbJJ6NXZ6P8by'
 
 //export const CONTRACT_ADDRESS = 'KT1BvZ1nhgtEMghqTqqz2UG8rDcjvJrQLomx' // V1.0
 

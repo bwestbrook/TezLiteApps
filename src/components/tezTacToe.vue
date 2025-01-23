@@ -201,7 +201,6 @@ export default {
                 this.socket.emit('updatePlayerTurn', this.playerTurn, game.players, activeAccount.address, this.gameId)
                 this.socket.emit('updateConnectedUsersInGame', activeAccount.address, this.gameId)
                 this.blockchainStatus = 'Active'
-                console.log(this.playerTurn, game.players)
                 if (game.players[this.playerTurn - 1] == activeAccount.address) {
                     this.playerTurnStr = 'YOUR TURN'
                     this.socket.emit('updateGamePlayable', true, this.gameId)
@@ -313,7 +312,7 @@ export default {
                             player: activeAccount.address,
                             move: this.bcNum
                         })
-                        .send({ amount: 1 })
+                        .send()
                 })
                 .then((op) => {
                     console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -430,11 +429,11 @@ export default {
                 gameData['gameId'] = j
                 for (let data of metaData) {
                     if (i == 0) {
-                        gameData['gameBalance'] = data.toNumber()
-                    } else  if (i == 1) {
                         gameData['gameStatus'] = data.toNumber()
+                    } else if (i == 1) {
+                        gameData['player1Paid'] = data.toNumber()
                     } else if (i == 2) {
-                        gameData['mutezPerMove'] = data.toNumber()
+                        gameData['player2Paid'] = data.toNumber()
                     } else if (i == 3) {
                         gameData['playerTurn'] = data.toNumber()
                     }
@@ -443,7 +442,8 @@ export default {
                 let playerList = []
                 for (let player of players) {
                     playerList.push(player)
-                }          
+                }           
+                console.log(gameData)            
                 gameData['players'] = playerList
                 gameData['grid'] = await game.grid
                 gamesObject[j] = gameData
@@ -458,17 +458,20 @@ export default {
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
                 return
-            }           
+            }      
             this.socket.emit("setUserActiveGameRoom", activeAccount.address, this.gameCount, gameId)
             await this.updateLoadedGameStatus(gameId)   
             const game = await this.gamesObject[gameId]
             const playerTurn = game.playerTurn
+            console.log('GO', game)
             const players = game.players
             const updateGrid = players[playerTurn - 1] == activeAccount.address
+            console.log(game)
+            console.log(playerTurn, 'ccc', game.players)
+            this.playerTurn = playerTurn
             this.socket.emit("updatePlayedPoint", 'NO MOVE', 'Active', this.gameId)
             this.socket.emit('loadGame', gameId, updateGrid)   
             this.socket.emit('updateGamePlayable', updateGrid)
-            this.socket.emit('updatePlayerTurn', playerTurn)
             this.socket.emit('resizeGameGrid', window.inner)
             this.blockchainStatus = `Game ${gameId} loaded`  
         },
