@@ -31,15 +31,17 @@ export default {
     this.camera.position.z = 200;
     this.camera.lookAt(this.scene.position)
 
-    //  
-    //
-    this.defaultGeometry = new Three.BoxGeometry(50, 100, 1, 1)
+    const loader = new Three.TextureLoader(); 
+   
+    this.backCardTexture = loader.load(require('../assets/pokerCard.png')); // Replace with the path to your image
+    this.cardMaterial = new Three.MeshBasicMaterial({ map: this.backCardTexture });
+    this.defaultGeometry = new Three.BoxGeometry(50, 100, 0.1, 1)
     // Materials
-    this.defaultMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.9, transparent:true});
+    //this.defaultMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.9, transparent:true});
+    this.defaultMaterial = new Three.MeshNormalMaterial()
     
   },
   mounted () {
-    console.log(this.$refs)
     this.renderer = new Three.WebGLRenderer({antialias: true});
     this.renderer.setSize(this.gameSize, this.gameSize)
    
@@ -65,11 +67,10 @@ export default {
       this.renderer.render(this.scene, this.camera);
     },
     buildGame: function() {
-        const card1 = new Three.Mesh(this.defaultGeometry, this.defaultMaterial); 
-        const card2 = new Three.Mesh(this.defaultGeometry, this.defaultMaterial); 
+        const card1 = new Three.Mesh(this.defaultGeometry, this.cardMaterial); 
+        const card2 = new Three.Mesh(this.defaultGeometry, this.cardMaterial); 
         this.card1 = card1
         this.card2 = card2
-        console.log(card1)
         card1.position.set(-40, 0, 0);
         this.board.add(card1)    
         card2.position.set(40, 0, 0);

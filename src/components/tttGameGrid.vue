@@ -459,6 +459,9 @@ export default {
     // Socket
     resizeGameRender: function(width) {
         this.gameSize = width * 0.95
+        if (this.gameSize > 1000) {
+          this.gameSize = 1000
+        }
         this.renderer.setSize(this.gameSize, this.gameSize)
     },
   }

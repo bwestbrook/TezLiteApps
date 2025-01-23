@@ -2,7 +2,6 @@
 
 import aceyDuecey from "./aceyDuecey.vue"
 import tezTacToe from "./tezTacToe.vue"
-import { reduceAddress } from "../utilities";
 
 export default {
   props: ['wallet', 'socket', 'tezos'],
@@ -18,14 +17,12 @@ export default {
     }
   },
   created () {
-    this.socket.on("newWallet", (address) => {
-      console.log(address)
-      this.walletAddress = 'UNSYNC: ' + reduceAddress(address)
+    this.socket.on("newWallet", (newWallet) => {
+      this.walletAddress = newWallet
     })
   },
   methods: {
     async selectGame(game) {
-      console.log('toggleGame')
       if (game == 'AceyDuecey') {
         this.showTezTactoe = false
         this.showAceyDuecy = true
@@ -33,7 +30,6 @@ export default {
         this.showTezTactoe = true
         this.showAceyDuecy = false
         this.socket.emit('updatePlayerControl')
-        console.log('update UPC')
       } 
     },
     async toggleWallet(){
@@ -52,6 +48,7 @@ export default {
 <template>
   <div class="mainBody">     
     <div class="centerBody">
+      <div class="gameManagement">
       <div class="rowFlex" > 
         <div @click="selectGame('TezTacToe')" class="actionButton">
             Play TezTacToe!
@@ -65,7 +62,8 @@ export default {
         <div class="actionButton" @click="toggleWallet">
             {{walletAddress}} 
         </div>
-     </div>    
+     </div>  
+    </div>  
       <tezTacToe v-if="showTezTactoe"
           :socket="socket"
           :wallet="wallet"
@@ -73,9 +71,7 @@ export default {
       />
       <aceyDuecey v-if="showAceyDuecy" 
       />
-      <div class="rules">
-        Load a Game!  When you click on a move, click again to search for anther move, when you are ready with you move submit it to the blockchain!
-      </div>
+
     </div>
   </div>
 </template>
@@ -84,9 +80,12 @@ export default {
 .mainBody{
   margin:0px;
   padding:2px;
+ 
   display: flex;
   flex-direction: column;
   margin: auto;
+  border-width: 2px;
+  border-color: #fff;
   color: rgb(255, 255, 255);
 }
 .centerBody{
@@ -95,7 +94,7 @@ export default {
   flex-direction: column;
   border-width: 2px;
   border-color: #fff;
-
+  border-style: inset;
 }
 .rules {
   align-content: stretch;
@@ -109,6 +108,16 @@ export default {
   border-color: #fff;
 }
 .rowFlex {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  padding: 5px;
+  border-style: inset;
+  border-width: 0px;
+  border-color: #ffffff;
+}
+.gameHubRowFlex {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -133,7 +142,7 @@ export default {
   justify-content: center;
   align-items: center;
   color: #fff;
-  padding: 5px;
+  padding: auto;
   border-style: inset;
   border-width: 1px;
   border-color: #ffffff;
@@ -143,7 +152,7 @@ export default {
   align-content: center;
   justify-content: center;
   padding: 5px;
-  margin: auto;
+  margin: 2px;
   border-style: ridge;
   border-radius: 2px;
   border-width: 1px;

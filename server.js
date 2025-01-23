@@ -13,10 +13,7 @@ app.use(express.static(path.join(__dirname, 'dist')))
 //app.set('views', path.join(__dirname, 'views'))
 //app.set('view engine', 'ejs')
 
-app.get('/', (req, res) => {
-  console.log(`Rendering 'pages/index' for route '/'`)
-  res.render('pages/index')
-})
+
 
 
 const server = http.createServer(app)
@@ -138,7 +135,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on("updatePlayerControl", function() {
-    console.log('update UPC')
     io.emit('updatePlayerControl')
   });
 
@@ -147,7 +143,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on("updateGamePlayable", function(gamePlayabe, gameId) {
-    console.log('GP', gamePlayabe)
     io.to(socket.id).emit('updateGamePlayable', gamePlayabe, gameId)
   });
   // Contract
@@ -159,6 +154,10 @@ io.on('connection', (socket) => {
     io.to(socket.id).emit('loadGame', gameId, updateGrid)
   });
 
+  socket.on("newWallet", function(newWallet) {
+    io.to(socket.id).emit('newWallet', newWallet)
+  });
+
   socket.on("walletConnection", function(address) {
     // Determine all the sockets a single user/wallet is connected to
     if (connectedUsers.hasOwnProperty(address)) {
@@ -166,7 +165,6 @@ io.on('connection', (socket) => {
     } else {
       connectedUsers[address] = [socket.id]
     }
-    console.log(address)
     io.to(socket.id).emit('newWallet', address)
   });
 

@@ -5,9 +5,8 @@ import tttGameGrid  from './tttGameGrid.vue'
 //import sha256 from 'js-sha256'
 import { RpcClient } from '@taquito/rpc';
 import { NODE_URL, CONTRACT_ADDRESS, ID_LOOKUP, TZKT_API_BASE_URL, OBJECT_CONTRACT, ADMIN_ADDRESS} from '../constants'
-import { reduceAddress, getRandomIntInclusive } from "../utilities";
+import { reduceAddress } from "../utilities";
 
-//import { transferToContract } from "../services/tezos-services"
 
 export default {
     name: "playerControl",
@@ -21,6 +20,7 @@ export default {
         return {
             showTezTactoe: true,
             showAceyDuecey: false,
+            allGamesStatus: {},
             gamesObject: {},
             gameId: -1,
             blockWaits: 2,
@@ -43,6 +43,9 @@ export default {
         this.socket.on("updateGames", () => {
             this.getGamesFromContractAsync()
         })
+        this.socket.on("newWallet", (newWallet) => {
+            this.walletAddres = newWallet
+        })
         this.socket.on("updatePlayerControl", (gamesObject) => {
             this.updatePlayerControl(gamesObject)
         })
@@ -50,14 +53,10 @@ export default {
             this.updateConnectedUsers(address)
         })
         this.socket.on("loadGame", (gameId, updateGrid) => {
-            console.log('LG')
             this.getGameGrid(gameId, updateGrid)
             this.updatePlayerControl()
         })
-        // Set up socket to receive from server
-        this.socket.on('connectedUsers', (connectedUsers, socketId) => {
-            console.log('CUs', connectedUsers, socketId)
-        });
+
         this.socket.on('playedPoint', (playedPoint, bcStatus) => {
             this.pointToPlay = playedPoint
             this.blockchainStatus = bcStatus
@@ -65,8 +64,7 @@ export default {
         this.socket.on('updateBCStatus', (bcStatus) => {
             this.blockchainStatus = bcStatus
         })
-        this.socket.on('updateGamePlayable', (gamePlayable, gameId) => {
-            console.log('new player', gamePlayable, gameId, this.gamePlayable)
+        this.socket.on('updateGamePlayable', (gamePlayable) => {
             this.gamePlayable = gamePlayable
         })
 
@@ -149,8 +147,7 @@ export default {
             await this.loadGameBC(this.gameId)
         },
         async togglePlayer(){
-            const activeAccount = await this.wallet.client.getActiveAccount()    
-            console.log('oggle player', this.playerTurn)          
+            const activeAccount = await this.wallet.client.getActiveAccount()  
             if (!activeAccount) {                  
                 return         
             } 
@@ -172,15 +169,18 @@ export default {
                 return
             }  
             let i = 0
-            this.playerGames = []
-            this.pendingGamesOthers = []
+            this.allGamesStatus = {}            
             for (i; i < this.gameCount; i++) {
                 if (gamesObject[i].players.includes(activeAccount.address)) {
-                    this.playerGames.push(gamesObject[i].gameId)
+                    this.allGamesStatus[i] = gamesObject[i].gameStatus
+                } else if (gamesObject[i].gameStatus == 1 ) {
+                    this.allGamesStatus[i] = 4
                 } else {
-                    this.pendingGamesOthers.push(gamesObject[i].gameId)
-                }
+                    this.allGamesStatus[i] = 6
+                }                    
+                
             }      
+            this.pendingGamesOthers = this.allGamesStatus[6]
         },
         async updateLoadedGameStatus(gameId) {
             const activeAccount = await this.wallet.client.getActiveAccount()   
@@ -215,11 +215,9 @@ export default {
                     this.socket.emit('updateGamePlayable', true, this.gameId)
                 } else {
                     this.playerTurnStr = 'OPP TURN'
-                    console.log('locking self')
                     this.socket.emit('updateGamePlayable', false, this.gameId)
                 }
             } else if (game.gameStatus > 2) {
-                console.log('locking game')
                 this.socket.emit('updateGamePlayable', false, this.gameId)
             }
         },
@@ -273,19 +271,7 @@ export default {
             if (!activeAccount) {
                 return
             }    
-            this.blockchainStatus = 'Joining Game on Smart Contract'       
-            const randomBigNumbers = [100034234, 50989023, 2340823, 234230]
-            const time = new Date()
-            const milliseconds = time.getMilliseconds();
-            console.log(milliseconds)
-            const randomSeed = getRandomIntInclusive(0, 100000)
-            const randomBigNumberIndex = getRandomIntInclusive(0, 3)
-            const randomBigNumberSeed = randomBigNumbers[randomBigNumberIndex]
-            console.log(randomSeed, randomBigNumberSeed)
-            const trueSeed = randomSeed * randomBigNumberSeed
-            console.log(trueSeed)
-            const playerTurn = getRandomIntInclusive(0, 1)
-            console.log(trueSeed, playerTurn)         
+            this.blockchainStatus = 'Joining Game on Smart Contract'              
             this.getSigner(activeAccount)  
             this.tezos.wallet
                 .at(CONTRACT_ADDRESS)
@@ -380,28 +366,19 @@ export default {
                 const response = await fetch(apiUrl);
                 const addressJson = await response.json();
                 let ownerAddress = addressJson[0]['address']
-                //console.log(ownerAddress, 'v', OBJECT_CONTRACT)
                 if (ownerAddress.toString() == OBJECT_CONTRACT) {
                     ownerAddress = ADMIN_ADDRESS
                 }
                 this.blockchainStatus = 'checking Id ' + (i + 1).toString() + ' of 273'
                 if (ownerAddress in ownersToPay) {
-                    console.log('onwer found')
                     ownersToPay[ownerAddress] += 1
                 } else {
                     ownersToPay[ownerAddress] = 1
-
                 }
                 i ++;
             }
-            console.log(ownersToPay)
             i = 0
-            let uniqueOwners  = []
-            for (let uniqueOwner in uniqueOwners) {
-                console.log([ownersToPay].filter(x => x==uniqueOwner).length)
-                console.log(i, uniqueOwner, uniqueOwners[i])
-                i ++;
-            }
+
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
                 return
@@ -518,29 +495,54 @@ export default {
 </script>
 
 <template>   
-     <div class="gameManagement" >
-        <div class="gameManagement"> 
-            <div class="rowFlex"> Game Hub 
-                <div> 
-                    <div class="actionButton" @click="createGameBC(1)" > Create New 1 XTZ Game  </div>
-                </div>
-                <div> 
-                    <div class="actionButton" @click="joinGameBC(gameId)" > Join {{ gameId }}  </div>
-                </div>
-                Load 
-                <div class="rowFlex" > 
-                    <div v-for="(item) in playerGames" :key="item"> 
-                        <div class="actionButton" @click="loadGameBC(item)">  {{ item }}</div>
+     <div class="rowFlex" >
+            <div class="gameManagement"> 
+                <div class="rowFlex">  
+                    <div class="actionButton"> MY GAME HUB </div>                
+                    <div class="rowFlex" > 
+                        Play
+                        <div v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
+                            <div v-if="key==2" class="actionButton" @click="loadGameBC(value)"> {{value}} </div>                  
+                        </div>
+                    </div>
+                    <div class="rowFlex" > 
+                        Join
+                        <div v-for="(key, value) in allGamesStatus" :key="key" :value="value">      
+                            <div v-if="key==4" class="actionButton" @click="loadGameBC(value)"> {{value}} </div>                   
+                        </div>
+                    </div>
+                    <div class="rowFlex" >
+                        View
+                        <div v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
+                            <div v-if="key==3" class="actionButton" @click="loadGameBC(value)"> {{value}}  </div>                 
+                        </div>
+                    </div>
+                    <div class="rowFlex" >
+                        Leave
+                        <div v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
+                            <div v-if="key==1" class="actionButton" @click="loadGameBC(value)"> {{value}}  </div>                 
+                        </div>
                     </div>
                 </div>
-                <div class="rowFlex" > 
-                    <div v-for="(item) in pendingGamesOthers" :key="item"> 
-                        <div class="actionButton" @click="loadGameBC(item)">  {{ item }}</div>
-                    </div>
+                <div class="rowFlex" >
+                    <div> 
+                        <div class="actionButton" @click="createGameBC(0.5)" > New 0.5 XTZ Game </div>                    
+                    </div> 
+                    <div> 
+                        <div class="actionButton" @click="createGameBC(1)" > New 1 XTZ </div>                    
+                    </div> 
+                    <div> 
+                        <div class="actionButton" @click="createGameBC(5)" > New 5 XTZ </div>                    
+                    </div> 
+                    <div> 
+                        <div class="actionButton" @click="joinGameBC(gameId)" > Join Game: {{ gameId }}  </div>
+                    </div>     
+                    <div> 
+                        <div class="actionButton" @click="leaveGameBC(gameId)" > Leave Game: {{ gameId }}  </div>
+                    </div> 
                 </div>
-            </div>      
-        </div>  
-        <div class="rowFlex"> Game Center 
+            </div>  
+        <div class="gameManagement"> Game Center 
             <div class="rowFlex" >     
                 <div> 
                     <div class="actionButton" > Game ID: {{ gameId }}</div>
@@ -552,6 +554,15 @@ export default {
                     <div class="actionButton" > {{ playerTurnStr }}</div>
                 </div>
             </div>
+            <div class="rowFlex" >     
+                <div> 
+                    <div class="actionButton" @click="submitMoveBC(pointToPlay, gameId)" > Submit Move </div>
+                </div>
+                <div> 
+                    <div class="actionButton" @click="surrenderGameBC" > Surrender </div>
+                </div>
+                
+            </div>
         </div>
  
     </div>
@@ -561,12 +572,6 @@ export default {
         :tezos="tezos"
     />
     
-     <div> 
-        <div class="actionButton" @click="submitMoveBC(pointToPlay, gameId)"> Submit Move </div>
-     </div>  
-     <div> 
-        <div class="actionButton" @click="surrenderBC"> Surrender  </div>
-    </div>  
     <div> 
          <div class="actionButton" > BC Status: {{ blockchainStatus }}</div>
     </div> 

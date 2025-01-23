@@ -14,6 +14,7 @@ const Tezos = new TezosToolkit(NODE_URL);
 
 let globalWallet = undefined
 
+   
 export default {
   name: 'App',
   components: {
@@ -30,8 +31,8 @@ export default {
     }
   },
   created() {   
-      //this.socket = io('localhost:3000')
-      this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
+      this.socket = io('localhost:3000')
+      //this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
       this.tezos = Tezos
       this.getWallet()
       this.socket.on('socketId', (socketId) => {
@@ -39,7 +40,6 @@ export default {
         }) 
   },
   mounted() {
-      console.log(this.user, this.socket.id)
       window.addEventListener('resize', () =>{
         this.onResize()
       })
@@ -59,25 +59,30 @@ export default {
               this.brodcastWallet(account)  
               this.socket.emit("walletConnection", account.address)  
               this.socket.emit("updateGames")
+              console.log(account)
           })
           const contractAbstraction = await Tezos.contract.at(CONTRACT_ADDRESS);
           console.log(contractAbstraction);
           
         } else {
+          console.log('log out')
           this.wallet = globalWallet
         }
       return globalWallet
     },
     async brodcastWallet (account) {
+      console.log('log out')
       if (account) {
         const reducedAddress = await reduceAddress(account.address)       
         Tezos.setWalletProvider(this.wallet)
         const signer = new RemoteSigner(account.address, NODE_URL )
         await this.tezos.setProvider({signer:signer})
-        this.walletAddress = 'UNSYNC WALLET ' + reducedAddress
+        this.socket.emit("newWallet", 'UNSYNC WALLET ' + reducedAddress)
         
       } else {
-        this.walletAddress = 'SYNC WALLET'
+        console.log('log out')
+
+        this.socket.emit("newWallet", 'SYNC WALLET')
       }
     },
     async sendTezos(activeAccount, amount) {
