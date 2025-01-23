@@ -494,33 +494,6 @@ export default {
 <template>   
      <div class="rowFlex" >
             <div class="gameManagement"> 
-                <div class="rowFlex">  
-                    <div class="actionButton"> MY GAME HUB </div>                
-                    <div class="rowFlex" > 
-                        Play
-                        <div v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
-                            <div v-if="key==2" class="actionButton" @click="loadGameBC(value)"> {{value}} </div>                  
-                        </div>
-                    </div>
-                    <div class="rowFlex" > 
-                        Join
-                        <div v-for="(key, value) in allGamesStatus" :key="key" :value="value">      
-                            <div v-if="key==4" class="actionButton" @click="loadGameBC(value)"> {{value}} </div>                   
-                        </div>
-                    </div>
-                    <div class="rowFlex" >
-                        View
-                        <div v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
-                            <div v-if="key==3" class="actionButton" @click="loadGameBC(value)"> {{value}}  </div>                 
-                        </div>
-                    </div>
-                    <div class="rowFlex" >
-                        Leave
-                        <div v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
-                            <div v-if="key==1" class="actionButton" @click="loadGameBC(value)"> {{value}}  </div>                 
-                        </div>
-                    </div>
-                </div>
                 <div class="rowFlex" >
                     <div> 
                         <div class="actionButton" @click="createGameBC(0.5)" > New 0.5 XTZ Game </div>                    
@@ -537,6 +510,33 @@ export default {
                     <div> 
                         <div class="actionButton" @click="leaveGameBC(gameId)" > Leave Game: {{ gameId }}  </div>
                     </div> 
+                </div>
+                <div class="rowFlex">  
+                    <div class="actionButton" > MY GAME HUB </div>                
+                    <div class="gridFlex4x2" > 
+                        Play
+                        <div v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
+                            <div v-if="key==2" class="actionButton" @click="loadGameBC(value)"> {{value}} </div>                  
+                        </div>
+                    </div>
+                    <div class="gridFlex4x2" > 
+                        Join
+                        <div v-for="(key, value) in allGamesStatus" :key="key" :value="value">      
+                            <div v-if="key==4" class="actionButton" @click="loadGameBC(value)"> {{value}} </div>                   
+                        </div>
+                    </div>
+                    <div class="gridFlex4x2" >
+                        View
+                        <div v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
+                            <div v-if="key==3" class="actionButton" @click="loadGameBC(value)"> {{value}}  </div>                 
+                        </div>
+                    </div>
+                    <div class="gridFlex4x2" >
+                        Leave
+                        <div v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
+                            <div v-if="key==1" class="actionButton" @click="loadGameBC(value)"> {{value}}  </div>                 
+                        </div>
+                    </div>
                 </div>
             </div>  
         <div class="gameManagement"> Game Center 

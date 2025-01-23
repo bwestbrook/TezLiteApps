@@ -128,8 +128,9 @@ export default {
   border-color: #ffffff;
 }
 .gridFlex4x2 {
-  display: flex;
+  display: grid;
   flex-direction: column;
+  grid-template-columns: 1fr 1fr;
   justify-content: center;
   align-items: center;
   color: #fff;
