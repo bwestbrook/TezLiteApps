@@ -111,13 +111,13 @@ def main():
             '''
             new_game_grid = {
                     111: 0,
-                    112: 1,
-                    113: 1,
-                    114: 1,
+                    112: 0,
+                    113: 0,
+                    114: 0,
                     121: 0,
-                    122: 2,
-                    123: 2,
-                    124: 2,
+                    122: 0,
+                    123: 0,
+                    124: 0,
                     131: 0,
                     132: 0,
                     133: 0,
@@ -178,11 +178,9 @@ def main():
             
             idx = self.data.currentGameIndex
             players = {1: sp.sender, 2: sp.sender}
-            metaData = {
-                
+            metaData = {                
                 "playerTurn": 1,
                 "gameStatus": 1,
-                "gameBalance": 0,
                 "player1Paid": 1,
                 "player2Paid": 0
             }  
@@ -211,7 +209,7 @@ def main():
             sp.cast(params.gameId, sp.int)
             if self.data.games[params.gameId].metaData['gameStatus'] == 1:                
                 if self.data.games[params.gameId].metaData['player1Paid'] == 0: # place in splot 1
-                    self.data.games[params.gameId].players[1] = sp.sender # must be second player
+                    self.data.games[params.gameId].players[1] = sp.sender # must be first player
                     self.data.games[params.gameId].metaData['player1Paid'] = 1                    
                     self.data.games[params.gameId].tzGameBalance += self.data.games[params.gameId].tzMutezPerMove                    
                     self.data.lockedBalance += self.data.games[params.gameId].tzMutezPerMove
@@ -221,7 +219,7 @@ def main():
                 else:
                     if self.data.games[params.gameId].metaData['player2Paid'] == 0: #place in spot 1                    
                         self.data.games[params.gameId].players[2] = sp.sender # must be second player
-                        self.data.games[params.gameId].metaData['player1Paid'] = 1
+                        self.data.games[params.gameId].metaData['player2Paid'] = 1
                         self.data.games[params.gameId].tzGameBalance += self.data.games[params.gameId].tzMutezPerMove                    
                         self.data.lockedBalance += self.data.games[params.gameId].tzMutezPerMove
                         self.data.games[params.gameId].metaData['gameStatus'] = 2 
@@ -405,10 +403,7 @@ def test():
         move = 121
     )
     s.show(a.balance)
-    a.surrenderGame(
-        _sender = player1.address,
-        gameId = 0
-    )
+ 
     s.show(a.balance)
     a.makeMove(
         _sender = player1.address,
