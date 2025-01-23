@@ -4,7 +4,7 @@ import smartpy as sp
 def main():
     class TezTacToe(sp.Contract):
         
-        def __init__(self, player1, player2):
+        def __init__(self):
             '''
             Logic largely controlled by "gameStatus"
             1: Created and at least one player in game
@@ -15,11 +15,9 @@ def main():
             '''
             #Game Control         
             self.data.admin = sp.address("tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w")
-            self.data.contractAddress = sp.address("KT1TezoooozzSmartPyzzSTATiCzzzwwBFA1")
             self.data.games = {}
-            self.data.currentGameIndex = 0
-            #NFT Payout
-            #self.data.nftHolders = {}
+            self.data.currentGameIndex = 0            
+            self.data.lockedBalance = sp.mutez(0)
             #Logic Control for game winners
             self.data.game_winners = {
                     0: [111, 112, 113, 114],
@@ -98,37 +96,28 @@ def main():
                     73: [414, 323, 232, 141],
                     74: [441, 332, 223, 114]
                 }            
-            self.data.winningSet = {
-                1: 0, 
-                2: 0,
-                3: 0,
-                4: 0}  
             self.data.setSum = 0
             self.data.gameWon = 0
-            self.data.lastCoord = 0            
-            self.data.failedAttempts = 0
+            self.data.lastCoord = 0     
             self.data.hasRemainingWinners = 0 
             self.data.winnerHasZero = 0
             self.data.winnerHasOne = 0
             self.data.winnerHasTwo = 0
-            self.data.nChecks = 0 # probaly delete after stable
-            self.data.lockedBalance = sp.mutez(0)
             
         @sp.entrypoint()
         def startGame(self, params):
             '''
             There's no 'send' to contract here as this entry point like join game costs tez on the FE in taquito
             '''
-            sp.emit(1, tag="contractUpdated")
             new_game_grid = {
                     111: 0,
-                    112: 0,
-                    113: 0,
-                    114: 0,
+                    112: 1,
+                    113: 1,
+                    114: 1,
                     121: 0,
-                    122: 0,
-                    123: 0,
-                    124: 0,
+                    122: 2,
+                    123: 2,
+                    124: 2,
                     131: 0,
                     132: 0,
                     133: 0,
@@ -186,86 +175,81 @@ def main():
                     443: 0,
                     444: 0
                     }
+            
             idx = self.data.currentGameIndex
-            players = {1: sp.sender, 2: sp.address('---')}  
-            gameBalance = sp.mutez(0)
-            sp.cast(params.mutezPerMove, sp.mutez)
-            sp.cast(params.surrenderAmount, sp.mutez)
-            sp.cast(params.surrenderOtherAmount, sp.mutez)
+            players = {1: sp.sender, 2: sp.sender}
             metaData = {
-                "playerTurn": params.playerTurn,
-                "gameStatus": params.gameStatus,
-                "winningPlayer": 0
-            }
+                
+                "playerTurn": 1,
+                "gameStatus": 1,
+                "gameBalance": 0,
+                "player1Paid": 1,
+                "player2Paid": 0
+            }  
+            sp.cast(params.tzSurrenderAmount, sp.mutez)
+            sp.cast(params.tzSurrenderOtherAmount, sp.mutez)
             new_game = sp.record(
                 grid = new_game_grid,
-                players = players,                
-                mutezPerMove = params.mutezPerMove,# computed by front end 1X mutez * (1 - fee), used by Cat's Game
-                gameBalance = gameBalance, #computed by front end 2X mutez (fee asseseed by FE in mutez per Muve)
-                surrenderAmount = params.surrenderAmount, #computed by front end 1X mutez * 0.75
-                surrenderOtherAmount = params.surrenderOtherAmount, #computed by front end 1X mutez * 0.25
-                playerTurn = params.playerTurn,
-                gamesStatus = params.gameStatus,
-                metaData = metaData
-            )     
-            new_game.gameBalance += new_game.mutezPerMove
-            self.data.lockedBalance += new_game.mutezPerMove
+                players = players,
+                metaData = metaData,
+                tzGameBalance = sp.amount,
+                tzMutezPerMove = sp.amount,
+                tzSurrenderAmount = params.tzSurrenderAmount,
+                tzSurrenderOtherAmount = params.tzSurrenderOtherAmount
+            )          
             self.data.games[idx] = new_game
             self.data.currentGameIndex += 1
-            
-       
-            
+            self.data.lockedBalance += sp.amount
+            #sp.emit(idx, tag="contractUpdated") 
+             
         @sp.entry_point()    
         def joinGame(self, params):
             '''
             There's no 'send' to contract here as this entry point like make game costs tez on the FE in taquito
             '''
-            assert sp.sender != self.data.games[params.gameId].players[1], "already in game"
-            thisPlayerIndex = 0
-            if self.data.games[params.gameId].metaData['gameStatus'] == 1:
-                sp.cast(params.gameId, sp.int)
-                if self.data.games[params.gameId].players[1] == sp.address('---'):
-                     thisPlayerIndex = 1
-                else:
-                     thisPlayerIndex = 2
-                sp.emit(thisPlayerIndex, tag="thisPlayerIndex")
-                self.data.games[params.gameId].players[thisPlayerIndex] = sp.sender
-                self.data.games[params.gameId].metaData['gameStatus'] = 1                
-                if self.data.games[params.gameId].players[1] != sp.address('---'):
-                     if self.data.games[params.gameId].players[2] != sp.address('---'):
-                         self.data.games[params.gameId].metaData['gameStatus'] = 2
-                         sp.emit('game Full')
-                         sp.emit(self.data.games[params.gameId].players, tag='players')  
-                         self.data.lockedBalance += self.data.games[params.gameId].mutezPerMove
-                         self.data.games[params.gameId].gameBalance += self.data.games[params.gameId].mutezPerMove
             sp.emit(params.gameId, tag="contractUpdated")
-
+            sp.cast(params.gameId, sp.int)
+            if self.data.games[params.gameId].metaData['gameStatus'] == 1:                
+                if self.data.games[params.gameId].metaData['player1Paid'] == 0: # place in splot 1
+                    self.data.games[params.gameId].players[1] = sp.sender # must be second player
+                    self.data.games[params.gameId].metaData['player1Paid'] = 1                    
+                    self.data.games[params.gameId].tzGameBalance += self.data.games[params.gameId].tzMutezPerMove                    
+                    self.data.lockedBalance += self.data.games[params.gameId].tzMutezPerMove
+                    if self.data.games[params.gameId].metaData['player2Paid'] == 1:
+                        self.data.games[params.gameId].metaData['gameStatus'] = 2
+                        sp.emit('game Full')
+                else:
+                    if self.data.games[params.gameId].metaData['player2Paid'] == 0: #place in spot 1                    
+                        self.data.games[params.gameId].players[2] = sp.sender # must be second player
+                        self.data.games[params.gameId].metaData['player1Paid'] = 1
+                        self.data.games[params.gameId].tzGameBalance += self.data.games[params.gameId].tzMutezPerMove                    
+                        self.data.lockedBalance += self.data.games[params.gameId].tzMutezPerMove
+                        self.data.games[params.gameId].metaData['gameStatus'] = 2 
+                        if self.data.games[params.gameId].metaData['player1Paid'] == 1:
+                            self.data.games[params.gameId].metaData['gameStatus'] = 2
+                            sp.emit('game Full')
+                
         @sp.entry_point()    
         def leaveGame(self, params):
             '''
             '''
             #assert sp.sender == self.data.games[params.gameId].players[2], "not your money" #<--- Why this not working? 
-            thisPlayerIndex = 0
             if self.data.games[params.gameId].players[1] == sp.sender:
-                thisPlayerIndex = 1
+                self.data.games[params.gameId].metaData['player1Paid'] = 0
+                sp.emit(self.data.games[params.gameId].players[1], tag="contractUpdated")
+                sp.send(sp.sender, self.data.games[params.gameId].tzMutezPerMove)            
+                self.data.games[params.gameId].tzGameBalance -= self.data.games[params.gameId].tzMutezPerMove
+                self.data.lockedBalance -= self.data.games[params.gameId].tzMutezPerMove
+                sp.emit(self.data.games[params.gameId].tzGameBalance, tag="gameBalance")
             else:
-                thisPlayerIndex = 2
-            sp.emit(thisPlayerIndex, tag="thisPlayerIndex")
-            self.data.games[params.gameId].players[thisPlayerIndex] = sp.address('---') 
-            self.data.games[params.gameId].metaData['gameStatus'] = 1
-            sp.emit(params.gameId, tag="contractUpdated")
-            sp.send(sp.sender, self.data.games[params.gameId].mutezPerMove)
-            
-            self.data.games[params.gameId].gameBalance -= self.data.games[params.gameId].mutezPerMove
-            self.data.lockedBalance -= self.data.games[params.gameId].mutezPerMove
-            sp.emit(self.data.games[params.gameId].gameBalance, tag="gameBalance")
+                sp.emit('Did not start Game', tag="cannotLeaveGameDidNotStart")
+
 
         @sp.entry_point()
         def makeMove(self, params):
             '''
             '''
-            playerTurn = self.data.games[params.gameId].metaData["playerTurn"]
-            sp.emit(playerTurn, tag='playerTurn')            
+            sp.emit(self.data.games[params.gameId].metaData["playerTurn"], tag='playerTurn')            
             #assert sp.sender == self.data.games[params.gameId].players[player_turn], "not playerTurn"
             #assert sp.sender == self.data.gameWon, "not your money" <--- Why this not working? 
             self.data.gameWon = 0            
@@ -273,9 +257,9 @@ def main():
             if self.data.games[params.gameId].metaData["gameStatus"] == 2:
                 sp.cast(params.gameId, sp.int)
                 sp.cast(params.move, sp.int)                
-                if self.data.games[params.gameId].players[playerTurn] == sp.sender:
-                    self.data.games[params.gameId].grid[params.move] = playerTurn
-                    if playerTurn == 1:
+                if self.data.games[params.gameId].players[self.data.games[params.gameId].metaData["playerTurn"]] == sp.sender:
+                    self.data.games[params.gameId].grid[params.move] = self.data.games[params.gameId].metaData["playerTurn"]
+                    if self.data.games[params.gameId].metaData["playerTurn"] == 1:
                         self.data.games[params.gameId].metaData["playerTurn"] = 2
                     else:
                         self.data.games[params.gameId].metaData["playerTurn"] = 1                    
@@ -313,60 +297,22 @@ def main():
                         if self.data.setSum == 8:
                             self.data.gameWon = 2
                             self.data.games[params.gameId].metaData["winningPlayer"] = 2
-
                     if self.data.gameWon > 0:
                         sp.emit(self.data.gameWon, tag="gameWonBy")
                         self.data.games[params.gameId].metaData["gameStatus"] = 3 # 3 is game won
+                        winAmount = self.data.games[params.gameId].tzMutezPerMove + self.data.games[params.gameId].tzMutezPerMove
+                        sp.send(self.data.games[params.gameId].players[self.data.games[params.gameId].metaData["winningPlayer"]], winAmount)
+                        
                     if self.data.hasRemainingWinners == 0:
                         sp.emit('cats Game', tag="catsGame")
                         self.data.games[params.gameId].metaData["gameStatus"] = 4 # Cats Game
+                        sp.send(self.data.games[params.gameId].players[1], self.data.games[params.gameId].tzSurrenderAmount)
+                        sp.send(self.data.games[params.gameId].players[2], self.data.games[params.gameId].tzSurrenderAmount)
                 else:
                     sp.emit('not Player Turn', tag="notPlayerTurnError")
             else:
                 sp.emit('game not active', tag="gameNotActiveError")
-                #sp.emit(params.move, tag="contractUpdated")
-
-        @sp.entry_point()
-        def claimWinnings(self, params):
-            '''
-            '''
-            #assert sp.sender == self.data.gameWon, "not your money" <--- Why this not working? 
-            if self.data.games[params.gameId].metaData["gameStatus"] == 3:
-                winningPlayerIndex = self.data.games[params.gameId].metaData["winningPlayer"]               
-                winningPlayer = self.data.games[params.gameId].players[winningPlayerIndex]
-                sp.emit(winningPlayer, tag="winningPlayer")
-                sp.emit(sp.sender, tag="sender")
-                if winningPlayer == sp.sender:
-                    winAmount = self.data.games[params.gameId].gameBalance
-                    sp.emit(winAmount, tag='sentWinAmount')
-                    sp.send(winningPlayer, winAmount)
-                else:
-                    sp.emit('did not Win!', tag="didNotWinError")
-            else: 
-                sp.emit('no Winner Yet', tag="noWinnerYetError")
-
-       
-        @sp.entry_point()
-        def payoutCatsGame(self, params):
-            '''
-            '''
-            #assert sp.sender == self.data.gameWon, "not your money" <--- Why this not working? 
-            if self.data.games[params.gameId].metaData["gameStatus"] == 4:
-                sendCatsGameTez = 0
-                if self.data.games[params.gameId].players[1] == sp.sender:
-                    sendCatsGameTez = 1
-                if self.data.games[params.gameId].players[2] == sp.sender:
-                    sendCatsGameTez = 1
-                else: 
-                    sp.emit('Requester Not in Game Cats Game', tag="notInGameCatsGame")
-                if sendCatsGameTez == 1:                    
-                    sp.send(self.data.games[params.gameId].players[1], self.data.games[params.gameId].mutezPerMove)
-                    sp.emit(self.data.games[params.gameId].mutezPerMove, tag='sentPlayer1CatsGame')
-                    sp.send(self.data.games[params.gameId].players[2], self.data.games[params.gameId].mutezPerMove)
-                    sp.emit(self.data.games[params.gameId].mutezPerMove, tag='sentPlayer2CatsGame')
-            else: 
-                sp.emit("not Cats Game", tag="notCatsGameError")
-
+                sp.emit(params.move, tag="contractUpdated")
          
         @sp.entry_point()
         def surrenderGame(self, params):
@@ -374,22 +320,20 @@ def main():
             '''
             #assert self.data.games[params.gameId].players.contains(sp.sender), "not in game"
             #assert sp.sender != self.data.games[params.gameId].players[2], 
-            surrenderPlayerIndex = 0
-            otherPlayerIndex = 0
             if self.data.games[params.gameId].metaData["gameStatus"] == 2:
                 if self.data.games[params.gameId].players[1] == sp.sender:
-                    surrenderPlayerIndex = 1
-                    otherPlayerIndex = 2
+                    sp.send(self.data.games[params.gameId].players[1], self.data.games[params.gameId].tzSurrenderAmount)
+                    sp.emit(self.data.games[params.gameId].tzSurrenderAmount, tag='surrenderAmount')
+                    sp.send(self.data.games[params.gameId].players[2], self.data.games[params.gameId].tzSurrenderOtherAmount)
+                    sp.emit(self.data.games[params.gameId].tzSurrenderOtherAmount, tag='surrenderOtherAmount')
                 else:
-                    surrenderPlayerIndex = 2
-                    otherPlayerIndex = 1    
-                sp.send(self.data.games[params.gameId].players[1], self.data.games[params.gameId].surrenderAmount)
-                sp.emit(self.data.games[params.gameId].mutezPerMove, tag='sentPlayer1CatsGame')
-                sp.send(self.data.games[params.gameId].players[2], self.data.games[params.gameId].surrenderOtherAmount)
-                sp.emit(self.data.games[params.gameId].mutezPerMove, tag='sentPlayer2CatsGame')
+                    sp.send(self.data.games[params.gameId].players[2], self.data.games[params.gameId].tzSurrenderAmount)
+                    sp.emit(self.data.games[params.gameId].tzSurrenderAmount, tag='surrenderAmount')
+                    sp.send(self.data.games[params.gameId].players[1], self.data.games[params.gameId].tzSurrenderOtherAmount)
+                    sp.emit(self.data.games[params.gameId].tzSurrenderOtherAmount, tag='surrenderOtherAmount')
                 self.data.games[params.gameId].metaData["gameStatus"] = 5
             else: 
-                sp.emit('Wrong Game Status', tag="wrongGameStatusError")
+                sp.emit(self.data.games[params.gameId].metaData["gameStatus"], tag="wrongGameStatusError")
 
         @sp.entry_point()    
         def payAdmin(self, params):
@@ -405,71 +349,71 @@ def main():
             #sp.send(self.data.admin, unlockedBalance)
             #sp.emit(unlockedBalance, tag="adminPaid")
 
-
-
-
-
-               
 @sp.add_test()
 def test():
     s = sp.test_scenario("my first test", main)
     player1 = sp.test_account("player1")
+    a = main.TezTacToe()
+    s += a
+   
+   
+
+    player1 = sp.test_account("player1")
     player2 = sp.test_account("player2")
     player3 = sp.test_account("player3")
-    player4 = sp.test_account("player4")
-    #player1.set_initial_balance(sp.tez(2))
-    a = main.TezTacToe(player1.address, player2.address)
-    a.set_initial_balance(sp.tez(2))
-    s += a
-    mutezPerMoveInt = 10000
-    mutezPerMove = sp.mutez(1500000)
-    surrenderAmount = sp.mutez(250000)
-    surrenderOtherAmount = sp.mutez(750000)
-    values = [player1.address, mutezPerMove]
+
+    tzMutezPerMove = sp.mutez(1500000)
+    tzSurrenderAmount = sp.mutez(250000)
+    tzSurrenderOtherAmount = sp.mutez(750000)
     a.startGame(
-        _sender = player1.address, 
-        _amount = mutezPerMove, 
-        mutezPerMove = mutezPerMove, 
-        surrenderAmount = surrenderAmount,
-        surrenderOtherAmount = surrenderOtherAmount,
-        playerTurn = 1, 
-        gameStatus =1
+        _sender = player1.address,
+        _amount = tzMutezPerMove,
+        tzSurrenderAmount = tzSurrenderAmount,
+        tzSurrenderOtherAmount = tzSurrenderOtherAmount
     )
-    a.leaveGame(_sender = player1.address, gameId=0)
-    a.joinGame(_sender = player1.address, _amount = mutezPerMove,  gameId=0)
-    a.joinGame(_sender = player2.address, _amount = mutezPerMove,  gameId=0)
-    a.startGame(
-        _sender = player1.address, 
-        _amount = mutezPerMove, 
-        mutezPerMove = mutezPerMove, 
-        surrenderAmount = surrenderAmount,
-        surrenderOtherAmount = surrenderOtherAmount,
-        playerTurn = 1, 
-        gameStatus =1
-    )
-    a.joinGame(_sender = player2.address, gameId=0)
-    a.joinGame(_sender = player2.address, gameId=0)
-    a.makeMove(_sender = player2.address, gameId=0, move=223)    
-    a.makeMove(_sender = player1.address, gameId=0, move=141)
-    a.makeMove(_sender = player2.address, gameId=0, move=122)
-    a.makeMove(_sender = player1.address, gameId=0, move=141)
-    a.startGame(
-        _sender = player1.address, 
-        mutezPerMove = mutezPerMove, 
-        surrenderAmount = surrenderAmount,
-        surrenderOtherAmount = surrenderOtherAmount,
-        playerTurn = 1, 
-        gameStatus =1
-    )
-    a.joinGame(_sender = player2.address, gameId=0)
-    #a.claimWinnings(_sender = player1.address, gameId=0)
-    #a.claimWinnings(_sender = player2.address, gameId=0)
-    s.show(a.balance)    
-    admin = sp.test_account("tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w")
-    a.payAdmin(_sender = admin.address, totalBalance = a.balance)
-    uniqueHolders = [player1.address, player3.address, player4.address]
-    uniqueHoldersCount = [0, 3, 1]
-    #uniqueHoldersCount [0, 1, 2]
-    #a.updateNftHolders(_sender = player1.address, uniqueHolders = uniqueHolders)#, uniqueHoldersCount = uniqueHoldersCount)
     s.show(a.balance)
+    a.leaveGame(
+        _sender = player1.address,
+        gameId = 0
+    )
+    s.show(a.balance)
+    a.joinGame(
+        _sender = player2.address,
+        _amount = tzMutezPerMove,
+        gameId = 0
+    )
+    s.show(a.balance)
+    a.joinGame(
+        _sender = player1.address,
+        _amount = tzMutezPerMove,
+        gameId = 0
+    )
+    s.show(a.balance)
+    a.makeMove(
+        _sender = player1.address,
+        gameId = 0,
+        move = 111
+    )
+    a.makeMove(
+        _sender = player2.address,
+        gameId = 0,
+        move = 131
+    )
+    a.makeMove(
+        _sender = player1.address,
+        gameId = 0,
+        move = 121
+    )
+    s.show(a.balance)
+    a.surrenderGame(
+        _sender = player1.address,
+        gameId = 0
+    )
+    s.show(a.balance)
+    a.makeMove(
+        _sender = player1.address,
+        gameId = 0,
+        move = 121
+    )
+   
     
