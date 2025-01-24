@@ -73,7 +73,7 @@ export default {
               Play TezTacToe!
           </div>   
           <div @click="selectGame('AceyDuecey')" class="actionButton">
-              Play ???!
+              click me
           </div>
 
         </div>    
