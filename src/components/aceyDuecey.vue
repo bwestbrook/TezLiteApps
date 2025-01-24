@@ -17,7 +17,7 @@ export default {
   },
 
   created () {
-    this.gameSize = window.innerWidth * 0.95
+    this.gameSize = window.innerWidth * 0.90
     console.log(this.gameSize)
     this.maxGameSize = 800
     this.board = new Three.Group()
@@ -49,11 +49,12 @@ export default {
     this.renderer.setSize(this.gameSize, this.gameSize)
    
     this.$refs.container.appendChild(this.renderer.domElement);
+    this.socket.emit("resizeGame", window.innerWidth)
     this.buildGame()
     this.renderer.render(this.scene, this.camera);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.flipCard()
-    this.socket.emit("resizeGame", window.innerWidth)
+    
 
   },
   methods: {
@@ -96,13 +97,14 @@ export default {
 
 <template>
   <div class="canvas-container" >        
-      NEW GAME COMING SOON!!!!
+      !!! NEW GAME ALERT !!!
       <div 
         @click="flipCard"
         class="mainBody"
         ref="container"
       >
       </div>
+      !!! NEW GAME ALERT !!!
   </div>
 </template>
 

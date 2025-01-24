@@ -844,7 +844,7 @@ export default {
       272: 245}
 
     this.maxGameSize = 800
-    this.gameSize = window.innerWidth * 0.95
+    this.gameSize = window.innerWidth * 0.9
   
     this.objectUrl = 'https://objkt.com/users/tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w'
     this.objectKalaUrl = 'https://objkt.com/tokens/kalamint/'
@@ -868,7 +868,7 @@ export default {
     //const displayLink = this.ipfsHttpsLink + 'QmUfTvmkEuxBCjTstHxs9n5SCvgKNJvAYxyyf2dwSKhnos'
     this.nftTexture = this.loader.load(''); 
     this.nftMaterial = new Three.MeshBasicMaterial({ map: this.nftTexture });
-    this.defaultGeometry = new Three.BoxGeometry(150, 150, 0.1, 1)
+    this.defaultGeometry = new Three.BoxGeometry(130, 130, 1, 1)
     // Socket Management
     this.defaultMaterial = new Three.MeshNormalMaterial()
     this.socket.on('resizeGame', (width) => {

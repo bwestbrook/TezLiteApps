@@ -58,12 +58,10 @@ export default {
   <div class="mainBody">     
     <div class="centerBody">
       <div class="gameManagement">
-        <div class="rowFlex" >           
-
+        <div class="rowFlex" >     
           <div class="actionButton" @click="toggleWallet">
               {{walletAddress}} 
           </div>  
-           
         </div>   
         <div class="rowFlex" >     
           <div @click="selectGame('browseNFTs')" class="actionButton">
@@ -73,9 +71,8 @@ export default {
               Play TezTacToe!
           </div>   
           <div @click="selectGame('AceyDuecey')" class="actionButton">
-              click me
+              Something's Coming Soon...
           </div>
-
         </div>    
         <tezTacToe v-if="showTezTactoe"
           :socket="socket"
@@ -99,8 +96,8 @@ export default {
 
 <style>
 .mainBody{
-  margin:2px;
-  padding:2px;
+  margin:5px;
+  padding:1px;
   max-width: 850px;
   display: flex;
   flex-direction: column;
@@ -180,8 +177,8 @@ export default {
   vertical-align: center;
   padding: 5px;
   margin: 2px;
-  width: 80px;
-  height: 50px;
+  width: fit-content;
+  height: 60px;
   border-style: ridge;
   border-radius: 2px;
   border-width: 1px;
