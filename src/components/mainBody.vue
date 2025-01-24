@@ -60,7 +60,7 @@ export default {
       <div class="gameManagement">
         <div class="rowFlex" >     
           <div>
-            <div class="label"> WARNING: ALL GAMES IN BETA GHOSTNET ONLY!!! NFTS ARE LIVE ON OBJKT.COM</div>
+            <div class="label"> ALL GAMES IN BETA GHOSTNET ONLY!!! NFTS ON MAINNET AT OBJKT.COM</div>
           </div>
           <div class="actionButton" @click="toggleWallet">
               {{walletAddress}} 
@@ -138,6 +138,17 @@ export default {
   align-content: center;
   display: flex;
   flex-wrap: wrap;
+  width: 100%;
+  color: #fff;
+  padding: auto;
+  border-style: inset;
+  border-width: 0px;
+  border-color: #ffffff;
+  vertical-align: top;
+}
+.rowFlexBox {
+  justify-content: center;
+  align-content: center;
   width: 100%;
   color: #fff;
   padding: auto;

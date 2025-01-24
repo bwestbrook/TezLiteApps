@@ -953,7 +953,7 @@ export default {
       const data = await response.json();
       const address = data[0].address
       if (reduceAddress(address) == 't.Upyq') {
-        this.owner = 'Available on objkt.com for 2.725 XTZ'
+        this.owner = 'PRIMARY - BUY on OBJKT.COM'
       } else {
         this.owner = reduceAddress(address)
       }
