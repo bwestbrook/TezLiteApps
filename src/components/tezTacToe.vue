@@ -237,7 +237,7 @@ export default {
             }
         },
         // Interact with Smart Contract
-        async createGameBC(tezAmount=1.0) {            
+        async createGameBC(tezAmount) {            
             this.blockchainStatus = 'Creating Game on Smart Contract'
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
@@ -253,7 +253,7 @@ export default {
                     return contract.methodsObject.startGame({
                             tzSurrenderAmount: tzSurrenderAmount,
                             tzSurrenderOtherAmount: tzSurrenderOtherAmount
-                        }).send({amount: 1});
+                        }).send({amount: tezAmount});
                 })
                 .then((op) => {
                     console.log(`Waiting for ${op.opHash} to be confirmed...`);
