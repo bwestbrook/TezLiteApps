@@ -575,10 +575,6 @@ export default {
         <div class="rowFlex">
             <div class="gameSelect" > Status: {{ blockchainStatus }}</div>
         </div>
-  
-    
-  
-   
 
 </template>
 

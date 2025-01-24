@@ -995,7 +995,7 @@ export default {
           </div> 
         </div>
         <div class="rowFlex">  
-          <div class="actionButton" @click="selectRandom"> Select Random </div>
+          <div class="actionButton" @click="selectRandom"> Select Random TXL </div>
           <div class="actionButton" @click="checkThisOnObjkt(txlId)"> Buy {{ txlId.toString() }} On All Objeckt </div>
           <div class="actionButton" @click="browseAllOnObjkt"> Browse On All Objeckt </div>
         </div>

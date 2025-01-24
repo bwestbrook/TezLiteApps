@@ -124,7 +124,7 @@ export default {
   color: #fff;
   padding: auto;
   border-style: ridge;
-  border-width: 4px;
+  border-width: 10px;
   border-color: #504e4e;
   flex: 1;
 }
@@ -178,7 +178,7 @@ export default {
   padding: 5px;
   margin: 2px;
   width: fit-content;
-  height: 60px;
+  height: 90px;
   border-style: ridge;
   border-radius: 2px;
   border-width: 1px;
