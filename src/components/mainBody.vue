@@ -131,11 +131,6 @@ export default {
   border-color: #922727;
   flex: 1;
 }
-.label {
-  justify-content: center;
-  align-content: center;
-  vertical-align: center;
-}
 .rowFlex {
   justify-content: center;
   align-content: center;
@@ -148,15 +143,6 @@ export default {
   border-width: 0px;
   border-color: #ffffff;
 }
-.gridFlex4x2 {
-  display: grid;
-  flex-direction: column;
-  grid-template-columns: 1fr 1fr;
-  justify-content: center;
-  align-items: center;
-  color: #fff;
-  padding: 5px;
-}
 .actionButton {
   align-content: center;
   vertical-align: center;
@@ -164,9 +150,17 @@ export default {
   margin: auto;
   border-style: ridge;
   border-radius: 2px;
-  border-width: 6px;
+  border-width: 5px;
   color: #fff;
   border-color: #ffffff;
+  flex: 1;
+}
+.gameCenter {
+  align-content: center;
+  vertical-align: center;
+  margin: auto;
+  padding: auto;
+  margin: auto;
   flex: 1;
 }
 .gameSelect {

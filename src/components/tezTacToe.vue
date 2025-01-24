@@ -29,7 +29,7 @@ export default {
             viewGameId: '', 
             blockWaits: '',
             gameStatus: 'No Players',
-            playerTurnStr: '',
+            playerTurnStr: 'No Game',
             playerTurn: -1, 
             playersInGame: '',
             player1Connected: '',
@@ -515,43 +515,48 @@ export default {
             <div class="actionButton" @click="createGameBC(10)" > New 10 XTZ Game</div>   
         </div>    
         <div class="rowFlex"> 
-            <div class="actionButton" @click="loadGameBC(gameId)">   Play Game: {{ playGameId }}                                       
+            <div class="gameCenter" >   
+                <div class="actionButton" @click="loadGameBC(playGameId)"> Play Game: {{ playGameId }} </div>                                       
                 <div> 
-                    <div class="rowFlex">                                
+                    <div class="rowFlex"> 
+                                                      
                         <div  v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
                             <div v-if="key==2" class="gameSelect" @click="updateGame(value, 'play')"> {{value}} </div>                  
                         </div>
                     </div>
                 </div>   
             </div>
-            <div class="actionButton" @click="joinGameBC(gameId)">   Join Game: {{ joinGameId }}                                    
+            <div class="gameCenter"  >  
+                <div class="actionButton" @click="joinGameBC(gameId)">   Join Game: {{ joinGameId }}  </div>                                   
                 <div> 
-                    <div class="rowFlex">                                
+                    <div class="rowFlex">     
+                                                
                         <div v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
                             <div v-if="key==1" class="gameSelect" @click="updateGame(value, 'join')"> {{value}} </div>                  
                         </div>
-                    </div>
-                </div>   
+                    </div>                       
+                </div>
             </div>
-            <div class="actionButton" @click="leaveGameBC(gameId)">   Leave Game: {{ leaveGameId }}                                      
+            <div class="gameCenter" > 
+                <div class="actionButton" @click="leaveGameBC(gameId)">   Leave Game: {{ leaveGameId }} </div>                             
                 <div> 
                     <div class="rowFlex">                                
                         <div  v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
                             <div v-if="key==2" class="gameSelect" @click="updateGame(value, 'leave')"> {{value}} </div>                  
                         </div>
                     </div>
-                </div>   
+                </div>                   
             </div>
-            <div class="actionButton" @click="loadGameBC(gameId)">   View Game: {{ viewGameId }}                               
+            <div class="gameCenter" > 
+                <div class="actionButton" @click="loadGameBC(gameId)">   View Game: {{ viewGameId }} </div>                              
                 <div> 
                     <div class="rowFlex">                                
                         <div  v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
                             <div v-if="key==3" class="gameSelect" @click="updateGame(value, 'view')"> {{value}} </div>                  
                         </div>
                     </div>
-                </div>   
-            </div>
-    
+                </div>                   
+            </div>    
         </div>
         <tttGameGrid 
             :wallet="wallet"
@@ -564,12 +569,12 @@ export default {
         </div>
 
         <div class="rowFlex" >         
-            <div class="actionButton" > Game ID: {{ gameId }}</div>
-            <div class="actionButton" > {{ playersInGame[0] }} {{player1Connected}} vs. {{ playersInGame[1]}} {{player2Connected}} </div>
-            <div class="actionButton" > {{ playerTurnStr }}</div>
+            <div class="gameSelect" > Game ID: {{ gameId }}</div>
+            <div class="gameSelect" > {{ playersInGame[0] }} {{player1Connected}} vs. {{ playersInGame[1]}} {{player2Connected}} </div>
+            <div class="gameSelect" > {{ playerTurnStr }}</div>
         </div>
         <div class="rowFlex">
-            <div class="actionButton" > Status: {{ blockchainStatus }}</div>
+            <div class="gameSelect" > Status: {{ blockchainStatus }}</div>
         </div>
   
     
