@@ -60,8 +60,7 @@ export default {
       <div class="gameManagement">
         <div class="rowFlex" >     
           <div>
-            <div class="gameManagement"> WARNING: IN BETA GHOST NET ONLY!!!</div>
-            <div> Made with love by @jamin_b on telegram/discord and @jaminb12 on X</div>
+            <div class="label"> WARNING: IN BETA GHOST NET ONLY!!!</div>
           </div>
           <div class="actionButton" @click="toggleWallet">
               {{walletAddress}} 
@@ -95,6 +94,7 @@ export default {
         />      
       </div>
     </div>
+    <div class="label"> Made with love by @jamin_b on telegram/discord and @jaminb12 on X</div>
   </div>
 </template>
 
@@ -174,6 +174,18 @@ export default {
   border-style: ridge;
   border-radius: 2px;
   border-width: 2px;
+  color: #fff;
+  border-color: #ffffff;
+  flex: 1;
+}
+.label {
+  align-content: center;
+  vertical-align: center;
+  padding: 4px;
+  margin: 4x;
+  border-style: ridge;
+  border-radius: 2px;
+  border-width: 0px;
   color: #fff;
   border-color: #ffffff;
   flex: 1;
