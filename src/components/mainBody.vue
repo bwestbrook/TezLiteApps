@@ -145,7 +145,7 @@ export default {
   color: #fff;
   padding: 10px;
   border-style: inset;
-  border-width: 3px;
+  border-width: 0px;
   border-color: #ffffff;
 }
 .gridFlex4x2 {
