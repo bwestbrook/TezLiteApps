@@ -14,6 +14,7 @@ export default {
   },
   data () {
     return {
+      showInfo: true, 
       txlId: 68,
       rank: 0,
       txlRanking: 1,
@@ -977,14 +978,27 @@ export default {
       const newId = await getRandomIntInclusive(1, 273)
       this.txlId = newId    
       this.getNftData()  
+    },
+    async showLearnMore() {
+      console.log('click me learn more')
+      //this.showInfo = true
+      if (this.showInfo)  {
+        this.showInfo = false
+      } else {
+        this.showInfo = true
+      }
     }
   }
 }
 </script>
 
 <template>
+ 
   <div class="centerBody">
+    
+    
     <div class="gameManagement" >    
+        <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> LOTS AND LOTS OF INFOR</div>
         <div class="rowFlex">
           <div class="gameManagement" > 
             <div>Select Rank </div>
@@ -1003,6 +1017,7 @@ export default {
           <div class="actionButton" @click="selectRandom"> Select Random TXL </div>
           <div class="actionButton" @click="checkThisOnObjkt(txlId)"> Buy {{ txlId.toString() }} On All Objkt.com </div>
           <div class="actionButton" @click="browseAllOnObjkt"> Browse On All Objkt.com </div>
+          <div class="actionButton" @click="showLearnMore"> Learn More </div>
         </div>
         <div class="canvas-container" >    
           <div 
