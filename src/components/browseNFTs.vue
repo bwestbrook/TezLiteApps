@@ -18,7 +18,8 @@ export default {
       rank: 0,
       txlRanking: 1,
       txlData: {},
-      owner: ''
+      owner: '',
+      tezosSymbol: 'ꜩ'
     }
   },
  
@@ -950,7 +951,12 @@ export default {
       const response = await fetch(tzktApiUrl);
       const data = await response.json();
       const address = data[0].address
-      this.owner = reduceAddress(address)
+      if (reduceAddress(address) == 't.Upyq') {
+        this.owner = 'Available on objkt.com for 2.725 XTZ'
+      } else {
+        this.owner = reduceAddress(address)
+      }
+      
     },
     async setNewNftImage() {
       const ipfsHash = await this.getIpfsHash()

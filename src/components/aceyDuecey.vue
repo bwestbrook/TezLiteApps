@@ -14,6 +14,8 @@ export default {
   data () {
     return {
 
+      tezosSymbol: 'ꜩ'
+
     }
   },
 

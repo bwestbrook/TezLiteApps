@@ -135,10 +135,12 @@ export default {
   flex-wrap: wrap;
   width: 100%;
   color: #fff;
-  padding: 10px;
+  padding: auto;
   border-style: inset;
-  border-width: 0px;
+  border-width: 2px;
   border-color: #ffffff;
+
+  vertical-align: top;
 }
 .actionButton {
   align-content: center;

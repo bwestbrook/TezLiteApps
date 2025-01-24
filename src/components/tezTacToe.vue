@@ -18,15 +18,16 @@ export default {
     props: ["socket", "wallet", "tezos"],
     data () {
         return {
-            showTezTactoe: true,
-            showAceyDuecey: false,
             allGamesStatus: {},
             gamesObject: {},
             gameId: -1,
             leaveGameId: 'NA',
+            leavableGames: false, 
             playGameId: 'NA',
             joinGameId: 'NA',
+            joinableGames: false, 
             viewGameId: 'NA', 
+            viewableGames: false, 
             blockWaits: '',
             gameStatus: 'No Players',
             playerTurnStr: 'No Game',
@@ -37,8 +38,7 @@ export default {
             addressesInGame: [],
             blockchainStatus: 'No Activity',
             pointToPlay: 'XXX',
-            playerGames: [],
-            pendingGamesOthers: []
+            tezosSymbol: 'ꜩ'
 
         }
     },
@@ -146,81 +146,6 @@ export default {
             await this.getGameGrid(this.gameId)
             await this.loadGameBC(this.gameId)
         }, 
-        // Populating the page
-        async togglePlayer(){
-            const activeAccount = await this.wallet.client.getActiveAccount()  
-            if (!activeAccount) {                  
-                return         
-            } 
-            if (this.playerTurn == 1) {
-                this.socket.emit('updatePlayerTurn', 2, this.addressesInGame, activeAccount.address, this.gameId)
-                this.playerTurn = 2
-            } else if (this.playerTurn == 2) {
-                this.socket.emit('updatePlayerTurn', 1, this.addressesInGame, activeAccount.address, this.gameId)
-                this.playerTurn = 1
-            }
-        },
-        async updatePlayerControl(gamesObject) {
-            if (!gamesObject) {
-                gamesObject = await this.getGamesFromContract()
-            }
-            const activeAccount = await this.wallet.client.getActiveAccount()   
-            if (!activeAccount) {
-                return
-            }  
-            let i = 0
-            this.allGamesStatus = {}            
-            for (i; i < this.gameCount; i++) {
-                if (gamesObject[i].players.includes(activeAccount.address)) {
-                    this.allGamesStatus[i] = gamesObject[i].gameStatus
-                } else if (gamesObject[i].gameStatus == 1 ) {
-                    this.allGamesStatus[i] = 4
-                } else {
-                    this.allGamesStatus[i] = 6
-                }                    
-                
-            }      
-            this.pendingGamesOthers = this.allGamesStatus[6]
-        },
-        async updateLoadedGameStatus(gameId) {
-            const activeAccount = await this.wallet.client.getActiveAccount()   
-            if (!activeAccount) {
-                return
-            }  
-            if (!this.gamesObject) {
-                return
-            }
-            const game = await this.gamesObject[gameId]
-            this.gameId = game.gameId
-            this.socket.emit("updateGameId", this.gameId)
-            this.socket.emit("updatePlayersInGame", game.players, this.gameId)
-            this.addressesInGame = game.players
-            if (game.gameStatus == 1 ) {
-                this.pendingGame = gameId
-                this.gameStatus = 'Pending'
-                this.playersInGame = [await reduceAddress(game.players[0]), 'None']
-                this.playerTurnStr = 'NA'
-            } else if (game.gameStatus == 2 ) {
-                this.gameStatus = 'None'
-                this.gameId = await game.gameId
-                this.walletPlayerTurn1 = await reduceAddress(game.players[0])
-                this.walletPlayerTurn2 = await reduceAddress(game.players[1])
-                this.playersInGame = [this.walletPlayerTurn1, this.walletPlayerTurn2]
-                this.playerTurn = await game.playerTurn
-                this.socket.emit('updatePlayerTurn', this.playerTurn, this.gameId)
-                this.socket.emit('updateConnectedUsersInGame', activeAccount.address, this.gameId)
-                this.blockchainStatus = 'Active'
-                if (game.players[this.playerTurn - 1] == activeAccount.address) {
-                    this.playerTurnStr = 'YOUR TURN'
-                    this.socket.emit('updateGamePlayable', true, this.gameId)
-                } else {
-                    this.playerTurnStr = 'OPP TURN'
-                    this.socket.emit('updateGamePlayable', false, this.gameId)
-                }
-            } else if (game.gameStatus > 2) {
-                this.socket.emit('updateGamePlayable', false, this.gameId)
-            }
-        },
         async updateConnectedUsers(connectedUsers) {
             if (connectedUsers.length == 1 ) { // reset
                 this.player1Connected = 'inactive'
@@ -260,8 +185,7 @@ export default {
                     return op.confirmation().then(() => op.opHash);
                 })
                 .then((hash) => console.log(`Operation injected: https://ghost.tzstats.com/${hash}`))
-                .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-            
+                .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));            
         },
         async joinGameBC(gameId) { 
             if (gameId < 0) {
@@ -498,34 +422,112 @@ export default {
             } else if (type == 'view') {
                 this.viewGameId = gameId
             }
+        },
+             // Populating the page
+             async togglePlayer(){
+            const activeAccount = await this.wallet.client.getActiveAccount()  
+            if (!activeAccount) {                  
+                return         
+            } 
+            if (this.playerTurn == 1) {
+                this.socket.emit('updatePlayerTurn', 2, this.addressesInGame, activeAccount.address, this.gameId)
+                this.playerTurn = 2
+            } else if (this.playerTurn == 2) {
+                this.socket.emit('updatePlayerTurn', 1, this.addressesInGame, activeAccount.address, this.gameId)
+                this.playerTurn = 1
+            }
+        },
+        async updatePlayerControl(gamesObject) {
+            if (!gamesObject) {
+                gamesObject = await this.getGamesFromContract()
+            }
+            const activeAccount = await this.wallet.client.getActiveAccount()   
+            if (!activeAccount) {
+                return
+            }  
+            let i = 0
+            this.allGamesStatus = {}       
+            this.joinableGames = false     
+            for (i; i < this.gameCount; i++) {
+                if (gamesObject[i].players.includes(activeAccount.address)) {
+                    this.allGamesStatus[i] = gamesObject[i].gameStatus
+                    if (gamesObject[i].gameStatus == 3 ) {
+                        this.viewableGames = true
+                    }
+                } else if (gamesObject[i].gameStatus == 1 ) {
+                    this.allGamesStatus[i] = 4
+                    this.joinableGames = true
+                } else {
+                    this.allGamesStatus[i] = 6
+                }                    
+                
+            }      
+            this.pendingGamesOthers = this.allGamesStatus[6]
+        },
+        async updateLoadedGameStatus(gameId) {
+            const activeAccount = await this.wallet.client.getActiveAccount()   
+            if (!activeAccount) {
+                return
+            }  
+            if (!this.gamesObject) {
+                return
+            }
+            const game = await this.gamesObject[gameId]
+            this.gameId = game.gameId
+            this.socket.emit("updateGameId", this.gameId)
+            this.socket.emit("updatePlayersInGame", game.players, this.gameId)
+            this.addressesInGame = game.players
+            if (game.gameStatus == 1 ) {
+                this.pendingGame = gameId
+                this.gameStatus = 'Pending'
+                this.playersInGame = [await reduceAddress(game.players[0]), 'None']
+                this.playerTurnStr = 'NA'
+            } else if (game.gameStatus == 2 ) {
+                this.gameStatus = 'None'
+                this.gameId = await game.gameId
+                this.walletPlayerTurn1 = await reduceAddress(game.players[0])
+                this.walletPlayerTurn2 = await reduceAddress(game.players[1])
+                this.playersInGame = [this.walletPlayerTurn1, this.walletPlayerTurn2]
+                this.playerTurn = await game.playerTurn
+                this.socket.emit('updatePlayerTurn', this.playerTurn, this.gameId)
+                this.socket.emit('updateConnectedUsersInGame', activeAccount.address, this.gameId)
+                this.blockchainStatus = 'Active'
+                if (game.players[this.playerTurn - 1] == activeAccount.address) {
+                    this.playerTurnStr = 'YOUR TURN'
+                    this.socket.emit('updateGamePlayable', true, this.gameId)
+                } else {
+                    this.playerTurnStr = 'OPP TURN'
+                    this.socket.emit('updateGamePlayable', false, this.gameId)
+                }
+            } else if (game.gameStatus > 2) {
+                this.socket.emit('updateGamePlayable', false, this.gameId)
+            }
         }
     }
 }
 
 </script>
 
-<template>   
-                        
+<template>                           
         <div class="rowFlex" >            
-            <div class="actionButton" @click="createGameBC(0)" > New 0 XTZ Game </div>  
-            <div class="actionButton" @click="createGameBC(0.5)" > New 0.5 XTZ Game</div> 
-            <div class="actionButton" @click="createGameBC(1)" > New 1 XTZ Game</div>  
-            <div class="actionButton" @click="createGameBC(5)" > New 5 XTZ Game</div> 
-            <div class="actionButton" @click="createGameBC(10)" > New 10 XTZ Game</div>   
+            <div class="actionButton" @click="createGameBC(0)" > New 0{{this.tezosSymbol}} Game </div>  
+            <div class="actionButton" @click="createGameBC(0.5)" > New 0.5{{this.tezosSymbol}} Game</div> 
+            <div class="actionButton" @click="createGameBC(1)" > New 1{{this.tezosSymbol}} Game</div>  
+            <div class="actionButton" @click="createGameBC(5)" > New 5{{this.tezosSymbol}} Game</div> 
+            <div class="actionButton" @click="createGameBC(10)" > New 10{{this.tezosSymbol}} Game</div>   
         </div>    
         <div class="rowFlex"> 
-            <div class="gameCenter" >   
+            <div v-if="joinableGames" class="gameCenter" >   
                 <div class="actionButton" @click="loadGameBC(playGameId)"> Play Game: {{ playGameId }} </div>                                       
                 <div> 
-                    <div class="rowFlex"> 
-                                                      
+                    <div class="rowFlex">                                                       
                         <div  v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
                             <div v-if="key==2" class="gameSelect" @click="updateGame(value, 'play')"> {{value}} </div>                  
                         </div>
                     </div>
                 </div>   
             </div>
-            <div class="gameCenter"  >  
+            <div v-if="joinableGames" class="gameCenter"  >  
                 <div class="actionButton" @click="joinGameBC(gameId)">   Join Game: {{ joinGameId }}  </div>                                   
                 <div> 
                     <div class="rowFlex">     
@@ -536,17 +538,17 @@ export default {
                     </div>                       
                 </div>
             </div>
-            <div class="gameCenter" > 
-                <div class="actionButton" @click="leaveGameBC(gameId)">  Leave Game: {{ leaveGameId }} </div>                             
-                <div> 
-                    <div class="rowFlex">                                
+            <div v-if="false"  class="gameCenter" > 
+                <div v-if="false" class="actionButton" @click="leaveGameBC(gameId)">  Leave Game: {{ leaveGameId }} </div>                             
+                <div v-if="false"> 
+                    <div v-if="false" class="rowFlex">                                
                         <div  v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
                             <div v-if="key==1" class="gameSelect" @click="updateGame(value, 'leave')"> {{value}} </div>                  
                         </div>
                     </div>
                 </div>                   
             </div>
-            <div class="gameCenter" > 
+            <div v-if="viewableGames" class="gameCenter" > 
                 <div class="actionButton" @click="loadGameBC(gameId)">   View Game: {{ viewGameId }} </div>                              
                 <div> 
                     <div class="rowFlex">                                
@@ -575,7 +577,6 @@ export default {
         <div class="rowFlex">
             <div class="gameSelect" > Status: {{ blockchainStatus }}</div>
         </div>
-
 </template>
 
 <style>
