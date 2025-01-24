@@ -916,7 +916,6 @@ export default {
       if (this.gameSize > this.maxGameSize) {
         this.gameSize = this.maxGameSize
       }
-      console.log(this.gameSize)
       this.renderer.setSize(this.gameSize, this.gameSize)
     }, 
     async getNftDataId() {
