@@ -209,8 +209,8 @@ export default {
 .canvas-container {
   border-style: ridge;
   border-radius: 2px;
-  border-width: 2px;
-  border-color: #231b1b;
+  border-width: 0px;
+  border-color: #080606;
 }
 .infoPopup {
   position: relative;
