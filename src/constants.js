@@ -4,6 +4,8 @@ export const PORT = 3000
 ////// GAME ///////
 export const GAME_WIDTH_FRACTION = 0.9
 
+export const MAX_GAME_SIZE = 600
+
 ////// NODES ///////
 
 export const NODE_URL = 'https://ghostnet.tezos.ecadinfra.com/'

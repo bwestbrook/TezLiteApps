@@ -535,14 +535,15 @@ export default {
 <template>                           
         <div class="rowFlex">
             <div class="actionButton" @click="showLearnMore"> HOW TO PLAY </div>
-        </div>
-        <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
+            <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
             <div>
             <ul>
               <li v-for="(key, value) in gameInfo" :key="key" :value="value">{{ key }}</li>
             </ul>
-          </div>
+            </div>
+            </div>
         </div>
+
         <div class="rowFlex" >            
             <div class="actionButton" @click="createGameBC(0)" > New 0{{this.tezosSymbol}} Game </div>  
             <div class="actionButton" @click="createGameBC(0.5)" > New 0.5{{this.tezosSymbol}} Game</div> 

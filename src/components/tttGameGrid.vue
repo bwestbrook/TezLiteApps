@@ -2,7 +2,7 @@
 
 import * as Three from 'three'
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import { GAME_WIDTH_FRACTION} from '../constants'
+import { GAME_WIDTH_FRACTION, MAX_GAME_SIZE } from '../constants'
 
 let gameWinners = [
 [[-1, -1, -1], [0, 0, 0], [1, 1, 1], [2, 2, 2]],
@@ -118,8 +118,8 @@ export default {
 
   created () {
     this.intvl = 0.5
-    this.maxGameSize = 800
-    this.gameSize = window.innerWidth * 0.95
+    this.maxGameSize = MAX_GAME_SIZE
+    this.gameSize = window.innerWidth * GAME_WIDTH_FRACTION
     if (this.gameSize > this.maxGameSize) {
       this.gameSize = this.maxGameSize
     }

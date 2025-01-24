@@ -5,7 +5,7 @@
 import { getRandomIntInclusive, reduceAddress } from '@/utilities';
 import * as Three from 'three'
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import { GAME_WIDTH_FRACTION, NFT_INFO } from '../constants'
+import { GAME_WIDTH_FRACTION, MAX_GAME_SIZE, NFT_INFO } from '../constants'
 
 export default {
   name: 'browseNFTs',
@@ -26,6 +26,7 @@ export default {
   },
  
   created () {
+    // API and Static
     this.idLookUp = {
       1: '60199',
       2: '60200',
@@ -846,87 +847,85 @@ export default {
       270: 89,
       271: 83,
       272: 245}
-
-    this.maxGameSize = 800
-    this.gameSize = window.innerWidth * 0.9
-  
     this.objectUrl = 'https://objkt.com/users/tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w'
     this.objectKalaUrl = 'https://objkt.com/tokens/kalamint/'
     this.ipfsHttpsLink = "https://ipfs.io/ipfs/"
     this.tzktMetadataEndPoint = 'https://api.tzkt.io/v1/bigmaps/861/keys?key.eq='
     this.tzktOwnerEndPoint ='https://api.tzkt.io/v1/bigmaps/857/keys?active=true&value.eq=1&select=key&key.nat.eq='
     this.rankingsHashUrl = 'https://ipfs.io/ipfs/QmTY4jY9q4XwcyEVNfsQJj8t4Liesi7nhzKcqyPYwMdm1t'
-    this.getNftData()
-
-    this.board = new Three.Group()
-        // General 
-    this.scene = new Three.Scene();
     
-    //Camera
+    //Three
+    this.board = new Three.Group()
+    this.scene = new Three.Scene();    
+    this.gameSize = window.innerWidth * GAME_WIDTH_FRACTION
+    this.maxGameSize = MAX_GAME_SIZE
     this.camera = new Three.PerspectiveCamera(45, 1, 1, 5000);
     this.camera.position.x = 0;
     this.camera.position.y = 0;
     this.camera.position.z = 200;
     this.camera.lookAt(this.scene.position)
     this.loader = new Three.TextureLoader();  
-    //const displayLink = this.ipfsHttpsLink + 'QmUfTvmkEuxBCjTstHxs9n5SCvgKNJvAYxyyf2dwSKhnos'
     this.nftTexture = this.loader.load(''); 
     this.nftMaterial = new Three.MeshBasicMaterial({ map: this.nftTexture });
     this.defaultGeometry = new Three.BoxGeometry(130, 130, 1, 1)
     // Socket Management
-    this.defaultMaterial = new Three.MeshNormalMaterial()
     this.socket.on('resizeGame', (width) => {
+      console.log("BFN", width)
       this.resizeGameRender(width)
     }); 
+
   },
   mounted () {
+
+    
     this.renderer = new Three.WebGLRenderer({antialias: true});
-    this.renderer.setSize(this.gameSize, this.gameSize)   
+    this.socket.emit("resizeGame", window.innerWidth)
     this.$refs.container.appendChild(this.renderer.domElement);
     this.buildGame()
+    this.getNftData()
     this.renderer.render(this.scene, this.camera);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.animateNft()
     this.socket.emit("resizeGame", window.innerWidth)
-
+    
   },
   methods: {
-    animate: function() {
+    async animate() {
       this.controls.update();
       requestAnimationFrame(this.animate);  
       this.renderer.render(this.scene, this.camera);
     },
-    animateNft: function() {
+    async animateNft() {
       requestAnimationFrame(this.animateNft);  
       let time = Date.now() * 0.001;
       this.nftDisplay.rotation.y = time;
       this.renderer.render(this.scene, this.camera);
     },
-    buildGame: function() {
+    async buildGame() {
       this.nftDisplay = new Three.Mesh(this.defaultGeometry, this.nftMaterial); 
       this.nftDisplay.position.set(0, 0, 0);
       this.scene.add(this.nftDisplay)                
       },
-    browseAllOnObjkt () {
+    async browseAllOnObjkt () {
       window.open(this.objectUrl, '_blank');
     },
-    checkThisOnObjkt () {
+    async checkThisOnObjkt () {
       const kalaId = this.idLookUp[this.txlId]
       window.open(this.objectKalaUrl + kalaId, '_blank');
     },
-    resizeGameRender: function(width) {
+    async resizeGameRender(width) {
       this.gameSize = width * GAME_WIDTH_FRACTION
       if (this.gameSize > this.maxGameSize) {
         this.gameSize = this.maxGameSize
       }
-      this.renderer.setSize(this.gameSize, this.gameSize)
+      await this.renderer.setSize(this.gameSize, this.gameSize)
     }, 
     async getNftDataId() {
-      this.getNftData()
+      await this.getNftData()
     },
     async getNftDataRank() {
       this.txlId = this.txlRevRankings[this.txlRanking] 
-      this.getNftData()
+      await this.getNftData()
     },
     async getNftData() {
       await this.setNewNftImage() 
@@ -999,13 +998,7 @@ export default {
     
     
     <div class="gameManagement" >    
-        <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
-          <div>
-            <ul>
-              <li v-for="(key, value) in nftInfo" :key="key" :value="value">{{ key }}</li>
-            </ul>
-          </div>
-        </div>
+
         <div class="rowFlex">
           <div class="gameManagement" > 
             <div>Select Rank </div>
@@ -1026,6 +1019,13 @@ export default {
           <div class="actionButton" @click="browseAllOnObjkt"> Browse On All Objkt.com </div>
           <div class="actionButton" @click="showLearnMore"> Learn More </div>
         </div>
+        <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
+          <div>
+            <ul>
+              <li v-for="(key, value) in nftInfo" :key="key" :value="value">{{ key }}</li>
+            </ul>
+          </div>
+        </div>
         <div class="canvas-container" >    
           <div 
                 @click="flipCard"
@@ -1038,7 +1038,7 @@ export default {
           <div class="rowFlex">       
             <div class="txlRank"> Rank: {{ txlRanking }}</div>
             <div class="txlRank"> Owner: {{ owner }}</div>
-            <div class="txlRank" v-for="(key, value) in txlData" :key="key" :value="value"> {{ value }}: {{ key }} </div>      
+            <div class="txlRank" v-for="(key, value) in txlData" :key="key" :value="value"> {{ value }}: {{ key }} </div>   
         
           </div> 
         </div>

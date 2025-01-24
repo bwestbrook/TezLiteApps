@@ -60,7 +60,7 @@ export default {
       <div class="gameManagement">
         <div class="rowFlex" >     
           <div>
-            <div class="label"> WARNING: IN BETA GHOST NET ONLY!!!</div>
+            <div class="label"> WARNING: ALL GAMES IN BETA GHOST NET ONLY!!! NFTS ARE LIVE ON OBJKT.COM</div>
           </div>
           <div class="actionButton" @click="toggleWallet">
               {{walletAddress}} 
@@ -125,6 +125,7 @@ export default {
   align-content: center;
   vertical-align: center;
   align-items: center;
+  width: 100%;
   color: #fff;
   padding: auto;
   border-style: ridge;
