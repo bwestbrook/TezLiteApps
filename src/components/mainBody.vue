@@ -162,7 +162,6 @@ export default {
   vertical-align: center;
   padding: 4px;
   margin: auto;
-  height: 10px;
   border-style: ridge;
   border-radius: 2px;
   border-width: 6px;
