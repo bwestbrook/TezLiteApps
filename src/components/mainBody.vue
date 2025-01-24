@@ -13,9 +13,9 @@ export default {
   },
   data () {
     return {
-      showTezTactoe: true,
+      showTezTactoe: false,
       showAceyDuecy: false,
-      showBrowseNFTs: false,
+      showBrowseNFTs: true,
       walletAddress: 'SYNC WALLET'
     }
   },
