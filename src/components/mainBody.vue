@@ -50,17 +50,22 @@ export default {
     <div class="centerBody">
       <div class="gameManagement">
       <div class="rowFlex" > 
-        <div @click="selectGame('TezTacToe')" class="actionButton">
-            Play TezTacToe!
-        </div>
-        <div @click="selectGame('AceyDuecey')" class="actionButton">
-            CLICK ME FOR SURPRISE
-        </div>
-        <div class="actionButton" @click="claimNFTEarningsBC"> 
+        <div> 
+          <div class="actionButton" @click="claimNFTEarningsBC"> 
             Claim NFT Earnings 
+          </div>
+          <div @click="selectGame('TezTacToe')" class="actionButton">
+              Play TezTacToe!
+          </div>
         </div>
-        <div class="actionButton" @click="toggleWallet">
-            {{walletAddress}} 
+        <div>
+          <div class="actionButton" @click="toggleWallet">
+              {{walletAddress}} 
+          </div>
+          
+          <div @click="selectGame('AceyDuecey')" class="actionButton">
+              CLICK ME FOR SURPRISE
+          </div>
         </div>
      </div>  
     </div>  
@@ -80,8 +85,7 @@ export default {
 .mainBody{
   margin:0px;
   padding:2px;
- 
-  display: flex;
+   display: flex;
   flex-direction: column;
   margin: auto;
   border-width: 2px;
@@ -96,35 +100,24 @@ export default {
   border-color: #fff;
   border-style: inset;
 }
-.rules {
-  align-content: stretch;
-  text-align: justify;
-  justify-content: center;
+.gameManagement {
+  display: flex;
+  width: 100%;
   flex-direction: column;
-  color: white;
-  margin:auto;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  padding: auto;
   border-style: inset;
   border-width: 1px;
-  border-color: #fff;
+  border-color: #ffffff;
 }
 .rowFlex {
   display: flex;
-  justify-content: center;
-  align-items: center;
   color: #fff;
   padding: 5px;
   border-style: inset;
   border-width: 0px;
-  border-color: #ffffff;
-}
-.gameHubRowFlex {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  color: #fff;
-  padding: 5px;
-  border-style: inset;
-  border-width: 1px;
   border-color: #ffffff;
 }
 .gridFlex4x2 {
@@ -137,21 +130,8 @@ export default {
   padding: 5px;
 
 }
-.gameManagement {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  color: #fff;
-  padding: auto;
-  border-style: inset;
-  border-width: 1px;
-  border-color: #ffffff;
-}
 .actionButton {
   display: flex;
-  align-content: center;
-  justify-content: center;
   padding: 5px;
   margin: 2px;
   border-style: ridge;
