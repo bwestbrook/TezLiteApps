@@ -5,7 +5,7 @@
 import { getRandomIntInclusive, reduceAddress } from '@/utilities';
 import * as Three from 'three'
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import { GAME_WIDTH_FRACTION} from '../constants'
+import { GAME_WIDTH_FRACTION, NFT_INFO } from '../constants'
 
 export default {
   name: 'browseNFTs',
@@ -14,7 +14,8 @@ export default {
   },
   data () {
     return {
-      showInfo: true, 
+      nftInfo: NFT_INFO,
+      showInfo: false, 
       txlId: 68,
       rank: 0,
       txlRanking: 1,
@@ -998,7 +999,13 @@ export default {
     
     
     <div class="gameManagement" >    
-        <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> LOTS AND LOTS OF INFOR</div>
+        <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
+          <div>
+            <ul>
+              <li v-for="(key, value) in nftInfo" :key="key" :value="value">{{ key }}</li>
+            </ul>
+          </div>
+        </div>
         <div class="rowFlex">
           <div class="gameManagement" > 
             <div>Select Rank </div>

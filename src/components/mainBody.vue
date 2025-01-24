@@ -13,9 +13,9 @@ export default {
   },
   data () {
     return {
-      showTezTactoe: false,
+      showTezTactoe: true,
       showAceyDuecy: false,
-      showBrowseNFTs: true,
+      showBrowseNFTs: false,
       walletAddress: 'SYNC WALLET'
     }
   },
@@ -217,7 +217,7 @@ export default {
   height: 100%;
   background-color: rgba(31, 49, 66, 0.9);
   display: flex;
-  justify-content: center;
-  align-items: center;
+  justify-content: left;
+  align-items: left;
 }
 </style>

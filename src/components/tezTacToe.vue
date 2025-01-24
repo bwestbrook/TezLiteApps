@@ -4,7 +4,7 @@ import { RemoteSigner } from '@taquito/remote-signer';
 import tttGameGrid  from './tttGameGrid.vue'
 //import sha256 from 'js-sha256'
 import { RpcClient } from '@taquito/rpc';
-import { NODE_URL, CONTRACT_ADDRESS} from '../constants'
+import { NODE_URL, CONTRACT_ADDRESS, GAME_INFO} from '../constants'
 import { reduceAddress } from "../utilities";
 
 
@@ -18,6 +18,7 @@ export default {
     props: ["socket", "wallet", "tezos"],
     data () {
         return {
+            gameInfo: GAME_INFO,
             allGamesStatus: {},
             gamesObject: {},
             gameId: -1,
@@ -39,7 +40,8 @@ export default {
             addressesInGame: [],
             blockchainStatus: 'No Activity',
             pointToPlay: 'XXX',
-            tezosSymbol: 'ꜩ'
+            tezosSymbol: 'ꜩ',
+            showInfo: false
 
         }
     },
@@ -515,6 +517,15 @@ export default {
             } else if (game.gameStatus > 2) {
                 this.socket.emit('updateGamePlayable', false, this.gameId)
             }
+        },
+        async showLearnMore() {
+            console.log('click me learn more')
+            //this.showInfo = true
+            if (this.showInfo)  {
+                this.showInfo = false
+            } else {
+                this.showInfo = true
+            }
         }
     }
 }
@@ -522,6 +533,16 @@ export default {
 </script>
 
 <template>                           
+        <div class="rowFlex">
+            <div class="actionButton" @click="showLearnMore"> HOW TO PLAY </div>
+        </div>
+        <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
+            <div>
+            <ul>
+              <li v-for="(key, value) in gameInfo" :key="key" :value="value">{{ key }}</li>
+            </ul>
+          </div>
+        </div>
         <div class="rowFlex" >            
             <div class="actionButton" @click="createGameBC(0)" > New 0{{this.tezosSymbol}} Game </div>  
             <div class="actionButton" @click="createGameBC(0.5)" > New 0.5{{this.tezosSymbol}} Game</div> 
@@ -529,8 +550,10 @@ export default {
             <div class="actionButton" @click="createGameBC(5)" > New 5{{this.tezosSymbol}} Game</div> 
             <div class="actionButton" @click="createGameBC(10)" > New 10{{this.tezosSymbol}} Game</div>   
         </div>    
+        <div class="rowFlex">
+            <div class="gameSelect" @click="showLearnMore"> My Game Hub </div>
+        </div>
         <div v-if="loadedGames" class="rowFlex"> 
-            <div v-if="!loadedGames"> NO GAMES </div>
             <div v-if="joinableGames" class="gameCenter" >   
                 <div class="actionButton" @click="loadGameBC(playGameId)"> Play Game: {{ playGameId }} </div>                                       
                 <div> 
@@ -573,6 +596,7 @@ export default {
                 </div>                   
             </div>    
         </div>
+
         <tttGameGrid 
             :wallet="wallet"
             :socket="socket"
@@ -588,6 +612,7 @@ export default {
             <div class="gameSelect" > {{ playersInGame[0] }} {{player1Connected}} vs. {{ playersInGame[1]}} {{player2Connected}} </div>
             <div class="gameSelect" > {{ playerTurnStr }}</div>
         </div>
+
         <div class="rowFlex">
             <div class="gameSelect" > Status: {{ blockchainStatus }}</div>
         </div>
