@@ -18,9 +18,7 @@ export default {
 
   created () {
     this.gameSize = window.innerWidth * 0.95
-    if (this.gameSize > 1000) {
-      this.gameSize = 1000
-    }
+    this.maxGameSize = 800
     this.board = new Three.Group()
         // General 
     this.scene = new Three.Scene();
@@ -56,6 +54,8 @@ export default {
     this.renderer.render(this.scene, this.camera);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.flipCard()
+
+    this.socket.emit("resizeGame", window.innerWidth)
   },
   methods: {
     animate: function() {
@@ -108,31 +108,6 @@ export default {
 
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
-<style scoped>
-.mainBody{
-  margin:0px;
-  padding:0px;
-  display: flex;
-  flex-direction: column;
-  margin: auto;
-}
-.centerBody{
-  display: flex;
-  margin:auto;
-  flex-direction: column;
-  border-width: 2px;
-  border-color: #fff;
+<style >
 
-}
-.rules {
-  align-content: stretch;
-  text-align: justify;
-  justify-content: center;
-  flex-direction: column;
-  color: white;
-  margin:auto;
-  border-style: inset;
-  border-width: 5px;
-  border-color: #fff;
-}
 </style>

@@ -4,7 +4,7 @@ import { RemoteSigner } from '@taquito/remote-signer';
 import tttGameGrid  from './tttGameGrid.vue'
 //import sha256 from 'js-sha256'
 import { RpcClient } from '@taquito/rpc';
-import { NODE_URL, CONTRACT_ADDRESS, ID_LOOKUP, TZKT_API_BASE_URL, OBJECT_CONTRACT, ADMIN_ADDRESS} from '../constants'
+import { NODE_URL, CONTRACT_ADDRESS} from '../constants'
 import { reduceAddress } from "../utilities";
 
 
@@ -122,8 +122,7 @@ export default {
     mounted() {
     },
     methods: {
-        //Wallet Control
-        
+        //Wallet Control        
         async getNextBlockLevel(transactionBlockLevel){
             let currentBlock = await this.rpcclient.getBlock();
             let currentBlockLevel = await currentBlock.header.level
@@ -134,9 +133,7 @@ export default {
                 let bcString = 'Waiting 2 blocks at block ' + currentBlockLevel.toString() + ' / ' + finalBlockLevel.toString()
                 this.blockchainStatus = bcString
             }
-            this.blockchainStatus = 'Confirmed!'
-            
-            
+            this.blockchainStatus = 'Confirmed!'                  
         },
         async delayGetGamesFromContract(transactionBlockLevel){
             await this.getNextBlockLevel(transactionBlockLevel)
@@ -148,7 +145,8 @@ export default {
             }            
             await this.getGameGrid(this.gameId)
             await this.loadGameBC(this.gameId)
-        },
+        }, 
+        // Populating the page
         async togglePlayer(){
             const activeAccount = await this.wallet.client.getActiveAccount()  
             if (!activeAccount) {                  
@@ -162,7 +160,6 @@ export default {
                 this.playerTurn = 1
             }
         },
-        // Populating the page
         async updatePlayerControl(gamesObject) {
             if (!gamesObject) {
                 gamesObject = await this.getGamesFromContract()
@@ -387,32 +384,6 @@ export default {
                     console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
         },
-        async claimNFTEarningsBC() {  
-            let ownersToPay = {}  
-            let i = 0
-            for (let Id in ID_LOOKUP) {
-                const apiUrl = TZKT_API_BASE_URL+ ID_LOOKUP[Id]
-                const response = await fetch(apiUrl);
-                const addressJson = await response.json();
-                let ownerAddress = addressJson[0]['address']
-                if (ownerAddress.toString() == OBJECT_CONTRACT) {
-                    ownerAddress = ADMIN_ADDRESS
-                }
-                this.blockchainStatus = 'checking Id ' + (i + 1).toString() + ' of 273'
-                if (ownerAddress in ownersToPay) {
-                    ownersToPay[ownerAddress] += 1
-                } else {
-                    ownersToPay[ownerAddress] = 1
-                }
-                i ++;
-            }
-            i = 0
-
-            const activeAccount = await this.wallet.client.getActiveAccount()   
-            if (!activeAccount) {
-                return
-            }            
-        },
         async getSigner(activeAccount) { 
             const signer = new RemoteSigner(activeAccount.address, NODE_URL )
             await this.tezos.setProvider({signer:signer})
@@ -535,7 +506,7 @@ export default {
 </script>
 
 <template>   
-     <div class="rowFlex" >
+        <div class="rowFlex" >
             <div class="gameManagement"> 
                 <div class="rowFlex" >
                     <div> 
@@ -560,7 +531,7 @@ export default {
                         <div> 
                             <div class="actionButton" @click="loadGameBC(gameId)" > Play Game: {{ playGameId }}  </div>
                         </div>   
-                        <div class="rowFlex"> 
+                        <div > 
                             <div v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
                                 <div v-if="key==2" class="actionButton" @click="updateGame(value, 'play')"> {{value}} </div>                  
                             </div>

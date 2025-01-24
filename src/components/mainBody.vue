@@ -15,6 +15,7 @@ export default {
     return {
       showTezTactoe: true,
       showAceyDuecy: false,
+      showBrowseNFTs: false,
       walletAddress: 'SYNC WALLET'
     }
   },
@@ -77,7 +78,7 @@ export default {
               Browse 2.725K
           </div>
         </div>       
-    </div>  
+     
       <tezTacToe v-if="showTezTactoe"
         :socket="socket"
         :wallet="wallet"
@@ -93,7 +94,8 @@ export default {
         :wallet="wallet"
         :tezos="tezos"
       />
-
+      
+      </div>
     </div>
   </div>
 </template>
@@ -102,6 +104,7 @@ export default {
 .mainBody{
   margin:0px;
   padding:2px;
+  max-width: 800px;
    display: flex;
   flex-direction: column;
   margin: auto;
@@ -119,7 +122,6 @@ export default {
 }
 .gameManagement {
   display: flex;
-  width: 100%;
   flex-direction: column;
   justify-content: center;
   align-content: center;
@@ -137,9 +139,13 @@ export default {
   vertical-align: center;
 }
 .rowFlex {
+  justify-content: center;
+  align-content: center;
   display: flex;
+  flex-wrap: wrap;
+  width: 100%;
   color: #fff;
-  padding: 5px;
+  padding: 10px;
   border-style: inset;
   border-width: 0px;
   border-color: #ffffff;
@@ -152,17 +158,29 @@ export default {
   align-items: center;
   color: #fff;
   padding: 5px;
-
 }
 .actionButton {
-  display: flex;
   align-content: center;
+  vertical-align: center;
+  flex-direction: column;
+  padding: 4px;
+  margin: auto;
+  border-style: ridge;
+  border-radius: 2px;
+  border-width: 6px;
+  color: #fff;
+  border-color: #ffffff;
+}
+.txlRank {
+  align-content: center;
+  vertical-align: center;
   padding: 5px;
   margin: 2px;
+  width: 80px;
+  height: 50px;
   border-style: ridge;
   border-radius: 2px;
   border-width: 1px;
-  color: #fff;
   border-color: #a7a5a5;
 }
 .canvas-container {
