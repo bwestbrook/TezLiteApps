@@ -847,13 +847,15 @@ export default {
       270: 89,
       271: 83,
       272: 245}
-    this.objectUrl = 'https://objkt.com/users/tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w'
+    //this.objectUrl = 'https://objkt.com/users/tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w'
     this.objectKalaUrl = 'https://objkt.com/tokens/kalamint/'
     this.ipfsHttpsLink = "https://ipfs.io/ipfs/"
     this.tzktMetadataEndPoint = 'https://api.tzkt.io/v1/bigmaps/861/keys?key.eq='
     this.tzktOwnerEndPoint ='https://api.tzkt.io/v1/bigmaps/857/keys?active=true&value.eq=1&select=key&key.nat.eq='
     this.rankingsHashUrl = 'https://ipfs.io/ipfs/QmTY4jY9q4XwcyEVNfsQJj8t4Liesi7nhzKcqyPYwMdm1t'
     
+    this.objectUrl = 'https://objkt.com/users/tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w?fa_contract=KT1EpGgjQs73QfFJs9z7m1Mxm5MTnpC2tqse&availability=for_sale'
+
     //Three
     this.board = new Three.Group()
     this.scene = new Three.Scene();    
