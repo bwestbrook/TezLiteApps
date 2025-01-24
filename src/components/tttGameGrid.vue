@@ -118,9 +118,10 @@ export default {
 
   created () {
     this.intvl = 0.5
+    this.maxGameSize = 600
     this.gameSize = window.innerWidth * 0.95
-    if (this.gameSize > 1000) {
-      this.gameSize = 1000
+    if (this.gameSize > this.maxGameSize) {
+      this.gameSize = this.maxGameSize
     }
     this.board = new Three.Group()
     // Geometry
@@ -459,8 +460,8 @@ export default {
     // Socket
     resizeGameRender: function(width) {
         this.gameSize = width * 0.95
-        if (this.gameSize > 1000) {
-          this.gameSize = 1000
+        if (this.gameSize > this.maxGameSize) {
+          this.gameSize = this.maxGameSize
         }
         this.renderer.setSize(this.gameSize, this.gameSize)
     },
@@ -471,7 +472,7 @@ export default {
 
 <template>
     
-      <div class="rowFlex"
+      <div class="canvas-container"
           @mousedown="checkClickDown"
           @mouseup="checkClickUp"   
           @mousemove="highlightMove"

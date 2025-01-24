@@ -145,8 +145,7 @@ export default {
                 this.gameId = this.gameCount - 1
             } else if (this.gameId == -1 && this.gameCount == 0) {
                 this.gameId = 0
-            }
-            
+            }            
             await this.getGameGrid(this.gameId)
             await this.loadGameBC(this.gameId)
         },
@@ -205,7 +204,7 @@ export default {
                 this.playersInGame = [await reduceAddress(game.players[0]), 'None']
                 this.playerTurnStr = 'NA'
             } else if (game.gameStatus == 2 ) {
-                this.gameStatus = 'Active'
+                this.gameStatus = 'None'
                 this.gameId = await game.gameId
                 this.walletPlayerTurn1 = await reduceAddress(game.players[0])
                 this.walletPlayerTurn2 = await reduceAddress(game.players[1])
@@ -282,6 +281,32 @@ export default {
                 .then((contract) => {
                     return contract.methods.joinGame(gameId)
                         .send({amount: 1})
+                })
+                .then((op) => {
+                    console.log(`Waiting for ${op.opHash} to be confirmed...`);
+                    return op.confirmation().then(() => op.opHash);
+                })
+                .then((op) => {
+                    console.log(`Operation injected: https://ghost.tzstats.com/${op.hash}`)
+                 })
+                .then(() => this.blockchainStatus = `Joined Game on Smart Contract ${{gameId}}` )
+                .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
+        },
+        async leaveGameBC(gameId) { 
+            if (gameId < 0) {
+                return
+            }    
+            const activeAccount = await this.wallet.client.getActiveAccount() 
+            if (!activeAccount) {
+                return
+            }    
+            this.blockchainStatus = 'Joining Game on Smart Contract'              
+            this.getSigner(activeAccount)  
+            this.tezos.wallet
+                .at(CONTRACT_ADDRESS)
+                .then((contract) => {
+                    return contract.methods.leaveGame(gameId)
+                        .send()
                 })
                 .then((op) => {
                     console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -441,12 +466,14 @@ export default {
                 gamesObject[j] = gameData
                 j ++;
             }           
-        this.gameCount = j 
-        this.gamesObject = await gamesObject
-        return gamesObject
+            this.gameCount = j 
+            this.gamesObject = await gamesObject
+            return gamesObject
         },
         async loadGameBC(gameId) {
-            console.log(gameId)
+            if (gameId < 0) {
+                return
+            }
             this.blockchainStatus = 'Loading Game from Smart Contract'       
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
@@ -491,6 +518,7 @@ export default {
             this.socket.emit("updateGameGrid", gameGrid, gameId, updateGrid)
         },
         async updateGame(gameId, type) {
+            this.gameId = gameId
             if (type == 'play') {
                 this.playGameId = gameId
             } else if (type == 'join') {
@@ -514,7 +542,7 @@ export default {
                         <div class="actionButton" @click="createGameBC(0)" > New 0 XTZ Game </div>                    
                     </div> 
                     <div> 
-                        <div class="actionButton" @click="createGameBC(1)" > New 0.5 XTZ Game</div>                    
+                        <div class="actionButton" @click="createGameBC(0.5)" > New 0.5 XTZ Game</div>                    
                     </div> 
                     <div> 
                         <div class="actionButton" @click="createGameBC(1)" > New 1 XTZ Game</div>                    
@@ -523,12 +551,12 @@ export default {
                         <div class="actionButton" @click="createGameBC(5)" > New 5 XTZ Game</div>                    
                     </div> 
                     <div> 
-                        <div class="actionButton" @click="createGameBC(5)" > New 10 XTZ Game</div>                    
+                        <div class="actionButton" @click="createGameBC(10)" > New 10 XTZ Game</div>                    
                     </div> 
                 </div>
                 <div class="rowFlex">  
-                    <div>MY GAME HUB</div>
-                    <div class="gameManagement" > 
+                    <div class="label">MY GAME HUB</div>
+                    <div class="gameManagement" >                         
                         <div> 
                             <div class="actionButton" @click="loadGameBC(gameId)" > Play Game: {{ playGameId }}  </div>
                         </div>   
@@ -571,8 +599,14 @@ export default {
                 </div>
             </div>
         </div>  
-        <div class="gameManagement"> Game Center 
-            <div class="rowFlex" >     
+        <tttGameGrid 
+            :wallet="wallet"
+            :socket="socket"
+            :tezos="tezos"
+        />
+        <div class="gameManagement"> 
+            <div class="rowFlex" >    
+                <div class="label">Game Center</div> 
                 <div> 
                     <div class="actionButton" > Game ID: {{ gameId }}</div>
                 </div>
@@ -591,15 +625,9 @@ export default {
                     <div class="actionButton" @click="surrenderGameBC" > Surrender </div>
                 </div>                
             </div>
-    </div>
-    <tttGameGrid 
-        :wallet="wallet"
-        :socket="socket"
-        :tezos="tezos"
-    />
-    
+        </div>    
     <div> 
-         <div class="actionButton" > BC Status: {{ blockchainStatus }}</div>
+         <div class="actionButton" > Status: {{ blockchainStatus }}</div>
     </div> 
 </template>
 

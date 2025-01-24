@@ -6,15 +6,16 @@ import * as Three from 'three'
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 export default {
-  name: 'aceyDuecy',
-  props: [],
-  components: { 
+    name: 'aceyDuecy',
+    props: ["socket", "wallet", "tezos"],
+    components: { 
   },
   data () {
     return {
 
     }
   },
+
   created () {
     this.gameSize = window.innerWidth * 0.95
     if (this.gameSize > 1000) {
@@ -39,7 +40,12 @@ export default {
     // Materials
     //this.defaultMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.9, transparent:true});
     this.defaultMaterial = new Three.MeshNormalMaterial()
-    
+
+    this.socket.on('resizeGame', (width) => {
+      if (!this.user) {
+        this.resizeGameRender(width)
+      }
+    }); 
   },
   mounted () {
     this.renderer = new Three.WebGLRenderer({antialias: true});
@@ -67,23 +73,29 @@ export default {
       this.renderer.render(this.scene, this.camera);
     },
     buildGame: function() {
-        const card1 = new Three.Mesh(this.defaultGeometry, this.cardMaterial); 
-        const card2 = new Three.Mesh(this.defaultGeometry, this.cardMaterial); 
-        this.card1 = card1
-        this.card2 = card2
-        card1.position.set(-40, 0, 0);
-        this.board.add(card1)    
-        card2.position.set(40, 0, 0);
-        this.board.add(card2)   
-        this.scene.add(this.board)                
-        }
-       
+      const card1 = new Three.Mesh(this.defaultGeometry, this.cardMaterial); 
+      const card2 = new Three.Mesh(this.defaultGeometry, this.cardMaterial); 
+      this.card1 = card1
+      this.card2 = card2
+      card1.position.set(-40, 0, 0);
+      this.board.add(card1)    
+      card2.position.set(40, 0, 0);
+      this.board.add(card2)   
+      this.scene.add(this.board)                
+    },
+    resizeGameRender: function(width) {
+      this.gameSize = width * 0.95
+      if (this.gameSize > this.maxGameSize) {
+        this.gameSize = this.maxGameSize
+      }
+      this.renderer.setSize(this.gameSize, this.gameSize)
+    }       
   },
 }
 </script>
 
 <template>
-  <div class="mainBody" >        
+  <div class="canvas-container" >        
       NEW GAME COMING SOON!!!!
       <div 
         @click="flipCard"
