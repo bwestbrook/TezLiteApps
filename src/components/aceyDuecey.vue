@@ -16,7 +16,7 @@ export default {
     }
   },
   created () {
-    this.gameSize = 1000 * 0.6
+    this.gameSize = window.innerWidth * 0.95
     if (this.gameSize > 1000) {
       this.gameSize = 1000
     }

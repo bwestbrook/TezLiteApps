@@ -64,7 +64,7 @@ export default {
           </div>
           
           <div @click="selectGame('AceyDuecey')" class="actionButton">
-              CLICK ME FOR SURPRISE
+              Play ???!
           </div>
         </div>
      </div>  
