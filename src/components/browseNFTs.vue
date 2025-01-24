@@ -996,7 +996,8 @@ export default {
               <option v-for="(key, value) in idLookUp" :key="key" :value="value"> {{ value}} </option>
             </select>
           </div> 
-          
+        </div>
+        <div class="rowFlex">  
           <div class="actionButton" @click="selectRandom"> Select Random </div>
           <div class="actionButton" @click="checkThisOnObjkt(txlId)"> Buy {{ txlId.toString() }} On All Objeckt </div>
           <div class="actionButton" @click="browseAllOnObjkt"> Browse On All Objeckt </div>
