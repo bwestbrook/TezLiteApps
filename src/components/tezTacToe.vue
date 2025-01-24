@@ -534,7 +534,7 @@ export default {
 
 <template>                           
         <div class="rowFlex">
-            <div class="actionButton" @click="showLearnMore"> HOW TO PLAY </div>
+            <div class="label" @click="showLearnMore"> HOW TO PLAY </div>
             <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
             <div>
             <ul>

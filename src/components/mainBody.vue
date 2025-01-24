@@ -60,7 +60,7 @@ export default {
       <div class="gameManagement">
         <div class="rowFlex" >     
           <div>
-            <div class="label"> WARNING: ALL GAMES IN BETA GHOST NET ONLY!!! NFTS ARE LIVE ON OBJKT.COM</div>
+            <div class="label"> WARNING: ALL GAMES IN BETA GHOSTNET ONLY!!! NFTS ARE LIVE ON OBJKT.COM</div>
           </div>
           <div class="actionButton" @click="toggleWallet">
               {{walletAddress}} 
@@ -102,7 +102,7 @@ export default {
 .mainBody{
   margin:5px;
   padding:1px;
-  max-width: 850px;
+  max-width: 610px;
   display: flex;
   flex-direction: column;
   margin: auto;
@@ -144,7 +144,6 @@ export default {
   border-style: inset;
   border-width: 2px;
   border-color: #ffffff;
-
   vertical-align: top;
 }
 .actionButton {
@@ -158,6 +157,7 @@ export default {
   color: #fff;
   border-color: #ffffff;
   flex: 1;
+  font-size: small;
 }
 .gameCenter {
   align-content: center;
@@ -178,6 +178,7 @@ export default {
   color: #fff;
   border-color: #ffffff;
   flex: 1;
+  font-size: small;
 }
 .label {
   align-content: center;
@@ -190,6 +191,7 @@ export default {
   color: #fff;
   border-color: #ffffff;
   flex: 1;
+  font-size: larger;
 }
 .txlRank {
   align-content: center;
