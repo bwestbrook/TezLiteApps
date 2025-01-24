@@ -13,9 +13,9 @@ export default {
   },
   data () {
     return {
-      showTezTactoe: true,
+      showTezTactoe: false,
       showAceyDuecy: false,
-      showBrowseNFTs: false,
+      showBrowseNFTs: true,
       walletAddress: 'SYNC WALLET'
     }
   },
@@ -71,7 +71,7 @@ export default {
               Play TezTacToe!
           </div>   
           <div @click="selectGame('AceyDuecey')" class="actionButton">
-              Something's Coming Soon...
+              Coming Soon...
           </div>
         </div>    
         <tezTacToe v-if="showTezTactoe"

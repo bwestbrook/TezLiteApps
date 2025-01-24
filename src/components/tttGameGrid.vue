@@ -2,7 +2,7 @@
 
 import * as Three from 'three'
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-
+import { GAME_WIDTH_FRACTION} from '../constants'
 
 let gameWinners = [
 [[-1, -1, -1], [0, 0, 0], [1, 1, 1], [2, 2, 2]],
@@ -457,7 +457,8 @@ export default {
     // Game Play Utilities
     // Socket
     resizeGameRender: function(width) {
-        this.gameSize = width * 0.95
+        this.gameSize = width * GAME_WIDTH_FRACTION
+        console.log(GAME_WIDTH_FRACTION)
         if (this.gameSize > this.maxGameSize) {
           this.gameSize = this.maxGameSize
         }

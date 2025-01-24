@@ -4,6 +4,7 @@
 
 import * as Three from 'three'
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { GAME_WIDTH_FRACTION} from '../constants'
 
 export default {
     name: 'aceyDuecy',
@@ -46,8 +47,7 @@ export default {
   },
   mounted () {
     this.renderer = new Three.WebGLRenderer({antialias: true});
-    this.renderer.setSize(this.gameSize, this.gameSize)
-   
+    this.renderer.setSize(this.gameSize, this.gameSize)   
     this.$refs.container.appendChild(this.renderer.domElement);
     this.socket.emit("resizeGame", window.innerWidth)
     this.buildGame()
@@ -84,7 +84,7 @@ export default {
       this.scene.add(this.board)                
     },
     resizeGameRender: function(width) {
-      this.gameSize = width * 0.95
+      this.gameSize = width * GAME_WIDTH_FRACTION
       if (this.gameSize > this.maxGameSize) {
         this.gameSize = this.maxGameSize
       }

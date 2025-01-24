@@ -5,6 +5,7 @@
 import { getRandomIntInclusive, reduceAddress } from '@/utilities';
 import * as Three from 'three'
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { GAME_WIDTH_FRACTION} from '../constants'
 
 export default {
   name: 'browseNFTs',
@@ -911,7 +912,7 @@ export default {
       window.open(this.objectKalaUrl + kalaId, '_blank');
     },
     resizeGameRender: function(width) {
-      this.gameSize = width * 0.95
+      this.gameSize = width * GAME_WIDTH_FRACTION
       if (this.gameSize > this.maxGameSize) {
         this.gameSize = this.maxGameSize
       }
