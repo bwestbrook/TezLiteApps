@@ -13,7 +13,7 @@ export default {
   },
   data () {
     return {
-      txlId: 144,
+      txlId: 68,
       rank: 0,
       txlRanking: 1,
       txlData: {},
@@ -865,8 +865,8 @@ export default {
     this.camera.position.z = 200;
     this.camera.lookAt(this.scene.position)
     this.loader = new Three.TextureLoader();  
-    const displayLink = this.ipfsHttpsLink + 'QmUfTvmkEuxBCjTstHxs9n5SCvgKNJvAYxyyf2dwSKhnos'
-    this.nftTexture = this.loader.load(displayLink); 
+    //const displayLink = this.ipfsHttpsLink + 'QmUfTvmkEuxBCjTstHxs9n5SCvgKNJvAYxyyf2dwSKhnos'
+    this.nftTexture = this.loader.load(''); 
     this.nftMaterial = new Three.MeshBasicMaterial({ map: this.nftTexture });
     this.defaultGeometry = new Three.BoxGeometry(150, 150, 0.1, 1)
     // Socket Management
@@ -883,7 +883,6 @@ export default {
     this.renderer.render(this.scene, this.camera);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.animateNft()
-    this.selectRandom()
     this.socket.emit("resizeGame", window.innerWidth)
   },
   methods: {
@@ -901,7 +900,6 @@ export default {
     buildGame: function() {
       this.nftDisplay = new Three.Mesh(this.defaultGeometry, this.nftMaterial); 
       this.nftDisplay.position.set(0, 0, 0);
-      this.board.add(this.nftTeaser) 
       this.scene.add(this.nftDisplay)                
       },
     browseAllOnObjkt () {
@@ -983,41 +981,43 @@ export default {
 </script>
 
 <template>
-  <div class="canvas-container" >    
-      <div class="rowFlex">
-        <div class="canvas-container" > 
-          <div class="actionButton">Select Rank </div>
-          <select class="txlRank" v-model="txlRanking" @change="getNftDataRank()">
-            <option v-for="(key, value) in txlRevRankings" :key="key" :value="value"> {{ value}} </option>
-          </select>
-        </div> 
-        <div class="canvas-container" > 
-          <div class="actionButton">Select ID </div>
-          <select class="txlRank" v-model="txlId" @change="getNftDataId()">
-            <option v-for="(key, value) in idLookUp" :key="key" :value="value"> {{ value}} </option>
-          </select>
-        </div> 
+  <div class="centerBody">
+    <div class="gameManagement" >    
+        <div class="rowFlex">
+          <div class="gameManagement" > 
+            <div class="actionButton">Select Rank </div>
+            <select class="txlRank" v-model="txlRanking" @change="getNftDataRank()">
+              <option v-for="(key, value) in txlRevRankings" :key="key" :value="value"> {{ value}} </option>
+            </select>
+          </div> 
+          <div class="gameManagement" > 
+            <div class="actionButton">Select ID </div>
+            <select class="txlRank" v-model="txlId" @change="getNftDataId()">
+              <option v-for="(key, value) in idLookUp" :key="key" :value="value"> {{ value}} </option>
+            </select>
+          </div> 
+          
+          <div class="actionButton" @click="selectRandom"> Select Random </div>
+          <div class="actionButton" @click="checkThisOnObjkt(txlId)"> Buy {{ txlId.toString() }} On All Objeckt </div>
+          <div class="actionButton" @click="browseAllOnObjkt"> Browse On All Objeckt </div>
+        </div>
+        <div class="canvas-container" >    
+          <div 
+                @click="flipCard"
+                class="mainBody"
+                ref="container"
+              >
+          </div> 
+        </div>
+        <div class="canvas-container">
+          <div class="rowFlex">       
+            <div class="txlRank"> Rank: {{ txlRanking }}</div>
+            <div class="txlRank"> Owner: {{ owner }}</div>
+            <div class="txlRank" v-for="(key, value) in txlData" :key="key" :value="value"> {{ value }}: {{ key }} </div>      
         
-        <div class="actionButton" @click="selectRandom"> Select Random </div>
-        <div class="actionButton" @click="checkThisOnObjkt(txlId)"> Buy {{ txlId.toString() }} On All Objeckt </div>
-        <div class="actionButton" @click="browseAllOnObjkt"> Browse On All Objeckt </div>
-      </div>
-      <div class="canvas-container" >    
-        <div 
-              @click="flipCard"
-              class="mainBody"
-              ref="container"
-            >
-        </div> 
-      </div>
-      <div class="canvas-container">
-        <div class="rowFlex">       
-          <div class="txlRank"> Rank: {{ txlRanking }}</div>
-          <div class="txlRank"> Owner: {{ owner }}</div>
-          <div class="txlRank" v-for="(key, value) in txlData" :key="key" :value="value"> {{ value }}: {{ key }} </div>      
-       
-        </div> 
-      </div>
+          </div> 
+        </div>
+    </div>
   </div>
 </template>
 

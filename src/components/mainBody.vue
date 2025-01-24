@@ -59,42 +59,39 @@ export default {
     <div class="centerBody">
       <div class="gameManagement">
         <div class="rowFlex" >           
-          <div class="actionButton" @click="claimNFTEarningsBC"> 
-            Claim 2.725K Earnings 
-          </div>    
+
           <div class="actionButton" @click="toggleWallet">
               {{walletAddress}} 
           </div>  
            
         </div>   
-        <div class="rowFlex" >          
+        <div class="rowFlex" >     
+          <div @click="selectGame('browseNFTs')" class="actionButton">
+              Browse 2.725K
+          </div>     
           <div @click="selectGame('TezTacToe')" class="actionButton">
               Play TezTacToe!
           </div>   
           <div @click="selectGame('AceyDuecey')" class="actionButton">
               Play ???!
           </div>
-          <div @click="selectGame('browseNFTs')" class="actionButton">
-              Browse 2.725K
-          </div>
-        </div>       
-     
-      <tezTacToe v-if="showTezTactoe"
-        :socket="socket"
-        :wallet="wallet"
-        :tezos="tezos"
-      />
-      <aceyDuecey v-if="showAceyDuecy" 
-        :socket="socket"
-        :wallet="wallet"
-        :tezos="tezos"
-      />
-      <browseNFTs v-if="showBrowseNFTs" 
-        :socket="socket"
-        :wallet="wallet"
-        :tezos="tezos"
-      />
-      
+
+        </div>    
+        <tezTacToe v-if="showTezTactoe"
+          :socket="socket"
+          :wallet="wallet"
+          :tezos="tezos"
+        />
+        <aceyDuecey v-if="showAceyDuecy" 
+          :socket="socket"
+          :wallet="wallet"
+          :tezos="tezos"
+        />
+        <browseNFTs v-if="showBrowseNFTs" 
+          :socket="socket"
+          :wallet="wallet"
+          :tezos="tezos"
+        />      
       </div>
     </div>
   </div>
@@ -102,10 +99,10 @@ export default {
 
 <style>
 .mainBody{
-  margin:0px;
+  margin:2px;
   padding:2px;
-  max-width: 800px;
-   display: flex;
+  max-width: 850px;
+  display: flex;
   flex-direction: column;
   margin: auto;
   border-width: 2px;
@@ -130,8 +127,9 @@ export default {
   color: #fff;
   padding: auto;
   border-style: inset;
-  border-width: 0px;
-  border-color: #231b1b;
+  border-width: 7px;
+  border-color: #922727;
+  flex: 1;
 }
 .label {
   justify-content: center;
@@ -162,14 +160,27 @@ export default {
 .actionButton {
   align-content: center;
   vertical-align: center;
-  flex-direction: column;
   padding: 4px;
   margin: auto;
+  height: 10px;
   border-style: ridge;
   border-radius: 2px;
   border-width: 6px;
   color: #fff;
   border-color: #ffffff;
+  flex: 1;
+}
+.gameSelect {
+  align-content: center;
+  vertical-align: center;
+  padding: 4px;
+  margin: 4x;
+  border-style: ridge;
+  border-radius: 2px;
+  border-width: 2px;
+  color: #fff;
+  border-color: #ffffff;
+  flex: 1;
 }
 .txlRank {
   align-content: center;
