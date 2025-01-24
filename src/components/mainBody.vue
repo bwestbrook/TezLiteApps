@@ -183,6 +183,7 @@ export default {
   border-radius: 2px;
   border-width: 1px;
   border-color: #a7a5a5;
+  flex: 1;
 }
 .canvas-container {
   border-style: ridge;
