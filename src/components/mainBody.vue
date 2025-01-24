@@ -124,7 +124,7 @@ export default {
   color: #fff;
   padding: auto;
   border-style: ridge;
-  border-width: 10px;
+  border-width: 0px;
   border-color: #504e4e;
   flex: 1;
 }

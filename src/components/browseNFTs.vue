@@ -1007,7 +1007,7 @@ export default {
               >
           </div> 
         </div>
-        <div class="canvas-container">
+        <div class="gameManagement">
           <div class="rowFlex">       
             <div class="txlRank"> Rank: {{ txlRanking }}</div>
             <div class="txlRank"> Owner: {{ owner }}</div>
