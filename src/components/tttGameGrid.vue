@@ -118,7 +118,7 @@ export default {
 
   created () {
     this.intvl = 0.5
-    this.maxGameSize = 600
+    this.maxGameSize = 800
     this.gameSize = window.innerWidth * 0.95
     if (this.gameSize > this.maxGameSize) {
       this.gameSize = this.maxGameSize
@@ -167,9 +167,7 @@ export default {
       this.connectMoves(false)
     });
     this.socket.on('resizeGame', (width) => {
-      if (!this.user) {
-        this.resizeGameRender(width)
-      }
+      this.resizeGameRender(width)
     });
     this.socket.on('updatePlayerTurn', (playerTurn) => {
         this.playerTurn = playerTurn 
@@ -463,6 +461,7 @@ export default {
         if (this.gameSize > this.maxGameSize) {
           this.gameSize = this.maxGameSize
         }
+        console.log(this.gameSize)
         this.renderer.setSize(this.gameSize, this.gameSize)
     },
   }

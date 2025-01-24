@@ -126,9 +126,9 @@ export default {
   align-items: center;
   color: #fff;
   padding: auto;
-  border-style: inset;
-  border-width: 7px;
-  border-color: #922727;
+  border-style: ridge;
+  border-width: 4px;
+  border-color: #504e4e;
   flex: 1;
 }
 .rowFlex {
@@ -150,7 +150,7 @@ export default {
   margin: auto;
   border-style: ridge;
   border-radius: 2px;
-  border-width: 5px;
+  border-width: 3px;
   color: #fff;
   border-color: #ffffff;
   flex: 1;

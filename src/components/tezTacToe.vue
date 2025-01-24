@@ -23,10 +23,10 @@ export default {
             allGamesStatus: {},
             gamesObject: {},
             gameId: -1,
-            leaveGameId: '',
-            playGameId: '',
-            joinGameId: '',
-            viewGameId: '', 
+            leaveGameId: 'NA',
+            playGameId: 'NA',
+            joinGameId: 'NA',
+            viewGameId: 'NA', 
             blockWaits: '',
             gameStatus: 'No Players',
             playerTurnStr: 'No Game',
@@ -454,8 +454,7 @@ export default {
             await this.updateLoadedGameStatus(gameId)
             this.socket.emit("updatePlayedPoint", 'NO MOVE', 'Active', this.gameId)
             this.socket.emit('loadGame', gameId, false)   
-            this.socket.emit('resizeGameGrid', window.inner)
-            
+            this.socket.emit('resizeGameGrid', window.inner)            
             this.blockchainStatus = `Game ${gameId} loaded`  
         },
         async getGameGrid(gameId, updateGrid=true) {
@@ -532,17 +531,17 @@ export default {
                     <div class="rowFlex">     
                                                 
                         <div v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
-                            <div v-if="key==1" class="gameSelect" @click="updateGame(value, 'join')"> {{value}} </div>                  
+                            <div v-if="key==4" class="gameSelect" @click="updateGame(value, 'join')"> {{value}} </div>                  
                         </div>
                     </div>                       
                 </div>
             </div>
             <div class="gameCenter" > 
-                <div class="actionButton" @click="leaveGameBC(gameId)">   Leave Game: {{ leaveGameId }} </div>                             
+                <div class="actionButton" @click="leaveGameBC(gameId)">  Leave Game: {{ leaveGameId }} </div>                             
                 <div> 
                     <div class="rowFlex">                                
                         <div  v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
-                            <div v-if="key==2" class="gameSelect" @click="updateGame(value, 'leave')"> {{value}} </div>                  
+                            <div v-if="key==1" class="gameSelect" @click="updateGame(value, 'leave')"> {{value}} </div>                  
                         </div>
                     </div>
                 </div>                   

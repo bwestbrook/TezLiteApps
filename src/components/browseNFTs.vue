@@ -884,6 +884,7 @@ export default {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.animateNft()
     this.socket.emit("resizeGame", window.innerWidth)
+
   },
   methods: {
     animate: function() {
@@ -907,7 +908,6 @@ export default {
     },
     checkThisOnObjkt () {
       const kalaId = this.idLookUp[this.txlId]
-      console.log(this.objectKalaUrl + kalaId)
       window.open(this.objectKalaUrl + kalaId, '_blank');
     },
     resizeGameRender: function(width) {
@@ -947,7 +947,6 @@ export default {
     async getOwner () {
       const kalaId = this.idLookUp[this.txlId]
       const tzktApiUrl = this.tzktOwnerEndPoint + kalaId
-      console.log(tzktApiUrl)
       const response = await fetch(tzktApiUrl);
       const data = await response.json();
       const address = data[0].address
@@ -972,10 +971,7 @@ export default {
       const newId = await getRandomIntInclusive(1, 273)
       this.txlId = newId    
       this.getNftData()  
-    },
-    async claimNFTEarningsBC() {  
-      console.log('claim')          
-    },
+    }
   }
 }
 </script>

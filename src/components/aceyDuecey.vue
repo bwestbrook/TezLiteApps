@@ -18,6 +18,7 @@ export default {
 
   created () {
     this.gameSize = window.innerWidth * 0.95
+    console.log(this.gameSize)
     this.maxGameSize = 800
     this.board = new Three.Group()
         // General 
@@ -39,11 +40,7 @@ export default {
     //this.defaultMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.9, transparent:true});
     this.defaultMaterial = new Three.MeshNormalMaterial()
 
-    this.socket.on('resizeGame', (width) => {
-      if (!this.user) {
-        this.resizeGameRender(width)
-      }
-    }); 
+    
   },
   mounted () {
     this.renderer = new Three.WebGLRenderer({antialias: true});
@@ -54,8 +51,8 @@ export default {
     this.renderer.render(this.scene, this.camera);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.flipCard()
-
     this.socket.emit("resizeGame", window.innerWidth)
+
   },
   methods: {
     animate: function() {
@@ -88,6 +85,7 @@ export default {
       if (this.gameSize > this.maxGameSize) {
         this.gameSize = this.maxGameSize
       }
+      console.log(this.gameSize)
       this.renderer.setSize(this.gameSize, this.gameSize)
     }       
   },
