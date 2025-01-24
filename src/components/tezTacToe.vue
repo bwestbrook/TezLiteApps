@@ -552,7 +552,7 @@ export default {
             <div class="actionButton" @click="createGameBC(10)" > New 10{{this.tezosSymbol}} Game</div>   
         </div>    
         <div class="rowFlex">
-            <div class="gameSelect"> My Game Hub </div>
+            <div > MY GAME HUB </div>
         </div>
         <div v-if="loadedGames" class="rowFlex"> 
             <div v-if="joinableGames" class="gameCenter" >   

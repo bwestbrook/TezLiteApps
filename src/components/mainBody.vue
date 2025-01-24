@@ -149,10 +149,10 @@ export default {
 .actionButton {
   align-content: center;
   vertical-align: center;
-  padding: 4px;
-  margin: auto;
+  padding: 1px;
+  margin: 3px;
   border-style: ridge;
-  border-radius: 2px;
+  border-radius: 5px;
   border-width: 3px;
   color: #fff;
   border-color: #ffffff;
