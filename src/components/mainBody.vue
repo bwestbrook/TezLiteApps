@@ -142,7 +142,7 @@ export default {
   color: #fff;
   padding: auto;
   border-style: inset;
-  border-width: 2px;
+  border-width: 0px;
   border-color: #ffffff;
   vertical-align: top;
 }

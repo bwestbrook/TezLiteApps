@@ -568,8 +568,7 @@ export default {
             <div v-if="joinableGames" class="gameCenter"  >  
                 <div class="actionButton" @click="joinGameBC(gameId)">   Join Game: {{ joinGameId }}  </div>                                   
                 <div> 
-                    <div class="rowFlex">     
-                                                
+                    <div class="rowFlex">                                                     
                         <div v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
                             <div v-if="key==4" class="gameSelect" @click="updateGame(value, 'join')"> {{value}} </div>                  
                         </div>
