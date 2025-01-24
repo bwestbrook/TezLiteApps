@@ -8,7 +8,7 @@ import io from 'socket.io-client'
 import mainBody from "./components/mainBody.vue"
 import { reduceAddress } from "./utilities";
 import { RemoteSigner } from '@taquito/remote-signer';
-import { CONTRACT_ADDRESS, NODE_URL} from './constants'
+import { NODE_URL} from './constants'
 import { TezosToolkit } from '@taquito/taquito'
 const Tezos = new TezosToolkit(NODE_URL);
 
@@ -59,30 +59,23 @@ export default {
               this.brodcastWallet(account)  
               this.socket.emit("walletConnection", account.address)  
               this.socket.emit("updateGames")
-              console.log(account)
           })
-          const contractAbstraction = await Tezos.contract.at(CONTRACT_ADDRESS);
-          console.log(contractAbstraction);
-          
+                 
         } else {
-          console.log('log out')
           this.wallet = globalWallet
         }
       return globalWallet
     },
     async brodcastWallet (account) {
-      console.log('log out')
       if (account) {
         const reducedAddress = await reduceAddress(account.address)       
         Tezos.setWalletProvider(this.wallet)
         const signer = new RemoteSigner(account.address, NODE_URL )
         await this.tezos.setProvider({signer:signer})
-        this.socket.emit("newWallet", 'UNSYNC WALLET ' + reducedAddress)
-        
+        this.socket.emit("newWallet", 'UNSYNC WALLET ' + reducedAddress)        
       } else {
-        console.log('log out')
-
         this.socket.emit("newWallet", 'SYNC WALLET')
+        this.socket.emit("updateGames")
       }
     },
     async sendTezos(activeAccount, amount) {

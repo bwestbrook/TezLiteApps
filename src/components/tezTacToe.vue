@@ -28,6 +28,7 @@ export default {
             joinableGames: false, 
             viewGameId: 'NA', 
             viewableGames: false, 
+            loadedGames: false,
             blockWaits: '',
             gameStatus: 'No Players',
             playerTurnStr: 'No Game',
@@ -324,8 +325,12 @@ export default {
         async getGamesFromContractAsync() {
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
+                console.log('adfad')
+                this.loadedGames = false
+                this.updatePlayerControl({})     
                 return
             }  
+            //this.loadedGames = true
             const gamesObject = await this.getGamesFromContract()   
             this.updatePlayerControl(gamesObject)        
         },
@@ -443,8 +448,12 @@ export default {
             }
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
+                gamesObject = {}
+                console.log('afdeqerqewrafa')
+                this.loadedGames = false
                 return
             }  
+            this.gameCount = Object.keys(gamesObject).length
             let i = 0
             this.allGamesStatus = {}       
             this.joinableGames = false     
@@ -460,9 +469,13 @@ export default {
                 } else {
                     this.allGamesStatus[i] = 6
                 }                    
-                
-            }      
-            this.pendingGamesOthers = this.allGamesStatus[6]
+            }    
+            console.log(Object.keys(this.allGamesStatus).length)  
+            if (Object.keys(this.allGamesStatus).length > 0 ) {
+                this.loadedGames = true
+            } else {
+                this.loadedGames = false
+            }
         },
         async updateLoadedGameStatus(gameId) {
             const activeAccount = await this.wallet.client.getActiveAccount()   
@@ -516,7 +529,8 @@ export default {
             <div class="actionButton" @click="createGameBC(5)" > New 5{{this.tezosSymbol}} Game</div> 
             <div class="actionButton" @click="createGameBC(10)" > New 10{{this.tezosSymbol}} Game</div>   
         </div>    
-        <div class="rowFlex"> 
+        <div v-if="loadedGames" class="rowFlex"> 
+            <div v-if="!loadedGames"> NO GAMES </div>
             <div v-if="joinableGames" class="gameCenter" >   
                 <div class="actionButton" @click="loadGameBC(playGameId)"> Play Game: {{ playGameId }} </div>                                       
                 <div> 

@@ -59,6 +59,10 @@ export default {
     <div class="centerBody">
       <div class="gameManagement">
         <div class="rowFlex" >     
+          <div>
+            <div class="gameManagement"> WARNING: IN BETA GHOST NET ONLY!!!</div>
+            <div> Made with love by @jamin_b on telegram/discord and @jaminb12 on X</div>
+          </div>
           <div class="actionButton" @click="toggleWallet">
               {{walletAddress}} 
           </div>  
