@@ -40,7 +40,9 @@ export default {
     //this.defaultMaterial = new Three.MeshMatcapMaterial({color: 'green', opacity:0.9, transparent:true});
     this.defaultMaterial = new Three.MeshNormalMaterial()
 
-    
+    this.socket.on('resizeGame', (width) => {
+      this.resizeGameRender(width)
+    }); 
   },
   mounted () {
     this.renderer = new Three.WebGLRenderer({antialias: true});
