@@ -458,12 +458,16 @@ export default {
             this.gameCount = Object.keys(gamesObject).length
             let i = 0
             this.allGamesStatus = {}       
-            this.joinableGames = false     
+            this.joinableGames = false   
+            this.leavableGames = false 
+            this.viewableGames = false   
             for (i; i < this.gameCount; i++) {
                 if (gamesObject[i].players.includes(activeAccount.address)) {
                     this.allGamesStatus[i] = gamesObject[i].gameStatus
                     if (gamesObject[i].gameStatus == 3 ) {
                         this.viewableGames = true
+                    } else if (gamesObject[i].gameStatus == 1 ) {
+                        this.leavableGames = true
                     }
                 } else if (gamesObject[i].gameStatus == 1 ) {
                     this.allGamesStatus[i] = 4
@@ -552,7 +556,7 @@ export default {
             <div class="actionButton" @click="createGameBC(10)" > New 10{{this.tezosSymbol}} Game</div>   
         </div>    
         <div class="rowFlex">
-            <div > MY GAME HUB </div>
+            <div class="gameSelect"> MY GAME HUB </div>
         </div>
         <div v-if="loadedGames" class="rowFlex"> 
             <div v-if="joinableGames" class="gameCenter" >   
@@ -575,10 +579,10 @@ export default {
                     </div>                       
                 </div>
             </div>
-            <div v-if="false"  class="gameCenter" > 
-                <div v-if="false" class="actionButton" @click="leaveGameBC(gameId)">  Leave Game: {{ leaveGameId }} </div>                             
-                <div v-if="false"> 
-                    <div v-if="false" class="rowFlex">                                
+            <div v-if="leavableGames"  class="gameCenter" > 
+                <div class="actionButton" @click="leaveGameBC(gameId)">  Leave Game: {{ leaveGameId }} </div>                             
+                <div> 
+                    <div class="rowFlex">                                
                         <div  v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
                             <div v-if="key==1" class="gameSelect" @click="updateGame(value, 'leave')"> {{value}} </div>                  
                         </div>

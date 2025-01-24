@@ -1017,7 +1017,7 @@ export default {
           <div class="actionButton" @click="selectRandom"> Select Random TXL </div>
           <div class="actionButton" @click="checkThisOnObjkt(txlId)"> Buy {{ txlId.toString() }} On All Objkt.com </div>
           <div class="actionButton" @click="browseAllOnObjkt"> Browse On All Objkt.com </div>
-          <div class="actionButton" @click="showLearnMore"> Learn More </div>
+          <div class="actionButton" @click="showLearnMore"> Learn More About 2.725K</div>
         </div>
         <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
           <div>
