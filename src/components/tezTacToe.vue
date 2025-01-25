@@ -229,8 +229,7 @@ export default {
             this.tezos.wallet
                 .at(CONTRACT_ADDRESS)
                 .then((contract) => {
-                    return contract.methods.leaveGame(gameId)
-                        .send()
+                    return contract.methods.leaveGame(gameId).send()
                 })
                 .then((op) => {
                     console.log(`Waiting for ${op.opHash} to be confirmed...`);

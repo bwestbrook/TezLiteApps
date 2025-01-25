@@ -24,6 +24,10 @@ export const CONTRACT_ADDRESS = 'KT1QZPPy4zPsxcpBivCAWPPwcH6t89nCHgy2' // V0.5 V
 
 export const OBJECT_CONTRACT = 'KT1FvqJwEDWb1Gwc55Jd1jjTHRVWbYKUUpyq' // 
 
+export const ORACLE_ADDRESS = 'KT1QJp5AjDN7qQuz4dmh9iXmRSkMmAYVkx1A'
+
+export const AD_CONTRACT_ADDRESS = 'KT1AGmRhBZ7s13AYEm5m6H5JrQj1vRnAdB6v'
+
 //export const CONTRACT_ADDRESS = 'KT1BHFYWTKyfErwx491rQ3P4c5MuFEXU2Wja' // V0.1
 
 //export const CONTRACT_ADDRESS = 'KT1BvZ1nhgtEMghqTqqz2UG8rDcjvJrQLomx' // V0.2
@@ -37,13 +41,25 @@ export const OBJECT_CONTRACT = 'KT1FvqJwEDWb1Gwc55Jd1jjTHRVWbYKUUpyq' //
 export const ADMIN_ADDRESS = 'tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w'
 
 export const NFT_INFO = [
-    'ITEM 1',
-    'ITEM 2',
-    'ASafadsfadsfadsfadsf'
+    "More Information Coming Soon, but here's the tl;dr",
+    'All games on thextz.life plan to generate revenue in the form of XTZ',
+    'This revenue will be shared evenly among the holders with an inverse weight against NFT rank',
+    "There's only 275 of them and already over 100 unique owners",
+    "They are only 2.725 XTZ on primary!",
+    "The only way to cash out from the contract is by hodling the NFTs",
+    "A separate smart contract takes snaps shots of the NFTs owners and monitors for sales"
+
 ]
 
 export const GAME_INFO = [
     'The goal of the game is to connect four in a row before you oponent does!',
-    'Synce your wallet and check out the game center ',
-    'ASafadsfadsfadsfadsf'
+    'Sync your wallet and check out the game center ',
+    'Create a game or select a game to play, join, leave, or view',
+    'To create a game specifying the amount of XTZ you want to wager that you can beat your opponent',
+    "Leave an unmatched game to retrieve your XTZ at any time",
+    "Once you've matchwith an opponent you have to play to win your money",   
+    "If it's your turn, select a move and submit it to the block chain",
+    "Wait for your opponent to play",
+    "Connect four in a row before you opponent and win the amount specificied at the start of the game!",
+    "In the case of the cats game, both users get 75% of thier wager back and the rest goes to 2P725K holders"
 ]

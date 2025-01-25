@@ -145,7 +145,15 @@ io.on('connection', (socket) => {
   socket.on("updateGamePlayable", function(gamePlayabe, gameId) {
     io.to(socket.id).emit('updateGamePlayable', gamePlayabe, gameId)
   });
-  // Contract
+
+  socket.on("getRandomNumber", function(number) {
+    min = Math.ceil(0);
+    max = Math.floor(100);
+    const randomNumber = Math.floor(Math.random() * (max - min + 1)) + min; //The maximum is inclusive and the minimum is inclusive 
+    console.log('new Number req', number)
+    io.to(socket.id).emit('newRandomNumber', randomNumber)
+  });
+
   socket.on("updateGames", function() {
     io.to(socket.id).emit('updateGames')
   });
