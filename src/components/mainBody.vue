@@ -67,13 +67,13 @@ export default {
           </div>  
         </div>   
         <div class="rowFlex" >     
-          <div @click="selectGame('browseNFTs')" class="actionButton">
+          <div @click="selectGame('browseNFTs')" :class="{ 'actionButtonSelected': showBrowseNFTs, 'actionButton': !showBrowseNFTs }" >
               Browse 2.725K
           </div>     
-          <div @click="selectGame('TezTacToe')" class="actionButton">
+          <div @click="selectGame('TezTacToe')" :class="{ 'actionButtonSelected': showTezTactoe, 'actionButton': !showTezTactoe }">
               Play TezTacToe!
           </div>   
-          <div @click="selectGame('AceyDuecey')" class="actionButton">
+          <div @click="selectGame('AceyDuecey')" :class="{ 'actionButtonSelected': showAceyDuecy, 'actionButton': !showAceyDuecy }">
               Coming Soon...
           </div>
         </div>    
@@ -170,6 +170,19 @@ export default {
   flex: 1;
   font-size: small;
 }
+.actionButtonSelected {
+  align-content: center;
+  vertical-align: center;
+  padding: 1px;
+  margin: 3px;
+  border-style: ridge;
+  border-radius: 5px;
+  border-width: 8px;
+  color: #fff;
+  border-color: #3f3737;
+  flex: 1;
+  font-size: small;
+}
 .gameCenter {
   align-content: center;
   vertical-align: center;
@@ -222,6 +235,24 @@ export default {
   border-radius: 2px;
   border-width: 0px;
   border-color: #080606;
+}
+.selectBox {
+  align-content: center;
+  vertical-align: center;
+  padding: 5px;
+  margin: 2px;
+  width: fit-content;
+  height: 30px;
+  border-style: inset;
+  border-radius: 2px;
+  border-width: 0px;
+  border-color: #080606;
+  background-color: black;
+  color:white;
+  border-radius: 4px;
+  border-width: 2px;
+  border-color: #ffffff;
+
 }
 .infoPopup {
   position: relative;

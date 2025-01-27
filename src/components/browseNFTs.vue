@@ -1018,13 +1018,13 @@ export default {
           </div>   
             <div class="gameManagement" >      
               <div>Select Rank </div>
-              <select class="txlRank" v-model="txlRanking" @change="getNftDataRank()">
+              <select class="selectBox" v-model="txlRanking" @change="getNftDataRank()">
                 <option v-for="(key, value) in txlRevRankings" :key="key" :value="value"> {{ value}} </option>
               </select>
             </div>           
           <div class="gameManagement"> 
             <div>Select ID </div>
-            <select class="txlRank" v-model="txlId" @change="getNftDataId()">
+            <select class="selectBox" v-model="txlId" @change="getNftDataId()">
               <option v-for="(key, value) in idLookUp" :key="key" :value="value"> {{ value}} </option>
             </select>
           </div> 

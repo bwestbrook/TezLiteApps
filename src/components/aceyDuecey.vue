@@ -15,6 +15,7 @@ export default {
   data () {
     return {
       gameInfo: AD_GAME_INFO,
+      showInfo: false, 
       highLow: 'Ace Low',
       tezosSymbol: 'ꜩ',
       potBalance: 0,
@@ -62,7 +63,7 @@ export default {
     
     try {
         const sub = this.tezos.stream.subscribeEvent({
-            tag: 'railLoss',
+            tag: 'betMade',
             address: AD_CONTRACT_ADDRESS,
             //excludeFailedOperations: true
         });
@@ -87,6 +88,7 @@ export default {
     this.showCards()
     this.socket.emit("resizeGame", window.innerWidth)    
     this.getPotBalance()
+    this.getGamesFromContractBC()
   },
   methods: {
     async showCards() {
@@ -266,18 +268,25 @@ export default {
       this.thisBets.push(bet)
       bet += this.betIncrement
     }
-    console.log(this.thisBets)
-    console.log('setting PB')
-    console.log(this.potBalance)
     },
     // Read the contract
     async getGamesFromContractBC() {
-        const contract = await this.tezos.wallet.at(AD_CONTRACT_ADDRESS)
-        const storage = await contract.storage()
-        
-        const games = await storage.games
-        return games
-      },
+      const contract = await this.tezos.wallet.at(AD_CONTRACT_ADDRESS)
+      const storage = await contract.storage()        
+      const games = await storage.games
+      for (let game in games) {
+        console.log('a')
+        console.log(games[game].value)
+      }
+      return games
+    },
+    async showLearnMore() {
+        if (this.showInfo)  {
+            this.showInfo = false
+        } else {
+            this.showInfo = true
+        }
+    }
   },
 }
 </script>
@@ -285,38 +294,41 @@ export default {
 <template>
   <div class="canvas-container" >        
     <div class="rowFlex">
-          <div class="label" @click="showLearnMore"> HOW TO PLAY </div>
-            <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
-            <div>
-              <ul>
-                <li v-for="(key, value) in gameInfo" :key="key" :value="value">{{ key }}</li>
-              </ul>
-            </div>
-          </div>
+      <div class="label" @click="showLearnMore"> HOW TO PLAY </div>
+        <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
+        <div>
+          <ul>
+            <li v-for="(key, value) in gameInfo" :key="key" :value="value">{{ key }}</li>
+          </ul>
+        </div>
       </div>
-      <div class="rowFlex"> 
-        <div class="gameManagement">Pot Balance: {{ potBalance }} {{this.tezosSymbol}} </div>
-        <div class="gameManagement">Your Bet: {{ thisBet }} {{this.tezosSymbol}} </div>
-
-      </div>
-      
-      <div 
-        @click="flipCard"
-        class="mainBody"
-        ref="container"
-      >
-      </div>
-      <div class="rowFlex">
-        <select class="txlRank" v-model="highLow"> PICK: 
-                <option v-for="key in ['Ace Low', 'Ace High']" :key="key" > {{ key }} </option>
-        </select>
-        <div class="actionButton" @click="betBC">Ante up and play!</div>     
-        <div class="actionButton" @click="continueBet">Bet On Acey Deucey</div>
-        <select class="txlRank" v-model="thisBet"> PICK: 
-                <option v-for="key in thisBets" :key="key" > {{ key }} </option>
-        </select>
-        <div class="actionButton" @click="getRandomNumberBC"> Ask the Oracle </div>
-      </div>
+    </div>  
+    <div class="rowFlex">
+        <div class="label">MY GAME HUB </div>
+        
+        
+    </div>    
+    <div 
+      @click="flipCard"
+      class="mainBody"
+      ref="container"
+    >
+    </div>
+    <div class="rowFlex"> 
+      <div class="gameManagement">Pot Balance: {{ potBalance }} {{this.tezosSymbol}} </div>
+      <div class="gameManagement">Your Bet: {{ thisBet }} {{this.tezosSymbol}} </div>
+    </div> 
+    <div class="rowFlex">
+      <select class="selectBox" v-model="highLow"> PICK: 
+        <option v-for="key in ['Ace Low', 'Ace High']" :key="key" > {{ key }} </option>
+      </select>
+      <div class="actionButton" @click="betBC">Ante up and play!</div>     
+      <div class="actionButton" @click="continueBet">Bet On Acey Deucey</div>
+      <select class="selectBox" v-model="thisBet"> PICK: 
+        <option v-for="key in thisBets" :key="key" > {{ key }} </option>
+      </select>
+      <div class="actionButton" @click="getRandomNumberBC"> Ask the Oracle </div>
+    </div> 
   </div>
 </template>
 

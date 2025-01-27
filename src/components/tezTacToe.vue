@@ -522,8 +522,6 @@ export default {
             }
         },
         async showLearnMore() {
-            console.log('click me learn more')
-            //this.showInfo = true
             if (this.showInfo)  {
                 this.showInfo = false
             } else {

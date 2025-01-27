@@ -26,7 +26,7 @@ export const OBJECT_CONTRACT = 'KT1FvqJwEDWb1Gwc55Jd1jjTHRVWbYKUUpyq' //
 
 export const ORACLE_ADDRESS = 'KT1QJp5AjDN7qQuz4dmh9iXmRSkMmAYVkx1A'
 
-export const AD_CONTRACT_ADDRESS = 'KT1AGmRhBZ7s13AYEm5m6H5JrQj1vRnAdB6v'
+export const AD_CONTRACT_ADDRESS = 'KT1NBv2LSnpMcJ4yBUWyvJx24U24h1nok94m'
 
 //export const CONTRACT_ADDRESS = 'KT1BHFYWTKyfErwx491rQ3P4c5MuFEXU2Wja' // V0.1
 
@@ -51,16 +51,12 @@ export const NFT_INFO = [
 
 ]
 
-
 export const AD_GAME_INFO = [
-    "More Information Coming Soon, but here's the tl;dr",
-    'All games on thextz.life plan to generate revenue in the form of XTZ',
-    'This revenue will be shared evenly among the holders with an inverse weight against NFT rank',
-    "There's only 275 of them and already over 100 unique owners",
-    "They are only 2.725 XTZ on primary!",
-    "The only way to cash out from the contract is by hodling the NFTs",
-    "A separate smart contract takes snaps shots of the NFTs owners and monitors for sales"
-
+    "Ante up for 0.5 XTZ and choose Ace High or Ace Low",
+    "Your bet goes into the pot (minus the 3% 2.725K holder fee)",
+    'If you get a pair to start, you get half your bet back and the game is over',
+    "If the cards don't match, then you can bet up to the pot that the next card will between your low and high card",
+    "3% of bets are shared amoung 2.725K holders!"
 ]
 
 export const GAME_INFO = [
