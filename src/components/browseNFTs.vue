@@ -848,7 +848,6 @@ export default {
       271: 83,
       272: 245
     }
-
     this.objectUrl = 'https://objkt.com/users/tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w?fa_contract=KT1EpGgjQs73QfFJs9z7m1Mxm5MTnpC2tqse&availability=for_sale'
     this.objectKalaUrl = 'https://objkt.com/tokens/kalamint/'
     this.ipfsHttpsLink = "https://ipfs.io/ipfs/"
@@ -879,12 +878,14 @@ export default {
     this.renderer = new Three.WebGLRenderer({antialias: true});
     this.socket.emit("resizeGame", window.innerWidth)
     this.$refs.container.appendChild(this.renderer.domElement);
+    this.selectRandom()
     this.buildGame()
     this.getNftData()
     this.renderer.render(this.scene, this.camera);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.animateNft()
     this.socket.emit("resizeGame", window.innerWidth)    
+    
   },
   methods: {
     async animate() {
