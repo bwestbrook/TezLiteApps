@@ -179,7 +179,7 @@ export default {
   border-radius: 5px;
   border-width: 8px;
   color: #fff;
-  border-color: #3f3737;
+  border-color: #190857;
   flex: 1;
   font-size: small;
 }
@@ -252,6 +252,7 @@ export default {
   border-radius: 4px;
   border-width: 2px;
   border-color: #ffffff;
+  flex: 1;
 
 }
 .infoPopup {

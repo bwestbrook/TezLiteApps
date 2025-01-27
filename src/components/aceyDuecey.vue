@@ -305,19 +305,18 @@ export default {
     </div>  
     <div class="rowFlex">
         <div class="label">MY GAME HUB </div>
-        
-        
     </div>    
+    <div class="rowFlex"> 
+      <div class="selectBox">Pot Balance: {{ potBalance }} {{this.tezosSymbol}} </div>
+      <div class="selectBox">Your Bet: {{ thisBet }} {{this.tezosSymbol}} </div>
+    </div> 
     <div 
       @click="flipCard"
       class="mainBody"
       ref="container"
     >
     </div>
-    <div class="rowFlex"> 
-      <div class="gameManagement">Pot Balance: {{ potBalance }} {{this.tezosSymbol}} </div>
-      <div class="gameManagement">Your Bet: {{ thisBet }} {{this.tezosSymbol}} </div>
-    </div> 
+
     <div class="rowFlex">
       <select class="selectBox" v-model="highLow"> PICK: 
         <option v-for="key in ['Ace Low', 'Ace High']" :key="key" > {{ key }} </option>
