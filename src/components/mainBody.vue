@@ -165,6 +165,7 @@ export default {
   border-style: ridge;
   border-radius: 5px;
   border-width: 3px;
+  cursor: grab;
   color: #fff;
   border-color: #ffffff;
   flex: 1;
@@ -203,6 +204,7 @@ export default {
   border-color: #ffffff;
   flex: 1;
   font-size: small;
+  cursor: grab;
 }
 .label {
   align-content: center;
