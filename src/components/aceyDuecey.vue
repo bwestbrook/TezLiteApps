@@ -28,13 +28,21 @@ export default {
     this.scene = new Three.Scene();
     this.camera = new Three.PerspectiveCamera(45, 1, 1, 5000);
     this.camera.position.x = 0;
-    this.camera.position.y = 0;
+    this.camera.position.y = -100;
     this.camera.position.z = 200;
     this.camera.lookAt(this.scene.position)
-    const loader = new Three.TextureLoader();    
-    this.backCardTexture = loader.load(require('../assets/pokerCard.png')); 
-    this.cardMaterial = new Three.MeshBasicMaterial({ map: this.backCardTexture });
-    this.defaultGeometry = new Three.BoxGeometry(50, 100, 0.1, 1)
+    this.degrees = 0
+    this.loader = new Three.TextureLoader();
+    this.card1Texture = this.loader.load(require('../assets/pokerCard.png')); 
+    this.card2Texture = this.loader.load(require('../assets/pokerCard.png')); 
+    this.card1Material = new Three.MeshBasicMaterial({ map: this.card1Texture });
+    this.card2Material = new Three.MeshBasicMaterial({ map: this.card2Texture });
+    this.defaultGeometry = new Three.BoxGeometry(130, 130, 1, 1)
+    ///
+    this.aceSpadeTexture = this.loader.load(require('../assets/Spade-Ace.png')); 
+    this.kingSpadeTexture = this.loader.load(require('../assets/Spade-King.png')); 
+
+    this.cardGeometry = new Three.BoxGeometry(50, 100, 0.1, 1)
     //Socket 
     this.socket.on('resizeGame', (width) => {
       console.log("AD", width)
@@ -78,22 +86,43 @@ export default {
       requestAnimationFrame(this.showCards);  
       this.renderer.render(this.scene, this.camera);
     },
-    async flipCard() {
-      requestAnimationFrame(this.flipCard);  
+    async teaseCards() {
+      requestAnimationFrame(this.teaseCards);  
       let time = Date.now() * 0.001;
-      this.card1.rotation.y = time;
+      this.card1.rotation.y = -time;
       this.card2.rotation.y = -time;
       this.renderer.render(this.scene, this.camera);
     },
-    async buildGame() {
-      const card1 = new Three.Mesh(this.defaultGeometry, this.cardMaterial); 
-      const card2 = new Three.Mesh(this.defaultGeometry, this.cardMaterial); 
-      this.card1 = card1
-      this.card2 = card2
-      card1.position.set(-40, 0, 0);
-      await this.board.add(card1)    
-      card2.position.set(40, 0, 0);
-      await this.board.add(card2)   
+    async flipCards() {
+      this.teaseCards()
+      //this.card1.material.map = this.aceSpadeTexture
+      //his.card2.material.map = this.kingSpadeTexture
+      //const displayLink = this.ipfsHttpsLink + ipfsHash.split('//')[1]
+      //const nftTexture = await this.loader.load(displayLink);
+      //const card1Textrue = await this.loader.load(require('../assets/Spade-Ace.png'));
+      this.loader.load(require('../assets/Spade-Ace.png'), (texture) => {
+        this.card1Texture.dispose(); // Dispose old texture
+        this.card1Texture = texture;
+        this.card1.material.map = texture;
+        this.card1.material.needsUpdate = true;
+      });
+
+      //const card2Textrue = await this.loader.load(require('../assets/Spade-King.png'));
+      this.loader.load(require('../assets/Spade-King.png'), (texture) => {
+        this.card2Texture.dispose(); // Dispose old texture
+        this.card2Texture = texture;
+        this.card2.material.map = texture;
+        this.card2.material.needsUpdate = true;
+      });
+
+    },
+    async buildGame() {      
+      this.card1 = new Three.Mesh(this.cardGeometry, this.card1Material); 
+      this.card2 = new Three.Mesh(this.cardGeometry, this.card2Material); 
+      this.card1.position.set(-40, 0, 0);
+      await this.board.add(this.card1)    
+      this.card2.position.set(40, 0, 0);
+      await this.board.add(this.card2)   
       await this.scene.add(this.board)                
     },
     async resizeGameRender(width) {
@@ -104,17 +133,18 @@ export default {
       await this.renderer.setSize(this.gameSize, this.gameSize)
     },  
     async continueBet() {
+      //const startTime = Date.now() * 0.0001;
+      this.flipCards(0)
       const games = await this.getGamesFromContractBC()
-      console.log(games.valueMap)
       const allGames = await games.valueMap
       const myObject = Object.fromEntries(allGames);
       const allGamesObj =  Object.values(myObject)
       let gameId = 2
-      let aceHigh = 0
-      console.log(allGamesObj[gameId], gameId)
+      console.log(allGamesObj[gameId])
       for (let game of allGamesObj) {
-        aceHigh = game['aceHigh'].toNumber()
-        console.log(game, aceHigh)
+
+        //let aceHigh = allGames[game]['aceHigh'].toNumber()
+        console.log(game, allGames[game])
       }
       
       // SET GAME ID DYANMICALLy
@@ -223,10 +253,11 @@ export default {
       >
       </div>
       <div class="rowFlex">
-        <div class="actionButton" @click="betBC">Ante up and play!</div>
-          <select class="txlRank" v-model="highLow">
+        <select class="txlRank" v-model="highLow"> PICCK: 
                 <option v-for="key in ['Ace Low', 'Ace High']" :key="key" > {{ key }} </option>
           </select>
+        <div class="actionButton" @click="betBC">Ante up and play!</div>
+     
         <div class="actionButton" @click="continueBet">Continue Hand</div>
         <div class="actionButton" @click="getRandomNumberBC"> Ask the Oracle </div>
       </div>

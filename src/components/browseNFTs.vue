@@ -846,7 +846,8 @@ export default {
       269: 49,
       270: 89,
       271: 83,
-      272: 245}
+      272: 245
+    }
 
     this.objectUrl = 'https://objkt.com/users/tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w?fa_contract=KT1EpGgjQs73QfFJs9z7m1Mxm5MTnpC2tqse&availability=for_sale'
     this.objectKalaUrl = 'https://objkt.com/tokens/kalamint/'
@@ -873,11 +874,8 @@ export default {
       console.log("BFN", width)
       this.resizeGameRender(width)
     }); 
-
   },
-  mounted () {
-
-    
+  mounted () {    
     this.renderer = new Three.WebGLRenderer({antialias: true});
     this.socket.emit("resizeGame", window.innerWidth)
     this.$refs.container.appendChild(this.renderer.domElement);
@@ -886,8 +884,7 @@ export default {
     this.renderer.render(this.scene, this.camera);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.animateNft()
-    this.socket.emit("resizeGame", window.innerWidth)
-    
+    this.socket.emit("resizeGame", window.innerWidth)    
   },
   methods: {
     async animate() {
@@ -953,30 +950,48 @@ export default {
       const data = await response.json();
       const address = data[0].address
       if (reduceAddress(address) == 't.Upyq') {
-        this.owner = 'PRIMARY - BUY on OBJKT.COM'
+        this.owner = 'PRIMARY - OBJKT.COM'
       } else {
         this.owner = reduceAddress(address)
-      }
-      
+      }      
     },
     async setNewNftImage() {
       const ipfsHash = await this.getIpfsHash()
       const displayLink = this.ipfsHttpsLink + ipfsHash.split('//')[1]
-      const nftTexture = await this.loader.load(displayLink);
       this.loader.load(displayLink, (texture) => {
         this.nftTexture.dispose(); // Dispose old texture
         this.nftTexture = texture;
         this.nftDisplay.material.map = texture;
         this.nftDisplay.material.needsUpdate = true;
       });
-      const nftMaterial = new Three.MeshBasicMaterial({ map: nftTexture });
-      const nftDisplay = new Three.Mesh(this.defaultGeometry, nftMaterial); 
-      this.board.add(nftDisplay)
-      nftDisplay.position.set(0, 0, 0);     
     },
     async selectRandom() {  
       const newId = await getRandomIntInclusive(1, 273)
       this.txlId = newId    
+      this.getNftData()  
+    },
+    async prevTxl() {  
+      this.txlId -= 1
+      if (this.txlId < 0) {
+        this.txlId = 0
+      }    
+      this.getNftData()  
+    },
+    async nextTxl() {  
+      this.txlId += 1
+      if (this.txlId > 273) {
+        this.txlId = 273
+      }    
+      this.getNftData()  
+    },
+    async prevRank() {  
+      this.txlRanking -= 1
+      this.txlId = this.txlRevRankings[this.txlRanking]     
+      this.getNftData()  
+    },
+    async nextRank() {  
+      this.txlRanking += 1
+      this.txlId = this.txlRevRankings[this.txlRanking] 
       this.getNftData()  
     },
     async showLearnMore() {
@@ -995,23 +1010,29 @@ export default {
 <template>
  
   <div class="centerBody">
-    
-    
-    <div class="gameManagement" >    
-
+    <div class="gameManagement" > 
         <div class="rowFlex">
-          <div class="gameManagement" > 
-            <div>Select Rank </div>
-            <select class="txlRank" v-model="txlRanking" @change="getNftDataRank()">
-              <option v-for="(key, value) in txlRevRankings" :key="key" :value="value"> {{ value}} </option>
-            </select>
-          </div> 
-          <div class="gameManagement" > 
+          <div class="gameManagement"> 
+            <div class="gameManagement" @click="prevRank()" > &larr;  Prev Rank </div>
+            <div class="gameManagement" @click="prevTxl()" >  &larr;  Prev ID </div>
+          </div>   
+            <div class="gameManagement" >      
+              <div>Select Rank </div>
+              <select class="txlRank" v-model="txlRanking" @change="getNftDataRank()">
+                <option v-for="(key, value) in txlRevRankings" :key="key" :value="value"> {{ value}} </option>
+              </select>
+            </div>           
+          <div class="gameManagement"> 
             <div>Select ID </div>
             <select class="txlRank" v-model="txlId" @change="getNftDataId()">
               <option v-for="(key, value) in idLookUp" :key="key" :value="value"> {{ value}} </option>
             </select>
           </div> 
+          <div class="gameManagement"> 
+            <div class="gameManagement" @click="nextRank()" > Next Rank  &rarr; </div>
+            <div class="gameManagement" @click="nextTxl()" > Next ID  &rarr; </div>
+          </div>
+        </div>
         </div>
         <div class="rowFlex">  
           <div class="actionButton" @click="selectRandom"> Select Random TXL </div>
@@ -1037,15 +1058,15 @@ export default {
         <div class="gameManagement">
           <div class="rowFlex">       
             <div class="txlRank"> Rank: {{ txlRanking }}</div>
+            <div class="txlRank"> ID: {{ txlId }}</div>
             <div class="txlRank"> Owner: {{ owner }}</div>
+           
             <div class="txlRank" v-for="(key, value) in txlData" :key="key" :value="value"> {{ value }}: {{ key }} </div>   
         
           </div> 
         </div>
-    </div>
-  </div>
+      </div>
 </template>
-
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style >
