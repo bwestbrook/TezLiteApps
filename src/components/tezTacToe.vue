@@ -546,13 +546,12 @@ export default {
             </div>
             </div>
         </div>
-
         <div class="rowFlex" >            
-            <div class="actionButton" @click="createGameBC(0)" > New 0{{this.tezosSymbol}} Game </div>  
-            <div class="actionButton" @click="createGameBC(0.5)" > New 0.5{{this.tezosSymbol}} Game</div> 
-            <div class="actionButton" @click="createGameBC(1)" > New 1{{this.tezosSymbol}} Game</div>  
-            <div class="actionButton" @click="createGameBC(5)" > New 5{{this.tezosSymbol}} Game</div> 
-            <div class="actionButton" @click="createGameBC(10)" > New 10{{this.tezosSymbol}} Game</div>   
+            <div class="actionButton" @click="createGameBC(0)"> New 0{{this.tezosSymbol}} Game </div>  
+            <div class="actionButton" @click="createGameBC(0.5)"> New 0.5{{this.tezosSymbol}} Game</div> 
+            <div class="actionButton" @click="createGameBC(1)"> New 1{{this.tezosSymbol}} Game</div>  
+            <div class="actionButton" @click="createGameBC(5)"> New 5{{this.tezosSymbol}} Game</div> 
+            <div class="actionButton" @click="createGameBC(10)"> New 10{{this.tezosSymbol}} Game</div>   
         </div>    
         <div class="rowFlex">
             <div class="gameSelect"> MY GAME HUB </div>

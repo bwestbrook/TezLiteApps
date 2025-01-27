@@ -5,7 +5,7 @@
 import * as Three from 'three'
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { RemoteSigner } from '@taquito/remote-signer';
-import { GAME_WIDTH_FRACTION, MAX_GAME_SIZE, ORACLE_ADDRESS, NODE_URL, AD_CONTRACT_ADDRESS} from '../constants'
+import { GAME_WIDTH_FRACTION, MAX_GAME_SIZE, ORACLE_ADDRESS, NODE_URL, AD_CONTRACT_ADDRESS, AD_GAME_INFO} from '../constants'
 
 export default {
     name: 'aceyDuecy',
@@ -14,8 +14,14 @@ export default {
   },
   data () {
     return {
+      gameInfo: AD_GAME_INFO,
       highLow: 'Ace Low',
-      tezosSymbol: 'ꜩ'
+      tezosSymbol: 'ꜩ',
+      potBalance: 0,
+      ante: 0.5, 
+      betIncrement: 0.25, 
+      thisBet: 0.5,
+      thisBets: []
 
     }
   },
@@ -24,19 +30,22 @@ export default {
     //Three 
     this.gameSize = window.innerWidth * GAME_WIDTH_FRACTION
     this.maxGameSize = MAX_GAME_SIZE
-    this.board = new Three.Group()
+    this.board = new Three.Group();
     this.scene = new Three.Scene();
+
     this.camera = new Three.PerspectiveCamera(45, 1, 1, 5000);
     this.camera.position.x = 0;
-    this.camera.position.y = -100;
-    this.camera.position.z = 200;
+    this.camera.position.y = -50;
+    this.camera.position.z = 250;
     this.camera.lookAt(this.scene.position)
     this.degrees = 0
     this.loader = new Three.TextureLoader();
     this.card1Texture = this.loader.load(require('../assets/pokerCard.png')); 
     this.card2Texture = this.loader.load(require('../assets/pokerCard.png')); 
+    this.card3Texture = this.loader.load(require('../assets/pokerCard.png'));
     this.card1Material = new Three.MeshBasicMaterial({ map: this.card1Texture });
     this.card2Material = new Three.MeshBasicMaterial({ map: this.card2Texture });
+    this.card3Material = new Three.MeshBasicMaterial({ map: this.card2Texture });
     this.defaultGeometry = new Three.BoxGeometry(130, 130, 1, 1)
     ///
     this.aceSpadeTexture = this.loader.load(require('../assets/Spade-Ace.png')); 
@@ -45,12 +54,12 @@ export default {
     this.cardGeometry = new Three.BoxGeometry(50, 100, 0.1, 1)
     //Socket 
     this.socket.on('resizeGame', (width) => {
-      console.log("AD", width)
       this.resizeGameRender(width)
     }); 
     this.socket.on('newRandomNumber', (randomNumber) => {
       console.log("RN", randomNumber)
     }); 
+    
     try {
         const sub = this.tezos.stream.subscribeEvent({
             tag: 'railLoss',
@@ -76,9 +85,8 @@ export default {
     this.renderer.render(this.scene, this.camera);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.showCards()
-    this.socket.emit("resizeGame", window.innerWidth)
-    
-
+    this.socket.emit("resizeGame", window.innerWidth)    
+    this.getPotBalance()
   },
   methods: {
     async showCards() {
@@ -104,7 +112,6 @@ export default {
       if (currentRotation >= targetRotation) {
         console.log('a.', currentRotation)
         currentRotation = targetRotation;
-
       }
       this.card1.rotation.y = -currentRotation;
       this.card2.rotation.y = currentRotation;
@@ -125,11 +132,15 @@ export default {
     },
     async buildGame() {      
       this.card1 = new Three.Mesh(this.cardGeometry, this.card1Material); 
-      this.card2 = new Three.Mesh(this.cardGeometry, this.card2Material); 
-      this.card1.position.set(-40, 0, 0);
+      this.card1.position.set(-60, -30, 0);
       await this.board.add(this.card1)    
-      this.card2.position.set(40, 0, 0);
+      this.card2 = new Three.Mesh(this.cardGeometry, this.card2Material); 
+      this.card2.position.set(60, -30, 0);
       await this.board.add(this.card2)   
+      this.card3 = new Three.Mesh(this.cardGeometry, this.card3Material); 
+      this.card3.position.set(0, 50, 0);
+      this.card3.visible = false
+      await this.board.add(this.card3)   
       await this.scene.add(this.board)                
     },
     async resizeGameRender(width) {
@@ -180,7 +191,8 @@ export default {
               return op.confirmation().then(() => op.opHash)
           })
           .then((hash) => {
-              console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
+              console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)
+              this.getPotBalance()})
           .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
     }, 
     async betBC() {      
@@ -211,7 +223,11 @@ export default {
               return op.confirmation().then(() => op.opHash)
           })
           .then((hash) => {
-              console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
+              console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)
+              this.getPotBalance()
+              this.flipCards()
+              this.card3.visible = true
+          })
           .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
     }, 
     async getRandomNumberBC() {      
@@ -240,9 +256,25 @@ export default {
       return signer
     },
     // Read the contract
+    async getPotBalance() {
+    const contract = await this.tezos.wallet.at(AD_CONTRACT_ADDRESS)
+    const storage = await contract.storage()
+    this.potBalance = storage.pot.toNumber() * 1e-6
+    this.thisBets = []
+    let bet = this.ante
+    while (bet < this.potBalance + this.betIncrement) {
+      this.thisBets.push(bet)
+      bet += this.betIncrement
+    }
+    console.log(this.thisBets)
+    console.log('setting PB')
+    console.log(this.potBalance)
+    },
+    // Read the contract
     async getGamesFromContractBC() {
         const contract = await this.tezos.wallet.at(AD_CONTRACT_ADDRESS)
         const storage = await contract.storage()
+        
         const games = await storage.games
         return games
       },
@@ -252,7 +284,22 @@ export default {
 
 <template>
   <div class="canvas-container" >        
-      !!! NEW GAME ALERT !!!
+    <div class="rowFlex">
+          <div class="label" @click="showLearnMore"> HOW TO PLAY </div>
+            <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
+            <div>
+              <ul>
+                <li v-for="(key, value) in gameInfo" :key="key" :value="value">{{ key }}</li>
+              </ul>
+            </div>
+          </div>
+      </div>
+      <div class="rowFlex"> 
+        <div class="gameManagement">Pot Balance: {{ potBalance }} {{this.tezosSymbol}} </div>
+        <div class="gameManagement">Your Bet: {{ thisBet }} {{this.tezosSymbol}} </div>
+
+      </div>
+      
       <div 
         @click="flipCard"
         class="mainBody"
@@ -260,19 +307,16 @@ export default {
       >
       </div>
       <div class="rowFlex">
-        <select class="txlRank" v-model="highLow"> PICCK: 
+        <select class="txlRank" v-model="highLow"> PICK: 
                 <option v-for="key in ['Ace Low', 'Ace High']" :key="key" > {{ key }} </option>
-          </select>
-        <div class="actionButton" @click="betBC">Ante up and play!</div>
-     
-        <div class="actionButton" @click="continueBet">Continue Hand</div>
+        </select>
+        <div class="actionButton" @click="betBC">Ante up and play!</div>     
+        <div class="actionButton" @click="continueBet">Bet On Acey Deucey</div>
+        <select class="txlRank" v-model="thisBet"> PICK: 
+                <option v-for="key in thisBets" :key="key" > {{ key }} </option>
+        </select>
         <div class="actionButton" @click="getRandomNumberBC"> Ask the Oracle </div>
       </div>
-      
-
-
-      
-      !!! NEW GAME ALERT !!!
   </div>
 </template>
 

@@ -51,6 +51,18 @@ export const NFT_INFO = [
 
 ]
 
+
+export const AD_GAME_INFO = [
+    "More Information Coming Soon, but here's the tl;dr",
+    'All games on thextz.life plan to generate revenue in the form of XTZ',
+    'This revenue will be shared evenly among the holders with an inverse weight against NFT rank',
+    "There's only 275 of them and already over 100 unique owners",
+    "They are only 2.725 XTZ on primary!",
+    "The only way to cash out from the contract is by hodling the NFTs",
+    "A separate smart contract takes snaps shots of the NFTs owners and monitors for sales"
+
+]
+
 export const GAME_INFO = [
     'The goal of the game is to connect four in a row before you oponent does!',
     'Sync your wallet and check out the game center ',
