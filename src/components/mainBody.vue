@@ -165,7 +165,7 @@ export default {
   border-style: ridge;
   border-radius: 5px;
   border-width: 3px;
-  cursor: grab;
+  cursor: pointer;
   color: #fff;
   border-color: #ffffff;
   flex: 1;
@@ -183,6 +183,7 @@ export default {
   border-color: #190857;
   flex: 1;
   font-size: small;
+  cursor: pointer;
 }
 .gameCenter {
   align-content: center;
@@ -204,7 +205,7 @@ export default {
   border-color: #ffffff;
   flex: 1;
   font-size: small;
-  cursor: grab;
+  cursor: pointer;
 }
 .label {
   align-content: center;

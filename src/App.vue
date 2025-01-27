@@ -16,7 +16,7 @@ let globalWallet = undefined
 
    
 export default {
-  name: 'App',
+  name: 'Tezos XTZ Lounge',
   components: {
     mainBody
   },
