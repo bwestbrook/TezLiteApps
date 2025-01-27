@@ -1018,7 +1018,7 @@ export default {
             <div class="actionButton" @click="prevTxl()" >  &larr;  Prev ID </div>
           </div>   
             <div class="gameManagement" >      
-              <div>Select Rank </div>
+              <div class="gameManagement">Select Rank </div>
               <select class="selectBox" v-model="txlRanking" @change="getNftDataRank()">
                 <option v-for="(key, value) in txlRevRankings" :key="key" :value="value"> {{ value}} </option>
               </select>
@@ -1039,7 +1039,7 @@ export default {
           <div class="actionButton" @click="selectRandom"> Select Random TXL </div>
           <div class="actionButton" @click="checkThisOnObjkt(txlId)"> Buy {{ txlId.toString() }} On All Objkt.com </div>
           <div class="actionButton" @click="browseAllOnObjkt"> Browse On All Objkt.com </div>
-          <div class="actionButton" @click="showLearnMore"> Learn More About 2.725K</div>
+          <div class="actionButtonHelp" @click="showLearnMore"> Learn More About 2.725K</div>
         </div>
         <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
           <div>

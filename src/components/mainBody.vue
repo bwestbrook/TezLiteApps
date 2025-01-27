@@ -132,6 +132,7 @@ export default {
   border-width: 0px;
   border-color: #504e4e;
   flex: 1;
+  cursor: default;
 }
 .rowFlex {
   justify-content: center;
@@ -146,16 +147,58 @@ export default {
   border-color: #ffffff;
   vertical-align: top;
 }
-.rowFlexBox {
-  justify-content: center;
+.gameCenter {
   align-content: center;
-  width: 100%;
-  color: #fff;
+  vertical-align: center;
+  margin: auto;
   padding: auto;
-  border-style: inset;
-  border-width: 0px;
+  margin: auto;
+  flex: 1;
+}
+.gameSelect {
+  align-content: center;
+  vertical-align: center;
+  padding: 4px;
+  margin: 4x;
+  border-style: ridge;
+  border-radius: 2px;
+  border-width: 2px;
+  color: #fff;
   border-color: #ffffff;
-  vertical-align: top;
+  flex: 1;
+  font-size: small;
+  cursor: pointer;
+}
+.txlRank {
+  align-content: center;
+  vertical-align: center;
+  padding: 5px;
+  margin: 2px;
+  width: fit-content;
+  height: 90px;
+  border-style: ridge;
+  border-radius: 2px;
+  border-width: 1px;
+  border-color: #a7a5a5;
+  flex: 1;
+  cursor: default;
+}
+.canvas-container {
+  border-style: ridge;
+  border-radius: 2px;
+  border-width: 0px;
+  border-color: #080606;
+}
+.infoPopup {
+  position: relative;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(31, 49, 66, 0.9);
+  justify-content: left;
+  align-items: left;
+  cursor: not-allowed;
 }
 .actionButton {
   align-content: center;
@@ -185,67 +228,28 @@ export default {
   font-size: small;
   cursor: pointer;
 }
-.gameCenter {
+.actionButtonHelp {
   align-content: center;
   vertical-align: center;
-  margin: auto;
-  padding: auto;
-  margin: auto;
-  flex: 1;
-}
-.gameSelect {
-  align-content: center;
-  vertical-align: center;
-  padding: 4px;
-  margin: 4x;
+  padding: 1px;
+  margin: 3px;
   border-style: ridge;
-  border-radius: 2px;
-  border-width: 2px;
+  border-radius: 5px;
+  border-width: 3px;
   color: #fff;
   border-color: #ffffff;
   flex: 1;
   font-size: small;
-  cursor: pointer;
+  cursor: help;
 }
-.label {
-  align-content: center;
-  vertical-align: center;
-  padding: 4px;
-  margin: 4x;
-  border-style: ridge;
-  border-radius: 2px;
-  border-width: 0px;
-  color: #fff;
-  border-color: #ffffff;
-  flex: 1;
-  font-size: larger;
-}
-.txlRank {
-  align-content: center;
-  vertical-align: center;
-  padding: 5px;
-  margin: 2px;
-  width: fit-content;
-  height: 90px;
-  border-style: ridge;
-  border-radius: 2px;
-  border-width: 1px;
-  border-color: #a7a5a5;
-  flex: 1;
-}
-.canvas-container {
-  border-style: ridge;
-  border-radius: 2px;
-  border-width: 0px;
-  border-color: #080606;
-}
+
 .selectBox {
   align-content: center;
   vertical-align: center;
   padding: 5px;
   margin: 2px;
   width: fit-content;
-  height: 30px;
+  height: auto;
   border-style: inset;
   border-radius: 2px;
   border-width: 0px;
@@ -256,16 +260,6 @@ export default {
   border-width: 2px;
   border-color: #ffffff;
   flex: 1;
-
-}
-.infoPopup {
-  position: relative;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(31, 49, 66, 0.9);
-  justify-content: left;
-  align-items: left;
+  cursor: pointer;
 }
 </style>

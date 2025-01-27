@@ -294,8 +294,8 @@ export default {
 <template>
   <div class="canvas-container" >        
     <div class="rowFlex">
-      <div class="label" @click="showLearnMore"> HOW TO PLAY </div>
-        <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
+      <div class="actionButtonHelp" @click="showLearnMore"> HOW TO PLAY </div>
+        <div class="infoPopup" v-if="showInfo" @click="showLearnMore"> 
         <div>
           <ul>
             <li v-for="(key, value) in gameInfo" :key="key" :value="value">{{ key }}</li>
@@ -304,7 +304,7 @@ export default {
       </div>
     </div>  
     <div class="rowFlex">
-        <div class="label">MY GAME HUB </div>
+        <div class="selectBox">MY GAME HUB </div>
     </div>    
     <div class="rowFlex"> 
       <div class="selectBox">Pot Balance: {{ potBalance }} {{this.tezosSymbol}} </div>

@@ -535,8 +535,8 @@ export default {
 
 <template>                           
         <div class="rowFlex">
-            <div class="label" @click="showLearnMore"> HOW TO PLAY </div>
-            <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
+            <div class="actionButtonHelp" @click="showLearnMore"> HOW TO PLAY </div>
+            <div class="infoPopup" v-if="showInfo" @click="showLearnMore" > 
             <div>
             <ul>
               <li v-for="(key, value) in gameInfo" :key="key" :value="value">{{ key }}</li>
@@ -554,8 +554,8 @@ export default {
         <div class="rowFlex">
             <div class="gameSelect"> MY GAME HUB </div>
         </div>
-        <div v-if="loadedGames" class="rowFlex"> 
-            <div v-if="joinableGames" class="gameCenter" >   
+        <div class="rowFlex" v-if="loadedGames" > 
+            <div class="gameCenter" v-if="joinableGames" >   
                 <div class="actionButton" @click="loadGameBC(playGameId)"> Play Game: {{ playGameId }} </div>                                       
                 <div> 
                     <div class="rowFlex">                                                       
@@ -565,7 +565,7 @@ export default {
                     </div>
                 </div>   
             </div>
-            <div v-if="joinableGames" class="gameCenter"  >  
+            <div class="gameCenter" v-if="joinableGames">  
                 <div class="actionButton" @click="joinGameBC(gameId)">   Join Game: {{ joinGameId }}  </div>                                   
                 <div> 
                     <div class="rowFlex">                                                     
@@ -575,7 +575,7 @@ export default {
                     </div>                       
                 </div>
             </div>
-            <div v-if="leavableGames"  class="gameCenter" > 
+            <div class="gameCenter" v-if="leavableGames"> 
                 <div class="actionButton" @click="leaveGameBC(gameId)">  Leave Game: {{ leaveGameId }} </div>                             
                 <div> 
                     <div class="rowFlex">                                
@@ -585,11 +585,11 @@ export default {
                     </div>
                 </div>                   
             </div>
-            <div v-if="viewableGames" class="gameCenter" > 
+            <div class="gameCenter" v-if="viewableGames"> 
                 <div class="actionButton" @click="loadGameBC(gameId)">   View Game: {{ viewGameId }} </div>                              
                 <div> 
                     <div class="rowFlex">                                
-                        <div  v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
+                        <div v-for="(key, value) in allGamesStatus" :key="key" :value="value"> 
                             <div v-if="key==3" class="gameSelect" @click="updateGame(value, 'view')"> {{value}} </div>                  
                         </div>
                     </div>
