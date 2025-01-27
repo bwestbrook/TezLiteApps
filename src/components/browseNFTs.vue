@@ -1013,8 +1013,8 @@ export default {
     <div class="gameManagement" > 
         <div class="rowFlex">
           <div class="gameManagement"> 
-            <div class="gameManagement" @click="prevRank()" > &larr;  Prev Rank </div>
-            <div class="gameManagement" @click="prevTxl()" >  &larr;  Prev ID </div>
+            <div class="actionButton" @click="prevRank()" > &larr;  Prev Rank </div>
+            <div class="actionButton" @click="prevTxl()" >  &larr;  Prev ID </div>
           </div>   
             <div class="gameManagement" >      
               <div>Select Rank </div>
@@ -1029,8 +1029,8 @@ export default {
             </select>
           </div> 
           <div class="gameManagement"> 
-            <div class="gameManagement" @click="nextRank()" > Next Rank  &rarr; </div>
-            <div class="gameManagement" @click="nextTxl()" > Next ID  &rarr; </div>
+            <div class="actionButton" @click="nextRank()" > Next Rank  &rarr; </div>
+            <div class="actionButton" @click="nextTxl()" > Next ID  &rarr; </div>
           </div>
         </div>
         </div>
