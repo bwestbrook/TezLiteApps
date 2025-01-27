@@ -94,20 +94,27 @@ export default {
       this.renderer.render(this.scene, this.camera);
     },
     async flipCards() {
-      this.teaseCards()
-      //this.card1.material.map = this.aceSpadeTexture
-      //his.card2.material.map = this.kingSpadeTexture
-      //const displayLink = this.ipfsHttpsLink + ipfsHash.split('//')[1]
-      //const nftTexture = await this.loader.load(displayLink);
-      //const card1Textrue = await this.loader.load(require('../assets/Spade-Ace.png'));
+      requestAnimationFrame(this.flipCards);  
+      //let time = Date.now() * 0.001;
+      const targetRotation = 180
+      let currentRotation = 0
+      let rotationIncrement = 0.001; // Adjust based on desired animation speed
+      this.renderer.render(this.scene, this.camera);
+      currentRotation += rotationIncrement;     
+      if (currentRotation >= targetRotation) {
+        console.log('a.', currentRotation)
+        currentRotation = targetRotation;
+
+      }
+      this.card1.rotation.y = -currentRotation;
+      this.card2.rotation.y = currentRotation;
+     
       this.loader.load(require('../assets/Spade-Ace.png'), (texture) => {
         this.card1Texture.dispose(); // Dispose old texture
         this.card1Texture = texture;
         this.card1.material.map = texture;
         this.card1.material.needsUpdate = true;
       });
-
-      //const card2Textrue = await this.loader.load(require('../assets/Spade-King.png'));
       this.loader.load(require('../assets/Spade-King.png'), (texture) => {
         this.card2Texture.dispose(); // Dispose old texture
         this.card2Texture = texture;

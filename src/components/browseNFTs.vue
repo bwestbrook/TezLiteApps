@@ -1059,10 +1059,8 @@ export default {
           <div class="rowFlex">       
             <div class="txlRank"> Rank: {{ txlRanking }}</div>
             <div class="txlRank"> ID: {{ txlId }}</div>
-            <div class="txlRank"> Owner: {{ owner }}</div>
-           
-            <div class="txlRank" v-for="(key, value) in txlData" :key="key" :value="value"> {{ value }}: {{ key }} </div>   
-        
+            <div class="txlRank"> Owner: {{ owner }}</div>           
+            <div class="txlRank" v-for="(key, value) in txlData" :key="key" :value="value"> {{ value }}: {{ key }} </div>           
           </div> 
         </div>
       </div>
