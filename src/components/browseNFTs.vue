@@ -23,7 +23,12 @@ export default {
       owner: '',
       tezosSymbol: 'ꜩ',
       intervalId: null,
-      countDownSeconds: 3
+      countDownSeconds: 10,
+      pauseRandom: true,
+      pauseState: 'Play',
+      currentRotation: 0,
+      pauseAnimation: false,
+      pauseAnimationState: 'Pause'
     }
   },
  
@@ -879,12 +884,13 @@ export default {
   },
   mounted () {    
     this.intervalId = setInterval(() => {
-      this.selectRandom();
+      if (!this.pauseRandom) {
+        this.selectRandom()
+      }
     }, 11000);
     this.intervalId = setInterval(() => {
       this.countDown();
     }, 1000);
-
     this.renderer = new Three.WebGLRenderer({antialias: true});
     this.socket.emit("resizeGame", window.innerWidth)
     this.$refs.container.appendChild(this.renderer.domElement);
@@ -893,20 +899,41 @@ export default {
     this.getNftData()
     this.renderer.render(this.scene, this.camera);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.animateNft()
+    if (this.pauseAnimation) {
+      this.dislplayNft()
+    } else {
+      this.animateNft()
+    }    
     this.socket.emit("resizeGame", window.innerWidth) 
   },
   methods: {
-    async animate() {
-      this.controls.update();
-      requestAnimationFrame(this.animate);  
+    async animateNft() {
+      this.animationFrame = requestAnimationFrame(this.animateNft); 
+      //this.nftDisplay.rotation.y = this.currentRotation
+      
+      let time = 0
+      time = Date.now() * 0.001;
+      this.nftDisplay.rotation.y = this.currentRotation + time;
       this.renderer.render(this.scene, this.camera);
     },
-    async animateNft() {
-      requestAnimationFrame(this.animateNft);  
-      let time = Date.now() * 0.001;
-      this.nftDisplay.rotation.y = time;
+    async dislplayNft() {
+      this.displayFrame = requestAnimationFrame(this.dislplayNft); 
+      this.nftDisplay.rotation.y = this.currentRotation
       this.renderer.render(this.scene, this.camera);
+    },
+    async toggleAnimation() {
+      if (this.pauseAnimation) {
+        this.pauseAnimation = false
+        this.pauseAnimationState = 'Pause'
+        cancelAnimationFrame(this.displayFrame); 
+        this.animateNft()
+      } else {
+        this.pauseAnimation = true
+        this.pauseAnimationState = 'Animate'
+        cancelAnimationFrame(this.animationFrame); 
+        this.currentRotation = this.nftDisplay.rotation.y 
+        this.dislplayNft()        
+      }
     },
     async buildGame() {
       this.nftDisplay = new Three.Mesh(this.defaultGeometry, this.nftMaterial); 
@@ -975,11 +1002,22 @@ export default {
         this.nftDisplay.material.needsUpdate = true;
       });
     },
-    async selectRandom() {  
+    async selectRandom() {        
       const newId = await getRandomIntInclusive(1, 273)
       this.txlId = newId    
       this.getNftData()  
-      this.countDownSeconds = 11
+      if (!this.pauseRandom) {
+        this.countDownSeconds = 11    
+      }
+    },
+    async togglePauseRandom() {  
+      if (this.pauseRandom) {
+        this.pauseRandom = false
+        this.pauseState = 'Pause'
+      } else {
+        this.pauseRandom = true
+        this.pauseState = 'Play'
+      }
     },
     async prevTxl() {  
       this.txlId -= 1
@@ -1013,7 +1051,10 @@ export default {
       }
     },
     async countDown() {
-      this.countDownSeconds -= 1 
+      if (!this.pauseRandom) {
+        this.countDownSeconds -= 1 
+      }
+      
     }
   }
 }
@@ -1051,8 +1092,7 @@ export default {
           <div class="actionButton" @click="checkThisOnObjkt(txlId)"> Buy {{ txlId.toString() }} On All Objkt.com </div>
           <div class="actionButton" @click="browseAllOnObjkt"> Browse On All Objkt.com </div>
           <div class="actionButtonHelp" @click="showLearnMore"> Learn More About 2.725K</div>
-        </div>
-        
+        </div>        
         <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
           <div>
             <ul>
@@ -1066,16 +1106,20 @@ export default {
           >
           </div> 
         </div>
-        <div> New TXL in {{ countDownSeconds }}</div>
-        <div class="gameManagement">
-          <div class="rowFlex">       
-            <div class="txlRank"> Rank: {{ txlRanking }}</div>
-            <div class="txlRank"> ID: {{ txlId }}</div>
-            <div class="txlRank"> Owner: {{ owner }}</div>           
-            <div class="txlRank" v-for="(key, value) in txlData" :key="key" :value="value"> {{ value }}: {{ key }} </div>           
-          </div> 
-        </div>
+        <div class="rowFlex">
+
+          <div class="actionButton" @click="toggleAnimation"> {{pauseAnimationState}}  </div>
+          <div class="gameInfo"> Random TXL in {{ countDownSeconds }} </div> 
+          <div class="actionButton" @click="togglePauseRandom"> {{pauseState}} Random </div>
+        </div>     
+        <div class="rowFlex">       
+          <div class="txlRank"> Rank: {{ txlRanking }}</div>
+          <div class="txlRank"> ID: {{ txlId }}</div>
+          <div class="txlRank"> Owner: {{ owner }}</div>           
+          <div class="txlRank" v-for="(key, value) in txlData" :key="key" :value="value"> {{ value }}: {{ key }} </div>           
+        </div> 
       </div>
+    
 </template>
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
