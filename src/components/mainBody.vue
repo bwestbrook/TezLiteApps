@@ -138,6 +138,16 @@ export default {
   margin: auto;
   flex: 1;
 }
+.gameInfo {
+  margin: 2px;
+  padding: 2px;
+  border-style: ridge;
+  border-radius: 3px;
+  border-width: 2px;
+  border-color: #ffffff;
+  flex: 1;
+  cursor: default;
+}
 .gameSelect {
   margin: 2px;
   padding: 2px;
@@ -148,6 +158,7 @@ export default {
   flex: 1;
   cursor: pointer;
 }
+
 .txlRank {
   align-content: center;
   vertical-align: center;

@@ -608,13 +608,13 @@ export default {
         </div>
 
         <div class="rowFlex" >         
-            <div class="gameSelect" > Game ID: {{ gameId }}</div>
-            <div class="gameSelect" > {{ playersInGame[0] }} {{player1Connected}} vs. {{ playersInGame[1]}} {{player2Connected}} </div>
-            <div class="gameSelect" > {{ playerTurnStr }}</div>
+            <div class="gameInfo" > Game ID: {{ gameId }}</div>
+            <div class="gameInfo" > {{ playersInGame[0] }} {{player1Connected}} vs. {{ playersInGame[1]}} {{player2Connected}} </div>
+            <div class="gameInfo" > {{ playerTurnStr }}</div>
         </div>
 
         <div class="rowFlex">
-            <div class="gameSelect" > Status: {{ blockchainStatus }}</div>
+            <div class="gameInfo" > Status: {{ blockchainStatus }}</div>
         </div>
 </template>
 
