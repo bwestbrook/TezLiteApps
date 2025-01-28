@@ -880,7 +880,7 @@ export default {
   mounted () {    
     this.intervalId = setInterval(() => {
       this.selectRandom();
-    }, 6000);
+    }, 11000);
     this.intervalId = setInterval(() => {
       this.countDown();
     }, 1000);
@@ -979,7 +979,7 @@ export default {
       const newId = await getRandomIntInclusive(1, 273)
       this.txlId = newId    
       this.getNftData()  
-      this.countDownSeconds = 6
+      this.countDownSeconds = 11
     },
     async prevTxl() {  
       this.txlId -= 1
@@ -1006,8 +1006,6 @@ export default {
       this.getNftData()  
     },
     async showLearnMore() {
-      console.log('click me learn more')
-      //this.showInfo = true
       if (this.showInfo)  {
         this.showInfo = false
       } else {
