@@ -1060,9 +1060,8 @@ export default {
             </ul>
           </div>
         </div>
-        <div class="canvas-container" >    
+        <div >    
           <div 
-            class="mainBody"
             ref="container"
           >
           </div> 

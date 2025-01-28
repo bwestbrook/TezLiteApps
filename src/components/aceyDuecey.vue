@@ -304,15 +304,13 @@ export default {
       </div>
     </div>  
     <div class="rowFlex">
-        <div class="selectBox">MY GAME HUB </div>
+        <div class="gameInfo">MY GAME HUB </div>
     </div>    
     <div class="rowFlex"> 
-      <div class="selectBox">Pot Balance: {{ potBalance }} {{this.tezosSymbol}} </div>
-      <div class="selectBox">Your Bet: {{ thisBet }} {{this.tezosSymbol}} </div>
+      <div class="gameInfo">Pot Balance: {{ potBalance }} {{this.tezosSymbol}} </div>
+      <div class="gameInfo">Your Bet: {{ thisBet }} {{this.tezosSymbol}} </div>
     </div> 
     <div 
-      @click="flipCard"
-      class="mainBody"
       ref="container"
     >
     </div>
@@ -324,7 +322,7 @@ export default {
       <div class="actionButton" @click="betBC">Ante up and play!</div>     
       <div class="actionButton" @click="continueBet">Bet On Acey Deucey</div>
       <div> 
-        <div> Bet {{ thisBet }} {{ tezosSymbol }}</div>
+        <div class="gameInfo"> Bet {{ thisBet }} {{ tezosSymbol }}</div>
         <select class="selectBox" v-model="thisBet"> 
           <option v-for="key in thisBets" :key="key" > {{ key }}  </option> 
         </select>

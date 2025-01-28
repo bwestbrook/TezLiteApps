@@ -148,6 +148,7 @@ export default {
   border-color: #ffffff;
   flex: 1;
   cursor: default;
+  font-family: 'EB Garamond';
 }
 .gameSelect {
   margin: 2px;
@@ -159,7 +160,6 @@ export default {
   flex: 1;
   cursor: pointer;
 }
-
 .txlRank {
   align-content: center;
   vertical-align: center;
@@ -204,6 +204,7 @@ export default {
   border-color: #ffffff;
   flex: 1;
   font-size: small;
+  font-family: 'EB Garamond';
 }
 .actionButtonSelected {
   align-content: center;
