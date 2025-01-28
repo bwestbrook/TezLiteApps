@@ -103,7 +103,7 @@ export default {
   margin:5px;
   padding:1px;
   max-width: 610px;
-  font-family: 'Noto Serif';
+  font-family: 'Arimo';
   display: flex;
   flex-direction: column;
   margin: auto;
