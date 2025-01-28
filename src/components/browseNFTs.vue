@@ -1031,13 +1031,13 @@ export default {
             <div class="actionButton" @click="prevTxl()" >  &larr;  Prev ID </div>
           </div>   
             <div class="gameManagement" >      
-              <div class="gameManagement">Select Rank </div>
+              <div class="gameManagement">Select New Rank </div>
               <select class="selectBox" v-model="txlRanking" @change="getNftDataRank()">
                 <option v-for="(key, value) in txlRevRankings" :key="key" :value="value"> {{ value}} </option>
               </select>
             </div>           
           <div class="gameManagement"> 
-            <div>Select ID </div>
+            <div class="gameManagement" >Select New ID </div>
             <select class="selectBox" v-model="txlId" @change="getNftDataId()">
               <option v-for="(key, value) in idLookUp" :key="key" :value="value"> {{ value}} </option>
             </select>
