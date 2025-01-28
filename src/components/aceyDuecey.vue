@@ -298,7 +298,7 @@ export default {
         <div class="infoPopup" v-if="showInfo" @click="showLearnMore"> 
         <div>
           <ul>
-            <li v-for="(key, value) in gameInfo" :key="key" :value="value">{{ key }}</li>
+            <li v-for="(key, value) in gameInfo" :key="key" :value="value">{{ key }}  </li>
           </ul>
         </div>
       </div>
@@ -323,9 +323,12 @@ export default {
       </select>
       <div class="actionButton" @click="betBC">Ante up and play!</div>     
       <div class="actionButton" @click="continueBet">Bet On Acey Deucey</div>
-      <select class="selectBox" v-model="thisBet"> PICK: 
-        <option v-for="key in thisBets" :key="key" > {{ key }} </option>
-      </select>
+      <div> 
+        <div> Bet {{ thisBet }} {{ tezosSymbol }}</div>
+        <select class="selectBox" v-model="thisBet"> 
+          <option v-for="key in thisBets" :key="key" > {{ key }}  </option> 
+        </select>
+      </div>
       <div class="actionButton" @click="getRandomNumberBC"> Ask the Oracle </div>
     </div> 
   </div>

@@ -106,6 +106,8 @@ export default {
   display: flex;
   flex-direction: column;
   margin: auto;
+  border-style: ridge;
+  border-radius: 5px;
   border-width: 2px;
   border-color: #fff;
   color: rgb(255, 255, 255);
@@ -114,38 +116,19 @@ export default {
   display: flex;
   margin:auto;
   flex-direction: column;
-  border-width: 2px;
-  border-color: #fff;
-  border-style: inset;
 }
 .gameManagement {
-  display: flex;
-  flex-direction: column;
   justify-content: center;
-  align-content: center;
   vertical-align: center;
-  align-items: center;
   width: 100%;
-  color: #fff;
   padding: auto;
-  border-style: ridge;
-  border-width: 0px;
-  border-color: #504e4e;
   flex: 1;
   cursor: default;
 }
 .rowFlex {
-  justify-content: center;
-  align-content: center;
   display: flex;
   flex-wrap: wrap;
   width: 100%;
-  color: #fff;
-  padding: auto;
-  border-style: inset;
-  border-width: 0px;
-  border-color: #ffffff;
-  vertical-align: top;
 }
 .gameCenter {
   align-content: center;
@@ -156,17 +139,13 @@ export default {
   flex: 1;
 }
 .gameSelect {
-  align-content: center;
-  vertical-align: center;
-  padding: 4px;
-  margin: 4x;
+  margin: 2px;
+  padding: 2px;
   border-style: ridge;
-  border-radius: 2px;
+  border-radius: 3px;
   border-width: 2px;
-  color: #fff;
   border-color: #ffffff;
   flex: 1;
-  font-size: small;
   cursor: pointer;
 }
 .txlRank {
@@ -242,7 +221,6 @@ export default {
   font-size: small;
   cursor: help;
 }
-
 .selectBox {
   align-content: center;
   vertical-align: center;
