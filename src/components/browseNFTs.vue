@@ -869,8 +869,8 @@ export default {
     this.camera.lookAt(this.scene.position)
     this.loader = new Three.TextureLoader();  
     this.nftTexture = this.loader.load(''); 
-    this.nftMaterial = new Three.MeshBasicMaterial({ map: this.nftTexture });
-    this.defaultGeometry = new Three.BoxGeometry(130, 130, 1, 1)
+    this.nftMaterial = new Three.MeshBasicMaterial({ map: this.nftTexture, transperant: true, alpha: 0.2});
+    this.defaultGeometry = new Three.BoxGeometry(130, 130, 3, 1)
     // Socket Management
     this.socket.on('resizeGame', (width) => {
       console.log("BFN", width)
