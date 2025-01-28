@@ -21,7 +21,9 @@ export default {
       txlRanking: 1,
       txlData: {},
       owner: '',
-      tezosSymbol: 'ꜩ'
+      tezosSymbol: 'ꜩ',
+      intervalId: null,
+      countDownSeconds: 3
     }
   },
  
@@ -848,6 +850,7 @@ export default {
       271: 83,
       272: 245
     }
+    this.selectRandom()
     this.objectUrl = 'https://objkt.com/users/tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w?fa_contract=KT1EpGgjQs73QfFJs9z7m1Mxm5MTnpC2tqse&availability=for_sale'
     this.objectKalaUrl = 'https://objkt.com/tokens/kalamint/'
     this.ipfsHttpsLink = "https://ipfs.io/ipfs/"
@@ -875,6 +878,13 @@ export default {
     }); 
   },
   mounted () {    
+    this.intervalId = setInterval(() => {
+      this.selectRandom();
+    }, 6000);
+    this.intervalId = setInterval(() => {
+      this.countDown();
+    }, 1000);
+
     this.renderer = new Three.WebGLRenderer({antialias: true});
     this.socket.emit("resizeGame", window.innerWidth)
     this.$refs.container.appendChild(this.renderer.domElement);
@@ -884,8 +894,7 @@ export default {
     this.renderer.render(this.scene, this.camera);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.animateNft()
-    this.socket.emit("resizeGame", window.innerWidth)    
-    
+    this.socket.emit("resizeGame", window.innerWidth) 
   },
   methods: {
     async animate() {
@@ -970,6 +979,7 @@ export default {
       const newId = await getRandomIntInclusive(1, 273)
       this.txlId = newId    
       this.getNftData()  
+      this.countDownSeconds = 6
     },
     async prevTxl() {  
       this.txlId -= 1
@@ -1003,6 +1013,9 @@ export default {
       } else {
         this.showInfo = true
       }
+    },
+    async countDown() {
+      this.countDownSeconds -= 1 
     }
   }
 }
@@ -1041,6 +1054,7 @@ export default {
           <div class="actionButton" @click="browseAllOnObjkt"> Browse On All Objkt.com </div>
           <div class="actionButtonHelp" @click="showLearnMore"> Learn More About 2.725K</div>
         </div>
+        
         <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
           <div>
             <ul>
@@ -1050,12 +1064,12 @@ export default {
         </div>
         <div class="canvas-container" >    
           <div 
-                @click="flipCard"
-                class="mainBody"
-                ref="container"
-              >
+            class="mainBody"
+            ref="container"
+          >
           </div> 
         </div>
+        <div> New TXL in {{ countDownSeconds }}</div>
         <div class="gameManagement">
           <div class="rowFlex">       
             <div class="txlRank"> Rank: {{ txlRanking }}</div>
