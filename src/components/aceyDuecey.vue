@@ -50,17 +50,17 @@ export default {
     this.camera.lookAt(this.scene.position)
     this.degrees = 0
     this.loader = new Three.TextureLoader();
-    this.card1Texture = this.loader.load(require('../assets/pokerCard.png')); 
-    this.card2Texture = this.loader.load(require('../assets/pokerCard.png')); 
-    this.card3Texture = this.loader.load(require('../assets/pokerCard.png'));
+    this.pokerCardLoader = require('../assets/pokerCard.png')
+    this.card1Texture = this.loader.load(this.pokerCardLoader); 
+    this.card2Texture = this.loader.load(this.pokerCardLoader); 
+    this.card3Texture = this.loader.load(this.pokerCardLoader);
     this.card1Material = new Three.MeshBasicMaterial({ map: this.card1Texture });
     this.card2Material = new Three.MeshBasicMaterial({ map: this.card2Texture });
     this.card3Material = new Three.MeshBasicMaterial({ map: this.card2Texture });
     this.cardTextures = [this.card1Texture, this.card2Texture, this.card3Texture]
     this.defaultGeometry = new Three.BoxGeometry(130, 130, 1, 1)
     ///
-    this.deck = [
-      require('../assets/pokerCard.png'),
+    this.deck = [     
       require('../assets/02_of_clubs.png'),
       require('../assets/02_of_diamonds.png'),
       require('../assets/02_of_hearts.png'),
@@ -133,9 +133,7 @@ export default {
         //excludeFailedOperations: true
       });
       subFirstTwoCards.on('data', (data) => {   
-        this.gameId = data.payload[0]["int"]
-        this.firstCard = data.payload[1]["int"]
-        this.secondCard = data.payload[2]["int"]
+        console.log(data) 
         this.myGameHub()
         this.loadGame()
         this.blockChainStatus = 'Cards Dealt!'
@@ -145,9 +143,8 @@ export default {
         address: AD_CONTRACT_ADDRESS,
         //excludeFailedOperations: true
       });
-      subLastCard.on('data', (data) => {          
-        this.gameId = data.payload[0]["int"]
-        this.lastCard = data.payload[1]["int"] - 1
+      subLastCard.on('data', (data) => { 
+        console.log(data)         
         this.myGameHub()
         this.loadGame()
         this.blockChainStatus = 'Final Card Dealt!'
@@ -190,9 +187,9 @@ export default {
       if (this.firstCard < 0) {
         return
       }
-      const card1asset = this.deck[this.firstCard - 1]
-      const card2asset = this.deck[this.secondCard - 1]
-      const card3asset = this.deck[this.lastCard - 1] 
+      const card1asset = this.deck[this.firstCard]
+      const card2asset = this.deck[this.secondCard]
+      const card3asset = this.deck[this.lastCard] 
       this.loadCardAsset(1, card1asset)
       this.loadCardAsset(2, card2asset)
       this.loadCardAsset(3, card3asset)
@@ -220,9 +217,9 @@ export default {
       this.cards = [this.card1, this.card2, this.card3]       
     },
     async resetGame() {    
-      this.loadCardAsset(1, this.deck[0])  
-      this.loadCardAsset(2, this.deck[0])  
-      this.loadCardAsset(3, this.deck[0])  
+      this.loadCardAsset(1, this.pokerCardLoader)  
+      this.loadCardAsset(2, this.pokerCardLoader)  
+      this.loadCardAsset(3, this.pokerCardLoader)  
       this.card3.visible = false            
     },
     async resizeGameRender(width) {
@@ -352,6 +349,7 @@ export default {
       this.firstCard = Number(data['games'][this.gameId]['hand'][1])
       this.secondCard = Number(data['games'][this.gameId]['hand'][2])
       this.lastCard = Number(data['games'][this.gameId]['hand'][3])
+      console.log(this.firstCard, this.secondCard)
       if (this.lastCard >= 1) {
         this.card3.visible = true
       } else {
