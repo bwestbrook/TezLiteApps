@@ -7,6 +7,8 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { RemoteSigner } from '@taquito/remote-signer';
 import { GAME_WIDTH_FRACTION, MAX_GAME_SIZE, NODE_URL, AD_CONTRACT_ADDRESS, AD_GAME_INFO} from '../constants'
 
+
+
 export default {
     name: 'aceyDuecy',
     props: ["socket", "wallet", "tezos"],
@@ -55,22 +57,25 @@ export default {
     this.defaultGeometry = new Three.BoxGeometry(130, 130, 1, 1)
     ///
     this.cards = [
-      './src/assets/Spade-Two.jpeg',
-      './src/assets/Spade-Three.jpg',
-      './src/assets/Spade-Four.png',
-      './src/assets/Spade-Five.png',
-      './src/assets/Spade-Six.png',
-      './src/assets/Spade-Seven.jpg',
-      './src/assets/Spade-Eight.jpg',
-      './src/assets/Spade-Nine.jpg',
-      './src/assets/Spade-Ten.jpg',
-      './src/assets/Spade-King.png',
-      './src/assets/Spade-Jack.jpg',
-      './src/assets/Spade-Queen.png', 
-      './src/assets/Spade-Ace.png'
+      require('../assets/pokerCard.png'),
+      require('../assets/Spade-Two.jpeg'),
+      require('../assets/Spade-Three.jpg'),
+      require('../assets/Spade-Four.png'),
+      require('../assets/Spade-Five.jpg'),
+      require('../assets/Spade-Six.png'),
+      require('../assets/Spade-Seven.jpg'),
+      require('../assets/Spade-Eight.jpg'),
+      require('../assets/Spade-Nine.jpg'),
+      require('../assets/Spade-Ten.jpg'),
+      require('../assets/Spade-King.png'),
+      require('../assets/Spade-Jack.jpg'),
+      require('../assets/Spade-Queen.png'), 
+      require('../assets/Spade-Ace.png')
          
     ]
-
+    const path = require('path');
+    const threeModulePath = require.resolve('three');
+    console.log(path, threeModulePath)
     this.cardGeometry = new Three.BoxGeometry(50, 100, 0.1, 1)
     //Socket 
     this.socket.on('resizeGame', (width) => {
@@ -145,17 +150,25 @@ export default {
     },
     async flipCards() {
       //requestAnimationFrame(this.flipCards);  
-      const card1asset = this.cards[this.firstCard - 1]
-      const card2asset = this.cards[this.secondCard - 1]
-      console.log(`'${card1asset}'`)
+      const card1asset = this.cards[this.firstCard]
+      const card2asset = this.cards[this.secondCard]
+      const card3asset = this.cards[this.lastCard]
+      console.log(card1asset)
       console.log(card2asset)
-      this.loader.load(require(card1asset), (texture) => {
+      console.log(card3asset)
+      this.loader.load((card1asset), (texture) => {
         this.card1Texture.dispose(); // Dispose old texture
         this.card1Texture = texture;
         this.card1.material.map = texture;
         this.card1.material.needsUpdate = true;
       });
-      this.loader.load(require('../assets/Spade-King.png'), (texture) => {
+      this.loader.load(require(card2asset), (texture) => {
+        this.card2Texture.dispose(); // Dispose old texture
+        this.card2Texture = texture;
+        this.card2.material.map = texture;
+        this.card2.material.needsUpdate = true;
+      });
+      this.loader.load(require(card3asset), (texture) => {
         this.card2Texture.dispose(); // Dispose old texture
         this.card2Texture = texture;
         this.card2.material.map = texture;
