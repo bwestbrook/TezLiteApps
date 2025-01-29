@@ -18,10 +18,11 @@ export default {
     return {
       gameInfo: AD_GAME_INFO,
       showInfo: false, 
-      highLow: 'Ace Low',
+      highLow: 'Ace High',
+      aceHigh: 1,
       blockChainStatus: 'No Activity',
       tezosSymbol: 'ꜩ',
-      gameId: -1, 
+      gameId: 'None', 
       firstCard: -1,
       secondCard: -1,
       lastCard: 0,
@@ -58,6 +59,7 @@ export default {
     this.defaultGeometry = new Three.BoxGeometry(130, 130, 1, 1)
     ///
     this.cards = [
+      require('../assets/pokerCard.png'),
       require('../assets/02_of_clubs.png'),
       require('../assets/02_of_diamonds.png'),
       require('../assets/02_of_hearts.png'),
@@ -132,9 +134,9 @@ export default {
       subFirstTwoCards.on('data', (data) => {   
         console.log('firstTwoCards')
         console.log(data.payload)
-        this.gameId = data.payload[0]["int"]
-        this.firstCard = data.payload[1]["int"]
-        this.secondCard = data.payload[2]["int"]
+        this.gameId = data.payload[0]["int"] - 1
+        this.firstCard = data.payload[1]["int"] - 1
+        this.secondCard = data.payload[2]["int"] - 1
         this.myGameHub()
         this.loadGame()
         this.blockChainStatus = 'Cards Dealt!'
@@ -148,7 +150,7 @@ export default {
         console.log('lastCard')
         console.log(data.payload)
         this.gameId = data.payload[0]["int"]
-        this.lastCard = data.payload[1]["int"]
+        this.lastCard = data.payload[1]["int"] - 1
         this.myGameHub()
         this.loadGame()
         this.blockChainStatus = 'Final Card Dealt!'
@@ -189,9 +191,13 @@ export default {
       if (this.lastCard == -1) {
         this.lastCard = 0
       }
+      if (this.firstCard < 0) {
+        return
+      }
+      console.log(this.firstCard, this.secondCard, this.lastCard)
       const card1asset = this.cards[this.firstCard]
       const card2asset = this.cards[this.secondCard]
-      const card3asset = this.cards[this.lastCard]
+      const card3asset = this.cards[this.lastCard] 
       this.loader.load((card1asset), (texture) => {
         this.card1Texture.dispose(); // Dispose old texture
         this.card1Texture = texture;
@@ -237,12 +243,13 @@ export default {
       if (!activeAccount) {
           return
       }          
+      console.log(this.aceHigh)
       this.blockChainStatus = 'Submitting Bet'
       await this.getSigner(activeAccount)
       await this.tezos.wallet
           .at(AD_CONTRACT_ADDRESS)
           .then((contract) => {
-            return contract.methodsObject.bet().send({amount: 0.5})
+            return contract.methods.bet(this.aceHigh).send({amount: 0.5})
           })
           .then((op) => {
             console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -310,9 +317,9 @@ export default {
             gameStatus = 'Play for Acey Duecey'
           } else if (data['games'][game]['gameStatus'] == '2') {
             gameStatus = 'Waiting For Card'
-          } else if (data['games'][game]['gameStatus'] == '3') {
-            gameStatus = 'Game Over Win'
           } else if (data['games'][game]['gameStatus'] == '4') {
+            gameStatus = 'Game Over Win'
+          } else if (data['games'][game]['gameStatus'] == '3') {
             gameStatus = 'Game Over Loss'
           }else if (data['games'][game]['gameStatus'] == '5') {
             gameStatus = 'Game Over Pair Loss'
@@ -325,10 +332,19 @@ export default {
         i ++
       }
     },
-    // Populate Interface
+    // Render Interface
     async setGameId(gameId) {
       this.gameId = gameId
       this.loadGame()
+    },
+    async toggleAceHigh() {
+      if (this.highLow == 'Ace High') {
+        this.aceHigh = 1
+      } else {
+        this.aceHigh = 0
+      }
+      console.log(this.aceHigh)
+
     },
     async myGameHub() {
       this.getGamesFromContractBC()
@@ -338,6 +354,9 @@ export default {
       this.getPotBalance()
     },
     async loadGame() {
+      if (this.gameId == 'None') {
+        return
+      }
       const response = await fetch(this.apiUrl);
       const data = await response.json();
       console.log(data['games'][this.gameId]['hand'])
@@ -375,7 +394,7 @@ export default {
       </div>
     </div>  
     <div class="rowFlex">
-        <div class="gameInfo">MY GAME HUB </div>
+        <div class="actionButton" @click="loadGame">MY GAME HUB </div>
         <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
     </div>    
     <div class="rowFlex"> 
@@ -390,7 +409,7 @@ export default {
     </div>
     <div class="rowFlex">
       <select class="selectBox" v-model="highLow"> PICK: 
-        <option v-for="key in ['Ace Low', 'Ace High']" :key="key" > {{ key }} </option>
+        <option @change="toggleAceHigh"  v-for="key in ['Ace Low', 'Ace High']" :key="key" > {{ key }} </option>
       </select>
       <div class="actionButton" @click="betBC">Ante up and play!</div>     
       <div class="actionButton" @click="continueBetBC">Bet On Acey Deucey</div>
