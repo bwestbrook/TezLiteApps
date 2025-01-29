@@ -878,7 +878,6 @@ export default {
     this.defaultGeometry = new Three.BoxGeometry(130, 130, 3, 1)
     // Socket Management
     this.socket.on('resizeGame', (width) => {
-      console.log("BFN", width)
       this.resizeGameRender(width)
     }); 
   },

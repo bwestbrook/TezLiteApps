@@ -7,11 +7,11 @@ export const GAME_WIDTH_FRACTION = 0.9
 export const MAX_GAME_SIZE = 600
 
 ////// NODES ///////
-//export const NODE_URL = 'https://ghostnet.tezos.ecadinfra.com/'
+export const NODE_URL = 'https://ghostnet.tezos.ecadinfra.com/'
 
 //export const NODE_URL ='https://rpc.pariscnet.teztnets.com'
 
-export const NODE_URL = 'https://ghostnet.smartpy.io/'
+//export const NODE_URL = 'https://ghostnet.smartpy.io/'
 
 //export const NODE_URL = 'https://rpc.ghostnet.teztnets.com/'
 
@@ -24,7 +24,7 @@ export const OBJECT_CONTRACT = 'KT1FvqJwEDWb1Gwc55Jd1jjTHRVWbYKUUpyq' //
 
 export const ORACLE_ADDRESS = 'KT1V4ch1ho5GsAyxcTVQ7rwtcLNXU8YhxxWY'
 
-export const AD_CONTRACT_ADDRESS = 'KT1Xm42ANoicFP4H7jYWifCVjCk66B7j72fj'
+export const AD_CONTRACT_ADDRESS = 'KT1TcSzvz6891eK8SZ69ih2fkYKDPnm3eP9u'
 
 export const TXL_CONTRACT_ADDRESS = 'KT1NCTnB4hYTgZvUqF5JgzTGpAtnfKSKYxwc'
 

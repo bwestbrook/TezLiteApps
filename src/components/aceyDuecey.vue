@@ -19,11 +19,12 @@ export default {
       gameInfo: AD_GAME_INFO,
       showInfo: false, 
       highLow: 'Ace Low',
+      blockChainStatus: 'No Activity',
       tezosSymbol: 'ꜩ',
       gameId: -1, 
       firstCard: -1,
       secondCard: -1,
-      lastCard: -1,
+      lastCard: 0,
       potBalance: 0,
       ante: 0.5, 
       betIncrement: 0.25, 
@@ -66,10 +67,10 @@ export default {
       require('../assets/Spade-Seven.jpg'),
       require('../assets/Spade-Eight.jpg'),
       require('../assets/Spade-Nine.jpg'),
-      require('../assets/Spade-Ten.jpg'),
-      require('../assets/Spade-King.png'),
+      require('../assets/Spade-Ten.jpg'),  
       require('../assets/Spade-Jack.jpg'),
       require('../assets/Spade-Queen.png'), 
+      require('../assets/Spade-King.png'),
       require('../assets/Spade-Ace.png')
          
     ]
@@ -86,40 +87,38 @@ export default {
       this.randomNumber = randomNumber
     }); 
     try {
-        const sub = this.tezos.stream.subscribeEvent({
-            tag: 'firstTwoCards',
-            address: AD_CONTRACT_ADDRESS,
-            //excludeFailedOperations: true
-        });
-        sub.on('data', (data) => {          
-            console.log('showCards')
-            console.log(data.payload)
-            this.gameId = data.payload[0]["int"]
-            this.firstCard = data.payload[1]["int"]
-            this.secondCard = data.payload[2]["int"]
-            console.log(this.gameId)
-            this.myGameHub()
-        })
-        } catch (e) {
+      const subFirstTwoCards = this.tezos.stream.subscribeEvent({
+        tag: 'firstTwoCards',
+        address: AD_CONTRACT_ADDRESS,
+        //excludeFailedOperations: true
+      });
+      subFirstTwoCards.on('data', (data) => {   
+        console.log('firstTwoCards')
+        console.log(data.payload)
+        this.gameId = data.payload[0]["int"]
+        this.firstCard = data.payload[1]["int"]
+        this.secondCard = data.payload[2]["int"]
+        this.myGameHub()
+        this.loadGame()
+        this.blockChainStatus = 'Cards Dealt!'
+      })
+      const subLastCard = this.tezos.stream.subscribeEvent({
+        tag: 'lastCard',
+        address: AD_CONTRACT_ADDRESS,
+        //excludeFailedOperations: true
+      });
+      subLastCard.on('data', (data) => {          
+        console.log('lastCard')
+        console.log(data.payload)
+        this.gameId = data.payload[0]["int"]
+        this.lastCard = data.payload[1]["int"]
+        this.myGameHub()
+        this.loadGame()
+        this.blockChainStatus = 'Final Card Dealt!'
+      })
+      } catch (e) {
         console.log('Error', e);
     }
-    try {
-        const sub = this.tezos.stream.subscribeEvent({
-            tag: 'lastCard',
-            address: AD_CONTRACT_ADDRESS,
-            //excludeFailedOperations: true
-        });
-        sub.on('data', (data) => {          
-            console.log('lastCard')
-            console.log(data.payload)
-            this.gameId = data.payload[0]
-            this.lastCard = data.payload[1]["int"]
-            this.myGameHub()
-        })
-        } catch (e) {
-        console.log('Error', e);
-    }
-
    
   },
   mounted () {
@@ -150,31 +149,30 @@ export default {
     },
     async flipCards() {
       //requestAnimationFrame(this.flipCards);  
+      if (this.lastCard == -1) {
+        this.lastCard = 0
+      }
       const card1asset = this.cards[this.firstCard]
       const card2asset = this.cards[this.secondCard]
       const card3asset = this.cards[this.lastCard]
-      console.log(card1asset)
-      console.log(card2asset)
-      console.log(card3asset)
       this.loader.load((card1asset), (texture) => {
         this.card1Texture.dispose(); // Dispose old texture
         this.card1Texture = texture;
         this.card1.material.map = texture;
         this.card1.material.needsUpdate = true;
       });
-      this.loader.load(require(card2asset), (texture) => {
+      this.loader.load((card2asset), (texture) => {
         this.card2Texture.dispose(); // Dispose old texture
         this.card2Texture = texture;
         this.card2.material.map = texture;
         this.card2.material.needsUpdate = true;
       });
-      this.loader.load(require(card3asset), (texture) => {
-        this.card2Texture.dispose(); // Dispose old texture
-        this.card2Texture = texture;
-        this.card2.material.map = texture;
-        this.card2.material.needsUpdate = true;
+      this.loader.load((card3asset), (texture) => {
+        this.card3Texture.dispose(); // Dispose old texture
+        this.card3Texture = texture;
+        this.card3.material.map = texture;
+        this.card3.material.needsUpdate = true;
       });
-
     },
     async buildGame() {      
       this.card1 = new Three.Mesh(this.cardGeometry, this.card1Material); 
@@ -202,19 +200,20 @@ export default {
       if (!activeAccount) {
           return
       }          
+      this.blockChainStatus = 'Submitting Bet'
       await this.getSigner(activeAccount)
       await this.tezos.wallet
           .at(AD_CONTRACT_ADDRESS)
           .then((contract) => {
-              return contract.methodsObject.bet().send({amount: 0.5})
+            return contract.methodsObject.bet().send({amount: 0.5})
           })
           .then((op) => {
-              console.log(`Waiting for ${op.opHash} to be confirmed...`);
-              return op.confirmation().then(() => op.opHash)
+            console.log(`Waiting for ${op.opHash} to be confirmed...`);
+            return op.confirmation().then(() => op.opHash)
           })
           .then((hash) => {
-              console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)
-              this.card3.visible = true
+            console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)
+            this.blockChainStatus = 'Getting Cards'
           })
           .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
     }, 
@@ -223,19 +222,21 @@ export default {
       if (!activeAccount) {
           return
       }    
+      this.blockChainStatus = 'Submitting Bet'
       await this.getSigner(activeAccount)
       await this.tezos.wallet
           .at(AD_CONTRACT_ADDRESS)
           .then((contract) => {
-              return contract.methodsObject.continueBet(this.gameId).send({amount: this.thisBet})
+            return contract.methodsObject.continueBet(this.gameId).send({amount: this.thisBet})
           })
           .then((op) => {
-              console.log(`Waiting for ${op.opHash} to be confirmed...`);
-              return op.confirmation().then(() => op.opHash)
+            console.log(`Waiting for ${op.opHash} to be confirmed...`);
+            return op.confirmation().then(() => op.opHash)
           })
           .then((hash) => {
-              console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)
-              this.getPotBalance()})
+            console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)
+            this.blockChainStatus = 'Getting Final Card' 
+          })
           .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
     }, 
     async getSigner(activeAccount) { 
@@ -268,10 +269,16 @@ export default {
       for (let game in data['games']) {
         if (data['games'][game]['player'] == activeAccount.address) {
           let gameStatus = 'No Game'
-          if (data['games'][game]['gameStatus'] == '3') {
-            gameStatus = 'Game Over'
-          } else if (data['games'][game]['gameStatus'] == '1') {
+          if (data['games'][game]['gameStatus'] == '1') {
             gameStatus = 'Play for Acey Duecey'
+          } else if (data['games'][game]['gameStatus'] == '2') {
+            gameStatus = 'Waiting For Card'
+          } else if (data['games'][game]['gameStatus'] == '3') {
+            gameStatus = 'Game Over Win'
+          } else if (data['games'][game]['gameStatus'] == '4') {
+            gameStatus = 'Game Over Loss'
+          }else if (data['games'][game]['gameStatus'] == '5') {
+            gameStatus = 'Game Over Pair Loss'
           }
           this.myGames[i] = {
             gameId: game,
@@ -300,6 +307,11 @@ export default {
       this.firstCard = Number(data['games'][this.gameId]['hand'][1])
       this.secondCard = Number(data['games'][this.gameId]['hand'][2])
       this.lastCard = Number(data['games'][this.gameId]['hand'][3])
+      if (this.lastCard >= 1) {
+        this.card3.visible = true
+      } else {
+        this.card3.visible = false
+      }
       this.flipCards()
     },
     async showLearnMore() {
@@ -333,6 +345,7 @@ export default {
       <div class="gameInfo">Game Id: {{ gameId }}  </div>
       <div class="gameInfo">Pot Balance: {{ potBalance }} {{this.tezosSymbol}} </div>
       <div class="gameInfo">Your Bet: {{ thisBet }} {{this.tezosSymbol}} </div>
+      <div class="gameInfo">Blockchain Status: {{ blockChainStatus }}  </div>
     </div> 
     <div 
       ref="container"
@@ -346,9 +359,6 @@ export default {
       <div class="actionButton" @click="continueBetBC">Bet On Acey Deucey</div>
       <div> 
         <div class="gameInfo"> Bet {{ thisBet }} {{ tezosSymbol }}</div>
-        <div class="rowFlex">
-          <div> {{ firstCard }}</div> <div> {{ secondCard }}</div> <div> {{ lastCard }}</div>
-        </div>
         <select class="selectBox" v-model="thisBet"> 
           <option v-for="key in thisBets" :key="key" > {{ key }}  </option> 
         </select>

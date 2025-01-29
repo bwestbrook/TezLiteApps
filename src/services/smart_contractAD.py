@@ -9,8 +9,9 @@ def main():
             Logic largely controlled by "gameStatus"
             1: Created and cards shown
             2: Ready for third card
-            3: Game ended/Paid
-            4: Pair Drawn
+            3: Game ended Win
+            4: Game ended Loss
+            5: Pair Drawn
             '''
             #Game Control         
             self.data.admin = sp.address("tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w")
@@ -59,7 +60,7 @@ def main():
                     sp.send(self.data.txlContract, halfAmount)
                     self.data.pot -= halfAmount
                     self.data.games[params.gameId].tzGameBalance -= sp.amount
-                    self.data.games[params.gameId].gameStatus = 4
+                    self.data.games[params.gameId].gameStatus = 5
                 else:
                     self.data.games[params.gameId].gameStatus = 1
             else:
@@ -85,27 +86,33 @@ def main():
             '''
             '''
             # verify sender is game owner 
-            if self.data.games[params.gameId].gameStatus == 2:
-                self.data.games[params.gameId].gameStatus = 3
-            
+            if self.data.games[params.gameId].gameStatus == 2:                           
                 sp.cast(params.gameId, sp.int_or_nat)
                 sp.cast(sp.sender, sp.address) 
                 self.data.games[params.gameId].hand[3] = params.lastCard
-                sp.emit([params.gameId, params.firstCard, params.secondCard], tag='lastCard')
+                sp.emit([params.gameId, params.lastCard], tag='lastCard')
                 sp.cast(params.gameId, sp.int_or_nat)         
                 lowCard = self.data.games[params.gameId].hand[1]
                 highCard = self.data.games[params.gameId].hand[2]
-                if params.lastCard < lowCard:                    
-                    sp.emit('lose out', tag='loseOut')
+                if params.lastCard < lowCard:   
+                    self.data.pot += sp.amount
+                    self.data.games[params.gameId].gameStatus = 4
                 if params.lastCard == lowCard:
-                    sp.emit('rail Loss', tag='railLoss')
+                    self.data.pot -= sp.amount
+                    sp.send(self.data.txlContract, sp.amount)
+                    self.data.games[params.gameId].gameStatus = 4
                 if params.lastCard > lowCard and params.lastCard < highCard:         
                     sp.emit('win in', tag='winIn')
-                    sp.send(sp.sender, self.data.games[params.gameId].tzGameBalance) 
+                    sp.send(self.data.games[params.gameId].player, self.data.games[params.gameId].tzGameBalance) 
+                    self.data.games[params.gameId].gameStatus = 3 
+                    sp.data.pot -= self.data.games[params.gameId].tzGameBalance
                 if params.lastCard == highCard:
-                    sp.emit('rail Loss', tag='railLoss')
-                if params.lastCard > highCard:                    
-                    sp.emit('lose out', tag='loseOut')
+                    self.data.pot -= sp.amount
+                    sp.send(self.data.txlContract, sp.amount)
+                    self.data.games[params.gameId].gameStatus = 4
+                if params.lastCard > highCard:   
+                    self.data.pot += sp.amount
+                    self.data.games[params.gameId].gameStatus = 4
             else:
                 sp.emit('bad Game Status', tag='badGameStatus')
                             

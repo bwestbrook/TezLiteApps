@@ -10,7 +10,7 @@ class WatchAceyDuecy():
         '''
         self.pytezos = pytezos
         print(self.pytezos)
-        self.contractAddress = "KT1Xm42ANoicFP4H7jYWifCVjCk66B7j72fj"
+        self.contractAddress = "KT1TcSzvz6891eK8SZ69ih2fkYKDPnm3eP9u"
         self.contract = self.pytezos.contract(self.contractAddress)
         self.builder = self.pytezos.contract(self.contractAddress)
         self.wallet = self.pytezos.contract(self.contractAddress)
@@ -21,7 +21,7 @@ class WatchAceyDuecy():
         '''
         i = 0
         response = requests.get(self.apiUrl).json()
-        while i < 100:
+        while i < 10000:
             response = requests.get(self.apiUrl).json()
             for gameId, gameData in response['games'].items():
                 if gameData['gameStatus'] == '0':
@@ -32,7 +32,7 @@ class WatchAceyDuecy():
                     self.lastCard(int(gameId))
                 else:
                     print('static game')
-            time.sleep(3)
+            time.sleep(5)
             i += 1
 
     def dealCards(self, gameId):
@@ -52,9 +52,10 @@ class WatchAceyDuecy():
         '''
         '''
         lastCard = random.randint(1, 13)
-        self.pytezos.bulk(
-           self.builder.lastCard(gameId = gameId, lastCard = lastCard)
-        ).send(min_confirmations=2)
+        try:
+            self.pytezos.bulk(self.builder.lastCard(gameId = gameId, lastCard = lastCard)).send(min_confirmations=2)
+        except: 
+            print('dog')
 
 
 
