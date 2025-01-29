@@ -56,9 +56,10 @@ export default {
     this.card1Material = new Three.MeshBasicMaterial({ map: this.card1Texture });
     this.card2Material = new Three.MeshBasicMaterial({ map: this.card2Texture });
     this.card3Material = new Three.MeshBasicMaterial({ map: this.card2Texture });
+    this.cardTextures = [this.card1Texture, this.card2Texture, this.card3Texture]
     this.defaultGeometry = new Three.BoxGeometry(130, 130, 1, 1)
     ///
-    this.cards = [
+    this.deck = [
       require('../assets/pokerCard.png'),
       require('../assets/02_of_clubs.png'),
       require('../assets/02_of_diamonds.png'),
@@ -132,11 +133,9 @@ export default {
         //excludeFailedOperations: true
       });
       subFirstTwoCards.on('data', (data) => {   
-        console.log('firstTwoCards')
-        console.log(data.payload)
-        this.gameId = data.payload[0]["int"] - 1
-        this.firstCard = data.payload[1]["int"] - 1
-        this.secondCard = data.payload[2]["int"] - 1
+        this.gameId = data.payload[0]["int"]
+        this.firstCard = data.payload[1]["int"]
+        this.secondCard = data.payload[2]["int"]
         this.myGameHub()
         this.loadGame()
         this.blockChainStatus = 'Cards Dealt!'
@@ -147,8 +146,6 @@ export default {
         //excludeFailedOperations: true
       });
       subLastCard.on('data', (data) => {          
-        console.log('lastCard')
-        console.log(data.payload)
         this.gameId = data.payload[0]["int"]
         this.lastCard = data.payload[1]["int"] - 1
         this.myGameHub()
@@ -158,7 +155,6 @@ export default {
       } catch (e) {
         console.log('Error', e);
     }
-   
   },
   mounted () {
     this.renderer = new Three.WebGLRenderer({antialias: true});
@@ -194,27 +190,19 @@ export default {
       if (this.firstCard < 0) {
         return
       }
-      console.log(this.firstCard, this.secondCard, this.lastCard)
-      const card1asset = this.cards[this.firstCard]
-      const card2asset = this.cards[this.secondCard]
-      const card3asset = this.cards[this.lastCard] 
-      this.loader.load((card1asset), (texture) => {
-        this.card1Texture.dispose(); // Dispose old texture
-        this.card1Texture = texture;
-        this.card1.material.map = texture;
-        this.card1.material.needsUpdate = true;
-      });
-      this.loader.load((card2asset), (texture) => {
-        this.card2Texture.dispose(); // Dispose old texture
-        this.card2Texture = texture;
-        this.card2.material.map = texture;
-        this.card2.material.needsUpdate = true;
-      });
-      this.loader.load((card3asset), (texture) => {
-        this.card3Texture.dispose(); // Dispose old texture
-        this.card3Texture = texture;
-        this.card3.material.map = texture;
-        this.card3.material.needsUpdate = true;
+      const card1asset = this.deck[this.firstCard - 1]
+      const card2asset = this.deck[this.secondCard - 1]
+      const card3asset = this.deck[this.lastCard - 1] 
+      this.loadCardAsset(1, card1asset)
+      this.loadCardAsset(2, card2asset)
+      this.loadCardAsset(3, card3asset)
+    },
+    async loadCardAsset(card, cardasset) {
+      this.loader.load((cardasset), (texture) => {
+        this.cardTextures[card - 1].dispose(); // Dispose old texture
+        this.cardTextures[card - 1] = texture;
+        this.cards[card - 1].material.map = texture;
+        this.cards[card - 1].material.needsUpdate = true;
       });
     },
     async buildGame() {      
@@ -228,7 +216,14 @@ export default {
       this.card3.position.set(0, 50, 0);
       this.card3.visible = false
       await this.board.add(this.card3)   
-      await this.scene.add(this.board)                
+      await this.scene.add(this.board)   
+      this.cards = [this.card1, this.card2, this.card3]       
+    },
+    async resetGame() {    
+      this.loadCardAsset(1, this.deck[0])  
+      this.loadCardAsset(2, this.deck[0])  
+      this.loadCardAsset(3, this.deck[0])  
+      this.card3.visible = false            
     },
     async resizeGameRender(width) {
       this.gameSize = width * GAME_WIDTH_FRACTION
@@ -242,9 +237,9 @@ export default {
       const activeAccount = await this.wallet.client.getActiveAccount()   
       if (!activeAccount) {
           return
-      }          
-      console.log(this.aceHigh)
+      }     
       this.blockChainStatus = 'Submitting Bet'
+      this.resetGame()
       await this.getSigner(activeAccount)
       await this.tezos.wallet
           .at(AD_CONTRACT_ADDRESS)
@@ -317,9 +312,9 @@ export default {
             gameStatus = 'Play for Acey Duecey'
           } else if (data['games'][game]['gameStatus'] == '2') {
             gameStatus = 'Waiting For Card'
-          } else if (data['games'][game]['gameStatus'] == '4') {
-            gameStatus = 'Game Over Win'
           } else if (data['games'][game]['gameStatus'] == '3') {
+            gameStatus = 'Game Over Win'
+          } else if (data['games'][game]['gameStatus'] == '4') {
             gameStatus = 'Game Over Loss'
           }else if (data['games'][game]['gameStatus'] == '5') {
             gameStatus = 'Game Over Pair Loss'
@@ -343,14 +338,9 @@ export default {
       } else {
         this.aceHigh = 0
       }
-      console.log(this.aceHigh)
-
     },
     async myGameHub() {
       this.getGamesFromContractBC()
-      for (let game in this.myGames) {
-        console.log(game, this.myGames[game])
-      }
       this.getPotBalance()
     },
     async loadGame() {
@@ -359,7 +349,6 @@ export default {
       }
       const response = await fetch(this.apiUrl);
       const data = await response.json();
-      console.log(data['games'][this.gameId]['hand'])
       this.firstCard = Number(data['games'][this.gameId]['hand'][1])
       this.secondCard = Number(data['games'][this.gameId]['hand'][2])
       this.lastCard = Number(data['games'][this.gameId]['hand'][3])
@@ -394,7 +383,7 @@ export default {
       </div>
     </div>  
     <div class="rowFlex">
-        <div class="actionButton" @click="loadGame">MY GAME HUB </div>
+        <div class="actionButton" @click="myGameHub()">MY GAME HUB </div>
         <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
     </div>    
     <div class="rowFlex"> 
@@ -408,8 +397,8 @@ export default {
     >
     </div>
     <div class="rowFlex">
-      <select class="selectBox" v-model="highLow"> PICK: 
-        <option @change="toggleAceHigh"  v-for="key in ['Ace Low', 'Ace High']" :key="key" > {{ key }} </option>
+      <select @change="toggleAceHigh()" class="selectBox" v-model="highLow"> PICK: 
+        <option   v-for="key in ['Ace Low', 'Ace High']" :key="key" > {{ key }} </option>
       </select>
       <div class="actionButton" @click="betBC">Ante up and play!</div>     
       <div class="actionButton" @click="continueBetBC">Bet On Acey Deucey</div>
