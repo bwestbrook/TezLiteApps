@@ -1,0 +1,1553 @@
+{
+    storage
+        (pair
+            (address %admin)
+            (pair
+                (address %contractAddress)
+                (pair
+                    (int %currentGameIndex)
+                    (pair
+                        (int %gameWon)
+                        (pair
+                            (map %game_winners
+                                int
+                                (list int))
+                            (pair
+                                (map %games
+                                    int
+                                    (pair
+                                        (mutez %gameBalance)
+                                        (pair
+                                            (int %gamesStatus)
+                                            (pair
+                                                (map %grid int int)
+                                                (pair
+                                                    (map %metaData string int)
+                                                    (pair
+                                                        (mutez %mutezPerMove)
+                                                        (pair
+                                                            (int %playerTurn)
+                                                            (pair
+                                                                (map %players int address)
+                                                                (pair
+                                                                    (mutez %surrenderAmount)
+                                                                    (mutez %surrenderOtherAmount))))))))))
+                                (pair
+                                    (int %hasRemainingWinners)
+                                    (pair
+                                        (int %lastCoord)
+                                        (pair
+                                            (mutez %lockedBalance)
+                                            (pair
+                                                (int %setSum)
+                                                (pair
+                                                    (int %winnerHasOne)
+                                                    (pair
+                                                        (int %winnerHasTwo)
+                                                        (int %winnerHasZero)))))))))))));
+    parameter
+        (or
+            (or
+                (int %joinGame)
+                (or
+                    (int %leaveGame)
+                    (pair %makeMove
+                        (int %gameId)
+                        (int %move))))
+            (or
+                (mutez %payAdmin)
+                (or
+                    (pair %startGame
+                        (int %gameStatus)
+                        (pair
+                            (mutez %mutezPerMove)
+                            (pair
+                                (int %playerTurn)
+                                (pair
+                                    (mutez %surrenderAmount)
+                                    (mutez %surrenderOtherAmount)))))
+                    (int %surrenderGame))));
+    code
+        {
+            UNPAIR;
+            IF_LEFT
+                {
+                    IF_LEFT
+                        {
+                            DUP 2;
+                            GET 11;
+                            DUP 2;
+                            GET;
+                            IF_NONE
+                                {
+                                    PUSH int 216;
+                                    FAILWITH
+                                }
+                                {
+                                };
+                            GET 13;
+                            PUSH int 1;
+                            GET;
+                            IF_NONE
+                                {
+                                    PUSH int 216;
+                                    FAILWITH
+                                }
+                                {
+                                };
+                            SENDER;
+                            COMPARE;
+                            NEQ;
+                            IF
+                                {
+                                }
+                                {
+                                    PUSH string "already in game";
+                                    FAILWITH
+                                };
+                            PUSH int 1;
+                            DUP 3;
+                            GET 11;
+                            DUP 3;
+                            GET;
+                            IF_NONE
+                                {
+                                    PUSH int 218;
+                                    FAILWITH
+                                }
+                                {
+                                };
+                            GET 7;
+                            PUSH string "gameStatus";
+                            GET;
+                            IF_NONE
+                                {
+                                    PUSH int 218;
+                                    FAILWITH
+                                }
+                                {
+                                };
+                            COMPARE;
+                            EQ;
+                            IF
+                                {
+                                    PUSH address "---";
+                                    DUP 3;
+                                    GET 11;
+                                    DUP 3;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 220;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    GET 13;
+                                    PUSH int 1;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 220;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    COMPARE;
+                                    EQ;
+                                    IF
+                                        {
+                                            PUSH int 1
+                                        }
+                                        {
+                                            PUSH int 2
+                                        };
+                                    NIL operation;
+                                    DUP 2;
+                                    EMIT %thisPlayerIndex int;
+                                    CONS;
+                                    DIG 3;
+                                    DUP;
+                                    GET 11;
+                                    DUP;
+                                    DUP 6;
+                                    DUP;
+                                    DUG 2;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 225;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    DUP;
+                                    GET 13;
+                                    SENDER;
+                                    SOME;
+                                    DIG 7;
+                                    UPDATE;
+                                    UPDATE 13;
+                                    SOME;
+                                    SWAP;
+                                    UPDATE;
+                                    UPDATE 11;
+                                    DUP;
+                                    GET 11;
+                                    DUP;
+                                    DUP 5;
+                                    DUP;
+                                    DUG 2;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 226;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    DUP;
+                                    GET 7;
+                                    PUSH
+                                        (option int)
+                                        (Some 1);
+                                    PUSH string "gameStatus";
+                                    UPDATE;
+                                    UPDATE 7;
+                                    SOME;
+                                    SWAP;
+                                    UPDATE;
+                                    UPDATE 11;
+                                    DUG 2;
+                                    PUSH address "---";
+                                    DUP 4;
+                                    GET 11;
+                                    DUP 4;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 227;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    GET 13;
+                                    PUSH int 1;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 227;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    COMPARE;
+                                    NEQ;
+                                    IF
+                                        {
+                                            PUSH address "---";
+                                            DUP 4;
+                                            GET 11;
+                                            DUP 4;
+                                            GET;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 228;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            GET 13;
+                                            PUSH int 2;
+                                            GET;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 228;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            COMPARE;
+                                            NEQ;
+                                            IF
+                                                {
+                                                    DIG 2;
+                                                    DUP;
+                                                    GET 11;
+                                                    DUP;
+                                                    DUP 5;
+                                                    DUP;
+                                                    DUG 2;
+                                                    GET;
+                                                    IF_NONE
+                                                        {
+                                                            PUSH int 229;
+                                                            FAILWITH
+                                                        }
+                                                        {
+                                                        };
+                                                    DUP;
+                                                    GET 7;
+                                                    PUSH
+                                                        (option int)
+                                                        (Some 2);
+                                                    PUSH string "gameStatus";
+                                                    UPDATE;
+                                                    UPDATE 7;
+                                                    SOME;
+                                                    SWAP;
+                                                    UPDATE;
+                                                    UPDATE 11;
+                                                    DUG 2;
+                                                    PUSH string "game Full";
+                                                    EMIT string;
+                                                    CONS;
+                                                    DUP 3;
+                                                    GET 11;
+                                                    DUP 3;
+                                                    GET;
+                                                    IF_NONE
+                                                        {
+                                                            PUSH int 231;
+                                                            FAILWITH
+                                                        }
+                                                        {
+                                                        };
+                                                    GET 13;
+                                                    EMIT %players
+                                                        (map int address);
+                                                    CONS;
+                                                    DUP 3;
+                                                    DUP;
+                                                    GET 17;
+                                                    DIG 4;
+                                                    GET 11;
+                                                    DUP 5;
+                                                    GET;
+                                                    IF_NONE
+                                                        {
+                                                            PUSH int 232;
+                                                            FAILWITH
+                                                        }
+                                                        {
+                                                        };
+                                                    GET 9;
+                                                    ADD;
+                                                    UPDATE 17;
+                                                    DUG 2;
+                                                    DUP 3;
+                                                    DUP;
+                                                    GET 11;
+                                                    DUP;
+                                                    DUP 5;
+                                                    DUP;
+                                                    DUG 2;
+                                                    GET;
+                                                    IF_NONE
+                                                        {
+                                                            PUSH int 233;
+                                                            FAILWITH
+                                                        }
+                                                        {
+                                                        };
+                                                    DUP;
+                                                    CAR;
+                                                    DIG 7;
+                                                    GET 11;
+                                                    DUP 8;
+                                                    GET;
+                                                    IF_NONE
+                                                        {
+                                                            PUSH int 233;
+                                                            FAILWITH
+                                                        }
+                                                        {
+                                                        };
+                                                    GET 9;
+                                                    ADD;
+                                                    UPDATE 1;
+                                                    SOME;
+                                                    SWAP;
+                                                    UPDATE;
+                                                    UPDATE 11;
+                                                    DUG 2
+                                                }
+                                                {
+                                                }
+                                        }
+                                        {
+                                        }
+                                }
+                                {
+                                    NIL operation
+                                };
+                            SWAP;
+                            EMIT %contractUpdated int;
+                            CONS
+                        }
+                        {
+                            IF_LEFT
+                                {
+                                    SENDER;
+                                    DUP 3;
+                                    GET 11;
+                                    DUP 3;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 242;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    GET 13;
+                                    PUSH int 1;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 242;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    COMPARE;
+                                    EQ;
+                                    IF
+                                        {
+                                            PUSH int 1
+                                        }
+                                        {
+                                            PUSH int 2
+                                        };
+                                    NIL operation;
+                                    DUP 2;
+                                    EMIT %thisPlayerIndex int;
+                                    CONS;
+                                    DIG 3;
+                                    DUP;
+                                    GET 11;
+                                    DUP;
+                                    DUP 6;
+                                    DUP;
+                                    DUG 2;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 247;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    DUP;
+                                    GET 13;
+                                    PUSH
+                                        (option address)
+                                        (Some "---");
+                                    DIG 7;
+                                    UPDATE;
+                                    UPDATE 13;
+                                    SOME;
+                                    SWAP;
+                                    UPDATE;
+                                    UPDATE 11;
+                                    DUP;
+                                    GET 11;
+                                    DUP;
+                                    DUP 5;
+                                    DUP;
+                                    DUG 2;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 248;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    DUP;
+                                    GET 7;
+                                    PUSH
+                                        (option int)
+                                        (Some 1);
+                                    PUSH string "gameStatus";
+                                    UPDATE;
+                                    UPDATE 7;
+                                    SOME;
+                                    SWAP;
+                                    UPDATE;
+                                    UPDATE 11;
+                                    DUG 2;
+                                    DUP 2;
+                                    EMIT %contractUpdated int;
+                                    CONS;
+                                    SENDER;
+                                    CONTRACT unit;
+                                    IF_NONE
+                                        {
+                                            PUSH int 250;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    DUP 4;
+                                    GET 11;
+                                    DUP 4;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 250;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    GET 9;
+                                    UNIT;
+                                    TRANSFER_TOKENS;
+                                    CONS;
+                                    DUP 3;
+                                    DUP;
+                                    GET 11;
+                                    DUP;
+                                    DUP 5;
+                                    DUP;
+                                    DUG 2;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 252;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    DUP;
+                                    CAR;
+                                    DIG 7;
+                                    GET 11;
+                                    DUP 8;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 252;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    GET 9;
+                                    SWAP;
+                                    SUB_MUTEZ;
+                                    IF_NONE
+                                        {
+                                            PUSH int 252;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    UPDATE 1;
+                                    SOME;
+                                    SWAP;
+                                    UPDATE;
+                                    UPDATE 11;
+                                    DUG 2;
+                                    DUP 3;
+                                    DUP;
+                                    GET 17;
+                                    DIG 4;
+                                    GET 11;
+                                    DUP 5;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 253;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    GET 9;
+                                    SWAP;
+                                    SUB_MUTEZ;
+                                    IF_NONE
+                                        {
+                                            PUSH int 253;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    UPDATE 17;
+                                    DUG 2;
+                                    DUP 3;
+                                    GET 11;
+                                    DIG 2;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 254;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    CAR;
+                                    EMIT %gameBalance mutez;
+                                    CONS
+                                }
+                                {
+                                    DUP 2;
+                                    GET 11;
+                                    DUP 2;
+                                    CAR;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 260;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    GET 7;
+                                    PUSH string "playerTurn";
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 260;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    NIL operation;
+                                    DUP 2;
+                                    EMIT %playerTurn int;
+                                    CONS;
+                                    DIG 3;
+                                    PUSH int 0;
+                                    UPDATE 7;
+                                    DUG 3;
+                                    DUP 3;
+                                    CDR;
+                                    EMIT %contractUpdated int;
+                                    CONS;
+                                    PUSH int 2;
+                                    DUP 5;
+                                    GET 11;
+                                    DUP 5;
+                                    CAR;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 266;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    GET 7;
+                                    PUSH string "gameStatus";
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 266;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    COMPARE;
+                                    EQ;
+                                    IF
+                                        {
+                                            SENDER;
+                                            DUP 5;
+                                            GET 11;
+                                            DUP 5;
+                                            CAR;
+                                            GET;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 269;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            GET 13;
+                                            DUP 4;
+                                            GET;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 269;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            COMPARE;
+                                            EQ;
+                                            IF
+                                                {
+                                                    DIG 3;
+                                                    DUP;
+                                                    GET 11;
+                                                    DUP;
+                                                    DUP 6;
+                                                    CAR;
+                                                    DUP;
+                                                    DUG 2;
+                                                    GET;
+                                                    IF_NONE
+                                                        {
+                                                            PUSH int 270;
+                                                            FAILWITH
+                                                        }
+                                                        {
+                                                        };
+                                                    DUP;
+                                                    GET 5;
+                                                    DUP 7;
+                                                    SOME;
+                                                    DUP 9;
+                                                    CDR;
+                                                    UPDATE;
+                                                    UPDATE 5;
+                                                    SOME;
+                                                    SWAP;
+                                                    UPDATE;
+                                                    UPDATE 11;
+                                                    DUG 3;
+                                                    PUSH int 1;
+                                                    DUP 3;
+                                                    COMPARE;
+                                                    EQ;
+                                                    IF
+                                                        {
+                                                            DIG 3;
+                                                            DUP;
+                                                            GET 11;
+                                                            DUP;
+                                                            DUP 6;
+                                                            CAR;
+                                                            DUP;
+                                                            DUG 2;
+                                                            GET;
+                                                            IF_NONE
+                                                                {
+                                                                    PUSH int 272;
+                                                                    FAILWITH
+                                                                }
+                                                                {
+                                                                };
+                                                            DUP;
+                                                            GET 7;
+                                                            PUSH
+                                                                (option int)
+                                                                (Some 2);
+                                                            PUSH string "playerTurn";
+                                                            UPDATE;
+                                                            UPDATE 7;
+                                                            SOME;
+                                                            SWAP;
+                                                            UPDATE;
+                                                            UPDATE 11;
+                                                            DUG 3
+                                                        }
+                                                        {
+                                                            DIG 3;
+                                                            DUP;
+                                                            GET 11;
+                                                            DUP;
+                                                            DUP 6;
+                                                            CAR;
+                                                            DUP;
+                                                            DUG 2;
+                                                            GET;
+                                                            IF_NONE
+                                                                {
+                                                                    PUSH int 274;
+                                                                    FAILWITH
+                                                                }
+                                                                {
+                                                                };
+                                                            DUP;
+                                                            GET 7;
+                                                            PUSH
+                                                                (option int)
+                                                                (Some 1);
+                                                            PUSH string "playerTurn";
+                                                            UPDATE;
+                                                            UPDATE 7;
+                                                            SOME;
+                                                            SWAP;
+                                                            UPDATE;
+                                                            UPDATE 11;
+                                                            DUG 3
+                                                        };
+                                                    DIG 3;
+                                                    PUSH int 0;
+                                                    UPDATE 13;
+                                                    DUG 3;
+                                                    DUP 4;
+                                                    GET 9;
+                                                    ITER
+                                                        {
+                                                            CDR;
+                                                            DIG 4;
+                                                            PUSH int 0;
+                                                            UPDATE 19;
+                                                            PUSH int 0;
+                                                            UPDATE 24;
+                                                            PUSH int 0;
+                                                            UPDATE 21;
+                                                            PUSH int 0;
+                                                            UPDATE 23;
+                                                            DUG 4;
+                                                            DUP;
+                                                            ITER
+                                                                {
+                                                                    DUP 6;
+                                                                    GET 11;
+                                                                    DUP 6;
+                                                                    CAR;
+                                                                    GET;
+                                                                    IF_NONE
+                                                                        {
+                                                                            PUSH int 282;
+                                                                            FAILWITH
+                                                                        }
+                                                                        {
+                                                                        };
+                                                                    GET 5;
+                                                                    SWAP;
+                                                                    GET;
+                                                                    IF_NONE
+                                                                        {
+                                                                            PUSH int 282;
+                                                                            FAILWITH
+                                                                        }
+                                                                        {
+                                                                        };
+                                                                    DUP;
+                                                                    EQ;
+                                                                    IF
+                                                                        {
+                                                                            DIG 5;
+                                                                            PUSH int 1;
+                                                                            UPDATE 24;
+                                                                            DUG 5
+                                                                        }
+                                                                        {
+                                                                        };
+                                                                    PUSH int 1;
+                                                                    DUP 2;
+                                                                    COMPARE;
+                                                                    EQ;
+                                                                    IF
+                                                                        {
+                                                                            DIG 5;
+                                                                            DUP;
+                                                                            GET 19;
+                                                                            DUP 3;
+                                                                            ADD;
+                                                                            UPDATE 19;
+                                                                            PUSH int 1;
+                                                                            UPDATE 21;
+                                                                            DUG 5
+                                                                        }
+                                                                        {
+                                                                        };
+                                                                    PUSH int 2;
+                                                                    DUP 2;
+                                                                    COMPARE;
+                                                                    EQ;
+                                                                    IF
+                                                                        {
+                                                                            DIG 5;
+                                                                            DUP;
+                                                                            GET 19;
+                                                                            DUP 3;
+                                                                            ADD;
+                                                                            UPDATE 19;
+                                                                            PUSH int 1;
+                                                                            UPDATE 23;
+                                                                            DUG 5
+                                                                        }
+                                                                        {
+                                                                        };
+                                                                    DIG 5;
+                                                                    SWAP;
+                                                                    UPDATE 15;
+                                                                    DUG 4
+                                                                };
+                                                            DROP;
+                                                            PUSH int 2;
+                                                            DUP 5;
+                                                            GET 19;
+                                                            COMPARE;
+                                                            LE;
+                                                            IF
+                                                                {
+                                                                    DIG 3;
+                                                                    DUP;
+                                                                    GET 13;
+                                                                    PUSH int 1;
+                                                                    ADD;
+                                                                    UPDATE 13;
+                                                                    DUG 3
+                                                                }
+                                                                {
+                                                                };
+                                                            PUSH int 3;
+                                                            DUP 5;
+                                                            GET 19;
+                                                            COMPARE;
+                                                            EQ;
+                                                            IF
+                                                                {
+                                                                    PUSH int 0;
+                                                                    DUP 5;
+                                                                    GET 23;
+                                                                    COMPARE;
+                                                                    EQ;
+                                                                    IF
+                                                                        {
+                                                                            DIG 3;
+                                                                            DUP;
+                                                                            GET 13;
+                                                                            PUSH int 1;
+                                                                            ADD;
+                                                                            UPDATE 13;
+                                                                            DUG 3
+                                                                        }
+                                                                        {
+                                                                        }
+                                                                }
+                                                                {
+                                                                };
+                                                            PUSH int 4;
+                                                            DUP 5;
+                                                            GET 19;
+                                                            COMPARE;
+                                                            EQ;
+                                                            IF
+                                                                {
+                                                                    PUSH int 1;
+                                                                    DUP 5;
+                                                                    GET 24;
+                                                                    COMPARE;
+                                                                    NEQ;
+                                                                    IF
+                                                                        {
+                                                                            PUSH int 1;
+                                                                            DUP 5;
+                                                                            GET 23;
+                                                                            COMPARE;
+                                                                            NEQ
+                                                                        }
+                                                                        {
+                                                                            PUSH bool False
+                                                                        };
+                                                                    IF
+                                                                        {
+                                                                            DIG 3;
+                                                                            PUSH int 1;
+                                                                            UPDATE 7;
+                                                                            DUP;
+                                                                            GET 11;
+                                                                            DUP;
+                                                                            DUP 6;
+                                                                            CAR;
+                                                                            DUP;
+                                                                            DUG 2;
+                                                                            GET;
+                                                                            IF_NONE
+                                                                                {
+                                                                                    PUSH int 300;
+                                                                                    FAILWITH
+                                                                                }
+                                                                                {
+                                                                                };
+                                                                            DUP;
+                                                                            GET 7;
+                                                                            PUSH
+                                                                                (option int)
+                                                                                (Some 1);
+                                                                            PUSH string "winningPlayer";
+                                                                            UPDATE;
+                                                                            UPDATE 7;
+                                                                            SOME;
+                                                                            SWAP;
+                                                                            UPDATE;
+                                                                            UPDATE 11;
+                                                                            DUG 3
+                                                                        }
+                                                                        {
+                                                                            DIG 3;
+                                                                            DUP;
+                                                                            GET 13;
+                                                                            PUSH int 1;
+                                                                            ADD;
+                                                                            UPDATE 13;
+                                                                            DUG 3
+                                                                        }
+                                                                }
+                                                                {
+                                                                };
+                                                            PUSH int 6;
+                                                            DUP 5;
+                                                            GET 19;
+                                                            COMPARE;
+                                                            EQ;
+                                                            IF
+                                                                {
+                                                                    PUSH int 0;
+                                                                    DUP 5;
+                                                                    GET 21;
+                                                                    COMPARE;
+                                                                    EQ;
+                                                                    IF
+                                                                        {
+                                                                            DIG 3;
+                                                                            DUP;
+                                                                            GET 13;
+                                                                            PUSH int 1;
+                                                                            ADD;
+                                                                            UPDATE 13;
+                                                                            DUG 3
+                                                                        }
+                                                                        {
+                                                                        }
+                                                                }
+                                                                {
+                                                                };
+                                                            PUSH int 8;
+                                                            DUP 5;
+                                                            GET 19;
+                                                            COMPARE;
+                                                            EQ;
+                                                            IF
+                                                                {
+                                                                    DIG 3;
+                                                                    PUSH int 2;
+                                                                    UPDATE 7;
+                                                                    DUP;
+                                                                    GET 11;
+                                                                    DUP;
+                                                                    DUP 6;
+                                                                    CAR;
+                                                                    DUP;
+                                                                    DUG 2;
+                                                                    GET;
+                                                                    IF_NONE
+                                                                        {
+                                                                            PUSH int 308;
+                                                                            FAILWITH
+                                                                        }
+                                                                        {
+                                                                        };
+                                                                    DUP;
+                                                                    GET 7;
+                                                                    PUSH
+                                                                        (option int)
+                                                                        (Some 2);
+                                                                    PUSH string "winningPlayer";
+                                                                    UPDATE;
+                                                                    UPDATE 7;
+                                                                    SOME;
+                                                                    SWAP;
+                                                                    UPDATE;
+                                                                    UPDATE 11;
+                                                                    DUG 3
+                                                                }
+                                                                {
+                                                                }
+                                                        };
+                                                    SWAP;
+                                                    DROP;
+                                                    PUSH int 0;
+                                                    DUP 4;
+                                                    GET 7;
+                                                    COMPARE;
+                                                    GT;
+                                                    IF
+                                                        {
+                                                            DUP 3;
+                                                            GET 7;
+                                                            EMIT %gameWonBy int;
+                                                            CONS;
+                                                            DIG 2;
+                                                            DUP;
+                                                            GET 11;
+                                                            DUP;
+                                                            DUP 5;
+                                                            CAR;
+                                                            DUP;
+                                                            DUG 2;
+                                                            GET;
+                                                            IF_NONE
+                                                                {
+                                                                    PUSH int 312;
+                                                                    FAILWITH
+                                                                }
+                                                                {
+                                                                };
+                                                            DUP;
+                                                            GET 7;
+                                                            PUSH
+                                                                (option int)
+                                                                (Some 3);
+                                                            PUSH string "gameStatus";
+                                                            UPDATE;
+                                                            UPDATE 7;
+                                                            SOME;
+                                                            SWAP;
+                                                            UPDATE;
+                                                            UPDATE 11;
+                                                            DUG 2
+                                                        }
+                                                        {
+                                                        };
+                                                    PUSH int 0;
+                                                    DUP 4;
+                                                    GET 13;
+                                                    COMPARE;
+                                                    EQ;
+                                                    IF
+                                                        {
+                                                            PUSH string "cats Game";
+                                                            EMIT %catsGame string;
+                                                            CONS;
+                                                            DIG 2;
+                                                            DUP;
+                                                            GET 11;
+                                                            DUP;
+                                                            DIG 4;
+                                                            CAR;
+                                                            DUP;
+                                                            DUG 2;
+                                                            GET;
+                                                            IF_NONE
+                                                                {
+                                                                    PUSH int 315;
+                                                                    FAILWITH
+                                                                }
+                                                                {
+                                                                };
+                                                            DUP;
+                                                            GET 7;
+                                                            PUSH
+                                                                (option int)
+                                                                (Some 4);
+                                                            PUSH string "gameStatus";
+                                                            UPDATE;
+                                                            UPDATE 7;
+                                                            SOME;
+                                                            SWAP;
+                                                            UPDATE;
+                                                            UPDATE 11;
+                                                            SWAP
+                                                        }
+                                                        {
+                                                            SWAP;
+                                                            DROP
+                                                        }
+                                                }
+                                                {
+                                                    SWAP;
+                                                    DROP;
+                                                    SWAP;
+                                                    DROP;
+                                                    PUSH string "not Player Turn";
+                                                    EMIT %notPlayerTurnError string;
+                                                    CONS
+                                                }
+                                        }
+                                        {
+                                            SWAP;
+                                            DROP;
+                                            SWAP;
+                                            DROP;
+                                            PUSH string "game not active";
+                                            EMIT %gameNotActiveError string;
+                                            CONS
+                                        }
+                                }
+                        }
+                }
+                {
+                    IF_LEFT
+                        {
+                            NIL operation;
+                            SENDER;
+                            EMIT %request address;
+                            CONS;
+                            SWAP;
+                            EMIT %totalBalance mutez;
+                            CONS;
+                            DUP 2;
+                            GET 17;
+                            EMIT %lockedBalcn mutez;
+                            CONS
+                        }
+                        {
+                            IF_LEFT
+                                {
+                                    NIL operation;
+                                    PUSH int 1;
+                                    EMIT %contractUpdated int;
+                                    CONS;
+                                    PUSH
+                                        (map int int)
+                                        {
+                                            Elt 111 0;
+                                            Elt 112 0;
+                                            Elt 113 0;
+                                            Elt 114 0;
+                                            Elt 121 0;
+                                            Elt 122 0;
+                                            Elt 123 0;
+                                            Elt 124 0;
+                                            Elt 131 0;
+                                            Elt 132 0;
+                                            Elt 133 0;
+                                            Elt 134 0;
+                                            Elt 141 0;
+                                            Elt 142 0;
+                                            Elt 143 0;
+                                            Elt 144 0;
+                                            Elt 211 0;
+                                            Elt 212 0;
+                                            Elt 213 0;
+                                            Elt 214 0;
+                                            Elt 221 0;
+                                            Elt 222 0;
+                                            Elt 223 0;
+                                            Elt 224 0;
+                                            Elt 231 0;
+                                            Elt 232 0;
+                                            Elt 233 0;
+                                            Elt 234 0;
+                                            Elt 241 0;
+                                            Elt 242 0;
+                                            Elt 243 0;
+                                            Elt 244 0;
+                                            Elt 311 0;
+                                            Elt 312 0;
+                                            Elt 313 0;
+                                            Elt 314 0;
+                                            Elt 321 0;
+                                            Elt 322 0;
+                                            Elt 323 0;
+                                            Elt 324 0;
+                                            Elt 331 0;
+                                            Elt 332 0;
+                                            Elt 333 0;
+                                            Elt 334 0;
+                                            Elt 341 0;
+                                            Elt 342 0;
+                                            Elt 343 0;
+                                            Elt 344 0;
+                                            Elt 411 0;
+                                            Elt 412 0;
+                                            Elt 413 0;
+                                            Elt 414 0;
+                                            Elt 421 0;
+                                            Elt 422 0;
+                                            Elt 423 0;
+                                            Elt 424 0;
+                                            Elt 431 0;
+                                            Elt 432 0;
+                                            Elt 433 0;
+                                            Elt 434 0;
+                                            Elt 441 0;
+                                            Elt 442 0;
+                                            Elt 443 0;
+                                            Elt 444 0
+                                        };
+                                    DUP 4;
+                                    GET 5;
+                                    EMPTY_MAP int address;
+                                    SENDER;
+                                    SOME;
+                                    PUSH int 1;
+                                    UPDATE;
+                                    PUSH
+                                        (option address)
+                                        (Some "---");
+                                    PUSH int 2;
+                                    UPDATE;
+                                    PUSH mutez 0;
+                                    EMPTY_MAP string int;
+                                    DUP 7;
+                                    GET 5;
+                                    SOME;
+                                    PUSH string "playerTurn";
+                                    UPDATE;
+                                    DUP 7;
+                                    CAR;
+                                    SOME;
+                                    PUSH string "gameStatus";
+                                    UPDATE;
+                                    PUSH
+                                        (option int)
+                                        (Some 0);
+                                    PUSH string "winningPlayer";
+                                    UPDATE;
+                                    DUP 7;
+                                    GET 8;
+                                    DUP 8;
+                                    GET 7;
+                                    DUP 5;
+                                    DUP 10;
+                                    GET 5;
+                                    DUP 11;
+                                    GET 3;
+                                    DUP 6;
+                                    DUP 11;
+                                    DUP 14;
+                                    CAR;
+                                    DUP 10;
+                                    PAIR 9;
+                                    SWAP;
+                                    DROP;
+                                    SWAP;
+                                    DROP;
+                                    SWAP;
+                                    DROP;
+                                    DIG 2;
+                                    DROP;
+                                    DIG 3;
+                                    DROP;
+                                    DUP;
+                                    DUP;
+                                    CAR;
+                                    DIG 2;
+                                    GET 9;
+                                    ADD;
+                                    UPDATE 1;
+                                    DIG 3;
+                                    DUP;
+                                    GET 17;
+                                    DUP 3;
+                                    GET 9;
+                                    ADD;
+                                    UPDATE 17;
+                                    DUP;
+                                    GET 11;
+                                    DIG 2;
+                                    SOME;
+                                    DIG 3;
+                                    UPDATE;
+                                    UPDATE 11;
+                                    DUP;
+                                    GET 5;
+                                    PUSH int 1;
+                                    ADD;
+                                    UPDATE 5;
+                                    SWAP
+                                }
+                                {
+                                    PUSH int 2;
+                                    DUP 3;
+                                    GET 11;
+                                    DUP 3;
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 330;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    GET 7;
+                                    PUSH string "gameStatus";
+                                    GET;
+                                    IF_NONE
+                                        {
+                                            PUSH int 330;
+                                            FAILWITH
+                                        }
+                                        {
+                                        };
+                                    COMPARE;
+                                    EQ;
+                                    IF
+                                        {
+                                            DUP 2;
+                                            GET 11;
+                                            DUP 2;
+                                            GET;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 331;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            GET 13;
+                                            PUSH int 1;
+                                            GET;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 331;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                    DROP
+                                                };
+                                            NIL operation;
+                                            DUP 3;
+                                            GET 11;
+                                            DUP 3;
+                                            GET;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 337;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            GET 13;
+                                            PUSH int 1;
+                                            GET;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 337;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            CONTRACT unit;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 337;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            DUP 4;
+                                            GET 11;
+                                            DUP 4;
+                                            GET;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 337;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            GET 15;
+                                            UNIT;
+                                            TRANSFER_TOKENS;
+                                            CONS;
+                                            DUP 3;
+                                            GET 11;
+                                            DUP 3;
+                                            GET;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 338;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            GET 9;
+                                            EMIT %sentPlayer1CatsGame mutez;
+                                            CONS;
+                                            DUP 3;
+                                            GET 11;
+                                            DUP 3;
+                                            GET;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 339;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            GET 13;
+                                            PUSH int 2;
+                                            GET;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 339;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            CONTRACT unit;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 339;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            DUP 4;
+                                            GET 11;
+                                            DUP 4;
+                                            GET;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 339;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            GET 16;
+                                            UNIT;
+                                            TRANSFER_TOKENS;
+                                            CONS;
+                                            DUP 3;
+                                            GET 11;
+                                            DUP 3;
+                                            GET;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 340;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            GET 9;
+                                            EMIT %sentPlayer2CatsGame mutez;
+                                            CONS;
+                                            DIG 2;
+                                            DUP;
+                                            GET 11;
+                                            DUP;
+                                            DIG 4;
+                                            DUP;
+                                            DUG 2;
+                                            GET;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 341;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            DUP;
+                                            GET 7;
+                                            PUSH
+                                                (option int)
+                                                (Some 5);
+                                            PUSH string "gameStatus";
+                                            UPDATE;
+                                            UPDATE 7;
+                                            SOME;
+                                            SWAP;
+                                            UPDATE;
+                                            UPDATE 11;
+                                            SWAP
+                                        }
+                                        {
+                                            DROP;
+                                            NIL operation;
+                                            PUSH string "Wrong Game Status";
+                                            EMIT %wrongGameStatusError string;
+                                            CONS
+                                        }
+                                }
+                        }
+                };
+            NIL operation;
+            SWAP;
+            ITER
+                {
+                    CONS
+                };
+            PAIR
+        }
+}

@@ -1,11 +1,11 @@
 
 
 <script>
-
+import { RemoteSigner } from '@taquito/remote-signer';
 import { getRandomIntInclusive, reduceAddress } from '@/utilities';
 import * as Three from 'three'
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import { GAME_WIDTH_FRACTION, MAX_GAME_SIZE, NFT_INFO } from '../constants'
+import { GAME_WIDTH_FRACTION, MAX_GAME_SIZE, NFT_INFO, TXL_CONTRACT_ADDRESS, NODE_URL } from '../constants'
 
 export default {
   name: 'browseNFTs',
@@ -23,7 +23,7 @@ export default {
       owner: '',
       tezosSymbol: 'ꜩ',
       intervalId: null,
-      countDownSeconds: 10,
+      countDownSeconds: 5,
       pauseRandom: true,
       pauseState: 'Play',
       currentRotation: 0,
@@ -887,7 +887,7 @@ export default {
       if (!this.pauseRandom) {
         this.selectRandom()
       }
-    }, 11000);
+    }, 5000);
     this.intervalId = setInterval(() => {
       this.countDown();
     }, 1000);
@@ -1007,7 +1007,7 @@ export default {
       this.txlId = newId    
       this.getNftData()  
       if (!this.pauseRandom) {
-        this.countDownSeconds = 11    
+        this.countDownSeconds = 5    
       }
     },
     async togglePauseRandom() {  
@@ -1054,8 +1054,38 @@ export default {
       if (!this.pauseRandom) {
         this.countDownSeconds -= 1 
       }
-      
-    }
+    },
+    async leaveGameBC(gameId) { 
+      if (gameId < 0) {
+          return
+      }    
+      const activeAccount = await this.wallet.client.getActiveAccount() 
+      if (!activeAccount) {
+          return
+      }    
+      this.blockchainStatus = 'Joining Game on Smart Contract'              
+      this.getSigner(activeAccount)  
+      this.tezos.wallet
+          .at(TXL_CONTRACT_ADDRESS)
+          .then((contract) => {
+              return contract.methods.leaveGame(gameId).send()
+          })
+          .then((op) => {
+              console.log(`Waiting for ${op.opHash} to be confirmed...`);
+              return op.confirmation().then(() => op.opHash);
+          })
+          .then((op) => {
+              console.log(`Operation injected: https://ghost.tzstats.com/${op.hash}`)
+            })
+          .then(() => this.blockchainStatus = `Joined Game on Smart Contract ${{gameId}}` )
+          .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
+    },
+    async getSigner(activeAccount) { 
+            const signer = new RemoteSigner(activeAccount.address, NODE_URL )
+            await this.tezos.setProvider({signer:signer})
+            await this.tezos.setWalletProvider(this.wallet)  
+            return signer
+    },
   }
 }
 </script>
@@ -1107,10 +1137,10 @@ export default {
           </div> 
         </div>
         <div class="rowFlex">
-
           <div class="actionButton" @click="toggleAnimation"> {{pauseAnimationState}}  </div>
           <div class="gameInfo"> Random TXL in {{ countDownSeconds }} </div> 
           <div class="actionButton" @click="togglePauseRandom"> {{pauseState}} Random </div>
+          <div class="actionButton" @click="payNftHolderBC"> Pay out TXL </div>
         </div>     
         <div class="rowFlex">       
           <div class="txlRank"> Rank: {{ txlRanking }}</div>

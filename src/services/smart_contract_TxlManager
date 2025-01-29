@@ -1,0 +1,393 @@
+import smartpy as sp
+
+@sp.module
+def main():
+    class TxlManager(sp.Contract):
+        
+        def __init__(self):
+            '''
+            '''               
+            #Game Control         
+            self.data.admin = sp.address("tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w")
+            new_data = sp.record(
+                owner = self.data.admin,
+                balance = sp.mutez(0)
+            )
+            self.data.idLookUp = {
+                60199: new_data,
+                60200: new_data,
+                60201: new_data,
+                60202: new_data,
+                60203: new_data,
+                60204: new_data,
+                60206: new_data,
+                60207: new_data,
+                60208: new_data,
+                60209: new_data,
+                60210: new_data,
+                60211: new_data,
+                60212: new_data,
+                60213: new_data,
+                60215: new_data,
+                60216: new_data,
+                60218: new_data,
+                60219: new_data,
+                60220: new_data,
+                60221: new_data,
+                60224: new_data,
+                60225: new_data,
+                60226: new_data,
+                60227: new_data,
+                60228: new_data,
+                60230: new_data,
+                60231: new_data,
+                60233: new_data,
+                60234: new_data,
+                60235: new_data,
+                60236: new_data,
+                60237: new_data,
+                60238: new_data,
+                60239: new_data,
+                60240: new_data,
+                60241: new_data,
+                60242: new_data,
+                60243: new_data,
+                60244: new_data,
+                60245: new_data,
+                60246: new_data,
+                60247: new_data,
+                60248: new_data,
+                60249: new_data,
+                60250: new_data,
+                60251: new_data,
+                60252: new_data,
+                60253: new_data,
+                60254: new_data,
+                60255: new_data,
+                60256: new_data,
+                60257: new_data,
+                60258: new_data,
+                60259: new_data,
+                60260: new_data,
+                60338: new_data,
+                60339: new_data,
+                60340: new_data,
+                60344: new_data,
+                60346: new_data,
+                60348: new_data,
+                60349: new_data,
+                60350: new_data,
+                60354: new_data,
+                60355: new_data,
+                60356: new_data,
+                60357: new_data,
+                60358: new_data,
+                60359: new_data,
+                60361: new_data,
+                60362: new_data,
+                60363: new_data,
+                60366: new_data,
+                60367: new_data,
+                60368: new_data,
+                60369: new_data,
+                60370: new_data,
+                60371: new_data,
+                60372: new_data,
+                60373: new_data,
+                60374: new_data,
+                60375: new_data,
+                60377: new_data,
+                60379: new_data,
+                60380: new_data,
+                60381: new_data,
+                60382: new_data,
+                60383: new_data,
+                60384: new_data,
+                60386: new_data,
+                60387: new_data,
+                60388: new_data,
+                60389: new_data,
+                60391: new_data,
+                60392: new_data,
+                60393: new_data,
+                60394: new_data,
+                60395: new_data,
+                60396: new_data,
+                60397: new_data,
+                60399: new_data,
+                60401: new_data,
+                60403: new_data,
+                60404: new_data,
+                60406: new_data,
+                60407: new_data,
+                60413: new_data,
+                60414: new_data,
+                60416: new_data,
+                60418: new_data,
+                60429: new_data,
+                60432: new_data,
+                60433: new_data,
+                60434: new_data,
+                60436: new_data,
+                60437: new_data,
+                60438: new_data,
+                60439: new_data,
+                60440: new_data,
+                60441: new_data,
+                60442: new_data,
+                60443: new_data,
+                60444: new_data,
+                60445: new_data,
+                60446: new_data,
+                60447: new_data,
+                60448: new_data,
+                60449: new_data,
+                60450: new_data,
+                60451: new_data,
+                60452: new_data,
+                60453: new_data,
+                60454: new_data,
+                60455: new_data,
+                60456: new_data,
+                60457: new_data,
+                60458: new_data,
+                60459: new_data,
+                60460: new_data,
+                60461: new_data,
+                60462: new_data,
+                60463: new_data,
+                60464: new_data,
+                60465: new_data,
+                60466: new_data,
+                60467: new_data,
+                60468: new_data,
+                60469: new_data,
+                60470: new_data,
+                60471: new_data,
+                60472: new_data,
+                60473: new_data,
+                60474: new_data,
+                60475: new_data,
+                60476: new_data,
+                60477: new_data,
+                60478: new_data,
+                60479: new_data,
+                60480: new_data,
+                60481: new_data,
+                60483: new_data,
+                60486: new_data,
+                60487: new_data,
+                60489: new_data,
+                60491: new_data,
+                60492: new_data,
+                60493: new_data,
+                60494: new_data,
+                60495: new_data,
+                60496: new_data,
+                60497: new_data,
+                60498: new_data,
+                60499: new_data,
+                60500: new_data,
+                60501: new_data,
+                60502: new_data,
+                60534: new_data,
+                60535: new_data,
+                60536: new_data,
+                60537: new_data,
+                60545: new_data,
+                60547: new_data,
+                60546: new_data,
+                60548: new_data,
+                60549: new_data,
+                60550: new_data,
+                60551: new_data,
+                60552: new_data,
+                60553: new_data,
+                60554: new_data,
+                60560: new_data,
+                60561: new_data,
+                60562: new_data,
+                60563: new_data,
+                60564: new_data,
+                60565: new_data,
+                60566: new_data,
+                60567: new_data,
+                60571: new_data,
+                60572: new_data,
+                60573: new_data,
+                60575: new_data,
+                60576: new_data,
+                60577: new_data,
+                60578: new_data,
+                60580: new_data,
+                60581: new_data,
+                60582: new_data,
+                60583: new_data,
+                60584: new_data,
+                60585: new_data,
+                60586: new_data,
+                60587: new_data,
+                60589: new_data,
+                60590: new_data,
+                60593: new_data,
+                60595: new_data,
+                60596: new_data,
+                60597: new_data,
+                60599: new_data,
+                60600: new_data,
+                60601: new_data,
+                60603: new_data,
+                60605: new_data,
+                60606: new_data,
+                60607: new_data,
+                60608: new_data,
+                60612: new_data,
+                60613: new_data,
+                60614: new_data,
+                60615: new_data,
+                60616: new_data,
+                60617: new_data,
+                60618: new_data,
+                60619: new_data,
+                60620: new_data,
+                60621: new_data,
+                60622: new_data,
+                60623: new_data,
+                60624: new_data,
+                60625: new_data,
+                60626: new_data,
+                60627: new_data,
+                60628: new_data,
+                60629: new_data,
+                60630: new_data,
+                60631: new_data,
+                60632: new_data,
+                60633: new_data,
+                60636: new_data,
+                60637: new_data,
+                60638: new_data,
+                60639: new_data,
+                60640: new_data,
+                60641: new_data,
+                60642: new_data,
+                60643: new_data,
+                60644: new_data,
+                60645: new_data,
+                60646: new_data,
+                60647: new_data,
+                60648: new_data,
+                60649: new_data,
+                60650: new_data,
+                60651: new_data,
+                60688: new_data,
+                60690: new_data,
+                60692: new_data,
+                60693: new_data,
+                60694: new_data,
+                60696: new_data
+                }          
+            self.data.totalRewards = sp.mutez(0)
+            
+        @sp.entrypoint
+        def updateOwner(self, params):
+            '''
+            Needs to listen for sales and update by admin/oracle
+            '''
+            # assert sp.sender == self.data.admin
+            sp.cast(params.txlId, sp.int_or_nat)
+            sp.cast(sp.sender, sp.address)
+            self.data.idLookUp[params.txlId].owner = sp.sender
+
+
+        @sp.entrypoint
+        def payTxlHolders(self):
+            '''
+            '''    
+            payAmount = sp.mutez(0)
+            isOwner = 0
+            for txlId in self.data.idLookUp.keys():
+                if self.data.idLookUp[txlId].owner == sp.sender:
+                    payAmount += self.data.idLookUp[txlId].balance
+                    self.data.idLookUp[txlId].balance = sp.mutez(0)
+                    isOwner = 1
+            if isOwner == 1:
+                sp.emit(payAmount)
+                sp.send(sp.sender, payAmount)
+                self.data.totalRewards -= payAmount
+
+        @sp.entrypoint
+        def fundPool(self):
+            '''
+            '''
+            sp.cast(sp.amount, sp.mutez)
+            # assert sp.sender == self.data.admin
+            sp.emit(sp.amount, tag='TXLFunded')
+            self.data.totalRewards += sp.amount
+            fundAmountPerNft = sp.split_tokens(sp.amount, 1, 271)
+            for txlId in self.data.idLookUp.keys():
+                #sp.emit(txlId)
+                self.data.idLookUp[txlId].balance += fundAmountPerNft
+               
+               
+      
+
+       
+@sp.add_test()
+def test():
+    s = sp.test_scenario("my first test", main)
+    player1 = sp.test_account("player1")
+    a = main.TxlManager()
+    s += a
+    #a.set_initial_balance(sp.tez(2))
+    player1 = sp.test_account("player1")
+    player2 = sp.test_account("player2")
+    player3 = sp.test_account("player3")
+    player4 = sp.test_account("tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w")
+    a.fundPool(
+        _amount = sp.tez(10)
+    )
+    a.fundPool(
+        _amount = sp.tez(10)
+    )
+    s.show(a.balance)
+    a.updateOwner(
+        _sender = player1.address,
+        txlId = sp.int_or_nat(60199)
+    )
+  
+    a.updateOwner(
+        _sender = player1.address,
+        txlId = sp.int_or_nat(60201)
+    )
+    
+    a.updateOwner(
+        _sender = player2.address,
+        txlId = sp.int_or_nat(60202)
+    )
+    
+    a.updateOwner(
+        _sender = player2.address,
+        txlId = sp.int_or_nat(60207)
+    )
+
+    a.updateOwner(
+        _sender = player2.address,
+        txlId = sp.int_or_nat(60203)
+    )
+
+    a.payTxlHolders(
+        _sender = player1.address
+    )
+    
+    a.payTxlHolders(
+        _sender = player2.address
+    )
+
+    a.payTxlHolders(
+        _sender = player4.address
+    )
+  
+    s.show(a.balance)
+
+
+    

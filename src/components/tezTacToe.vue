@@ -4,12 +4,12 @@ import { RemoteSigner } from '@taquito/remote-signer';
 import tttGameGrid  from './tttGameGrid.vue'
 //import sha256 from 'js-sha256'
 import { RpcClient } from '@taquito/rpc';
-import { NODE_URL, CONTRACT_ADDRESS, GAME_INFO} from '../constants'
+import { NODE_URL, TTT_CONTRACT_ADDRESS, GAME_INFO} from '../constants'
 import { reduceAddress } from "../utilities";
 
 
 export default {
-    name: "playerControl",
+    name: "tezTacToe",
     emits: [
     ],
     components: { 
@@ -85,7 +85,7 @@ export default {
         try {
             const sub = this.tezos.stream.subscribeEvent({
                 tag: 'notPlayerTurnError',
-                address: CONTRACT_ADDRESS,
+                address: TTT_CONTRACT_ADDRESS,
                 //excludeFailedOperations: true
             });
             sub.on('data', (data) => {
@@ -98,7 +98,7 @@ export default {
         try {
             const sub = this.tezos.stream.subscribeEvent({
                 tag: 'gameNotActiveError',
-                address: CONTRACT_ADDRESS,
+                address: TTT_CONTRACT_ADDRESS,
                 //excludeFailedOperations: true
             });
             sub.on('data', (data) => {
@@ -111,7 +111,7 @@ export default {
         try {
             const sub = this.tezos.stream.subscribeEvent({
               tag: 'contractUpdated',
-              address: CONTRACT_ADDRESS,
+              address: TTT_CONTRACT_ADDRESS,
               //excludeFailedOperations: true
             });
             sub.on('data', (data) => {
@@ -176,7 +176,7 @@ export default {
             const tzSurrenderOtherAmount =  Math.ceil(0.75 * feeAmount * 1e6)
             this.getSigner(activeAccount)
             this.tezos.wallet
-                .at(CONTRACT_ADDRESS)
+                .at(TTT_CONTRACT_ADDRESS)
                 .then((contract) => {
                     return contract.methodsObject.startGame({
                             tzSurrenderAmount: tzSurrenderAmount,
@@ -201,7 +201,7 @@ export default {
             this.blockchainStatus = 'Joining Game on Smart Contract'              
             this.getSigner(activeAccount)  
             this.tezos.wallet
-                .at(CONTRACT_ADDRESS)
+                .at(TTT_CONTRACT_ADDRESS)
                 .then((contract) => {
                     return contract.methods.joinGame(gameId)
                         .send({amount: 1})
@@ -227,7 +227,7 @@ export default {
             this.blockchainStatus = 'Joining Game on Smart Contract'              
             this.getSigner(activeAccount)  
             this.tezos.wallet
-                .at(CONTRACT_ADDRESS)
+                .at(TTT_CONTRACT_ADDRESS)
                 .then((contract) => {
                     return contract.methods.leaveGame(gameId).send()
                 })
@@ -255,7 +255,7 @@ export default {
             }    
             this.getSigner(activeAccount)
             await this.tezos.wallet
-                .at(CONTRACT_ADDRESS)
+                .at(TTT_CONTRACT_ADDRESS)
                 .then((contract) => {
                     return contract.methodsObject.makeMove({
                             gameId: gameId,
@@ -272,25 +272,6 @@ export default {
                     console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
         },
-        async payAdminBC() {      
-            const activeAccount = await this.wallet.client.getActiveAccount()   
-            if (!activeAccount) {
-                return
-            }    
-            this.getSigner(activeAccount)
-            await this.tezos.wallet
-                .at(CONTRACT_ADDRESS)
-                .then((contract) => {
-                    return contract.methodsObject.payAdmin().send()
-                })
-                .then((op) => {
-                    console.log(`Waiting for ${op.opHash} to be confirmed...`);
-                    return op.confirmation().then(() => op.opHash)
-                })
-                .then((hash) => {
-                    console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
-                .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-        },
         async surrenderGameBC() {      
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
@@ -298,7 +279,7 @@ export default {
             }    
             this.getSigner(activeAccount)
             await this.tezos.wallet
-                .at(CONTRACT_ADDRESS)
+                .at(TTT_CONTRACT_ADDRESS)
                 .then((contract) => {
                     return contract.methodsObject.surrenderGame().send()
                 })
@@ -311,14 +292,14 @@ export default {
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
         },
         async getSigner(activeAccount) { 
-            const signer = new RemoteSigner(activeAccount.address, NODE_URL )
+            const signer = await RemoteSigner(activeAccount.address, NODE_URL )
             await this.tezos.setProvider({signer:signer})
             await this.tezos.setWalletProvider(this.wallet)  
             return signer
         },
         // Reading Smart Contract
         async getGamesFromContractBC() {
-            const contract = await this.tezos.wallet.at(CONTRACT_ADDRESS)
+            const contract = await this.tezos.wallet.at(TTT_CONTRACT_ADDRESS)
             const storage = await contract.storage()
             const games = await storage.games
             return games

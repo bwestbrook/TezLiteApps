@@ -7,26 +7,26 @@ export const GAME_WIDTH_FRACTION = 0.9
 export const MAX_GAME_SIZE = 600
 
 ////// NODES ///////
-
-export const NODE_URL = 'https://ghostnet.tezos.ecadinfra.com/'
+//export const NODE_URL = 'https://ghostnet.tezos.ecadinfra.com/'
 
 //export const NODE_URL ='https://rpc.pariscnet.teztnets.com'
 
-//export const NODE_URL = 'https://ghostnet.smartpy.io/'
+export const NODE_URL = 'https://ghostnet.smartpy.io/'
 
 //export const NODE_URL = 'https://rpc.ghostnet.teztnets.com/'
 
 //export const NODE_URL = 'https://rpc.tzkt.io/ghostnet' 
 
 ////// CONTRACTS ///////
-
-export const CONTRACT_ADDRESS = 'KT1QZPPy4zPsxcpBivCAWPPwcH6t89nCHgy2' // V0.5 Version 1 will be on mainnet
+export const TTT_CONTRACT_ADDRESS = 'KT1QZPPy4zPsxcpBivCAWPPwcH6t89nCHgy2' // V0.5 Version 1 will be on mainnet
 
 export const OBJECT_CONTRACT = 'KT1FvqJwEDWb1Gwc55Jd1jjTHRVWbYKUUpyq' // 
 
-export const ORACLE_ADDRESS = 'KT1QJp5AjDN7qQuz4dmh9iXmRSkMmAYVkx1A'
+export const ORACLE_ADDRESS = 'KT1V4ch1ho5GsAyxcTVQ7rwtcLNXU8YhxxWY'
 
-export const AD_CONTRACT_ADDRESS = 'KT1NBv2LSnpMcJ4yBUWyvJx24U24h1nok94m'
+export const AD_CONTRACT_ADDRESS = 'KT1Xm42ANoicFP4H7jYWifCVjCk66B7j72fj'
+
+export const TXL_CONTRACT_ADDRESS = 'KT1NCTnB4hYTgZvUqF5JgzTGpAtnfKSKYxwc'
 
 //export const CONTRACT_ADDRESS = 'KT1BHFYWTKyfErwx491rQ3P4c5MuFEXU2Wja' // V0.1
 
@@ -37,7 +37,6 @@ export const AD_CONTRACT_ADDRESS = 'KT1NBv2LSnpMcJ4yBUWyvJx24U24h1nok94m'
 //export const CONTRACT_ADDRESS = 'KT1RxAUU7GXn2xqrAhLH9Eu8MCFnC8Zt9bjT' // V0.4
 
 ////// ADDRESSES ///////
-
 export const ADMIN_ADDRESS = 'tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w'
 
 export const NFT_INFO = [
@@ -47,8 +46,8 @@ export const NFT_INFO = [
     "There's only 275 of them and already over 100 unique owners",
     "They are only 2.725 XTZ on primary!",
     "The only way to cash out from the contract is by hodling the NFTs",
-    "A separate smart contract takes snaps shots of the NFTs owners and monitors for sales"
-
+    "A separate smart contract takes snaps shots of the NFTs owners and monitors for sales",
+    "When you pay out NFTs"
 ]
 
 export const AD_GAME_INFO = [

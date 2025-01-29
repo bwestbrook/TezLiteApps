@@ -5,7 +5,7 @@
 import * as Three from 'three'
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { RemoteSigner } from '@taquito/remote-signer';
-import { GAME_WIDTH_FRACTION, MAX_GAME_SIZE, ORACLE_ADDRESS, NODE_URL, AD_CONTRACT_ADDRESS, AD_GAME_INFO} from '../constants'
+import { GAME_WIDTH_FRACTION, MAX_GAME_SIZE, NODE_URL, AD_CONTRACT_ADDRESS, AD_GAME_INFO} from '../constants'
 
 export default {
     name: 'aceyDuecy',
@@ -18,22 +18,27 @@ export default {
       showInfo: false, 
       highLow: 'Ace Low',
       tezosSymbol: 'ꜩ',
+      gameId: -1, 
+      firstCard: -1,
+      secondCard: -1,
+      lastCard: -1,
       potBalance: 0,
       ante: 0.5, 
       betIncrement: 0.25, 
       thisBet: 0.5,
+      myGames: {},
       thisBets: []
-
     }
   },
 
   created () {
+
+    this.apiUrl = 'https://api.ghostnet.tzkt.io/v1/contracts/' + AD_CONTRACT_ADDRESS + '/storage'
     //Three 
     this.gameSize = window.innerWidth * GAME_WIDTH_FRACTION
     this.maxGameSize = MAX_GAME_SIZE
     this.board = new Three.Group();
     this.scene = new Three.Scene();
-
     this.camera = new Three.PerspectiveCamera(45, 1, 1, 5000);
     this.camera.position.x = 0;
     this.camera.position.y = -50;
@@ -49,8 +54,22 @@ export default {
     this.card3Material = new Three.MeshBasicMaterial({ map: this.card2Texture });
     this.defaultGeometry = new Three.BoxGeometry(130, 130, 1, 1)
     ///
-    this.aceSpadeTexture = this.loader.load(require('../assets/Spade-Ace.png')); 
-    this.kingSpadeTexture = this.loader.load(require('../assets/Spade-King.png')); 
+    this.cards = [
+      './src/assets/Spade-Two.jpeg',
+      './src/assets/Spade-Three.jpg',
+      './src/assets/Spade-Four.png',
+      './src/assets/Spade-Five.png',
+      './src/assets/Spade-Six.png',
+      './src/assets/Spade-Seven.jpg',
+      './src/assets/Spade-Eight.jpg',
+      './src/assets/Spade-Nine.jpg',
+      './src/assets/Spade-Ten.jpg',
+      './src/assets/Spade-King.png',
+      './src/assets/Spade-Jack.jpg',
+      './src/assets/Spade-Queen.png', 
+      './src/assets/Spade-Ace.png'
+         
+    ]
 
     this.cardGeometry = new Three.BoxGeometry(50, 100, 0.1, 1)
     //Socket 
@@ -59,23 +78,44 @@ export default {
     }); 
     this.socket.on('newRandomNumber', (randomNumber) => {
       console.log("RN", randomNumber)
+      this.randomNumber = randomNumber
     }); 
-    
     try {
         const sub = this.tezos.stream.subscribeEvent({
-            tag: 'betMade',
+            tag: 'firstTwoCards',
             address: AD_CONTRACT_ADDRESS,
             //excludeFailedOperations: true
         });
-        sub.on('data', (data) => {
-            //const transactionBlockLevel = data.level
-            console.log('numberRequested: ', data)
-            console.log(this.socket)
-            this.socket.emit("getRandomNumber", 100)
+        sub.on('data', (data) => {          
+            console.log('showCards')
+            console.log(data.payload)
+            this.gameId = data.payload[0]["int"]
+            this.firstCard = data.payload[1]["int"]
+            this.secondCard = data.payload[2]["int"]
+            console.log(this.gameId)
+            this.myGameHub()
         })
         } catch (e) {
-        console.log(e);
+        console.log('Error', e);
     }
+    try {
+        const sub = this.tezos.stream.subscribeEvent({
+            tag: 'lastCard',
+            address: AD_CONTRACT_ADDRESS,
+            //excludeFailedOperations: true
+        });
+        sub.on('data', (data) => {          
+            console.log('lastCard')
+            console.log(data.payload)
+            this.gameId = data.payload[0]
+            this.lastCard = data.payload[1]["int"]
+            this.myGameHub()
+        })
+        } catch (e) {
+        console.log('Error', e);
+    }
+
+   
   },
   mounted () {
     this.renderer = new Three.WebGLRenderer({antialias: true});
@@ -87,10 +127,10 @@ export default {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.showCards()
     this.socket.emit("resizeGame", window.innerWidth)    
-    this.getPotBalance()
-    this.getGamesFromContractBC()
+    this.myGameHub()
   },
   methods: {
+    // Game Rendering
     async showCards() {
       this.controls.update();
       requestAnimationFrame(this.showCards);  
@@ -104,21 +144,12 @@ export default {
       this.renderer.render(this.scene, this.camera);
     },
     async flipCards() {
-      requestAnimationFrame(this.flipCards);  
-      //let time = Date.now() * 0.001;
-      const targetRotation = 180
-      let currentRotation = 0
-      let rotationIncrement = 0.001; // Adjust based on desired animation speed
-      this.renderer.render(this.scene, this.camera);
-      currentRotation += rotationIncrement;     
-      if (currentRotation >= targetRotation) {
-        console.log('a.', currentRotation)
-        currentRotation = targetRotation;
-      }
-      this.card1.rotation.y = -currentRotation;
-      this.card2.rotation.y = currentRotation;
-     
-      this.loader.load(require('../assets/Spade-Ace.png'), (texture) => {
+      //requestAnimationFrame(this.flipCards);  
+      const card1asset = this.cards[this.firstCard - 1]
+      const card2asset = this.cards[this.secondCard - 1]
+      console.log(`'${card1asset}'`)
+      console.log(card2asset)
+      this.loader.load(require(card1asset), (texture) => {
         this.card1Texture.dispose(); // Dispose old texture
         this.card1Texture = texture;
         this.card1.material.map = texture;
@@ -152,41 +183,38 @@ export default {
       }
       await this.renderer.setSize(this.gameSize, this.gameSize)
     },  
-    async continueBet() {
-      //const startTime = Date.now() * 0.0001;
-      this.flipCards(0)
-      const games = await this.getGamesFromContractBC()
-      const allGames = await games.valueMap
-      const myObject = Object.fromEntries(allGames);
-      const allGamesObj =  Object.values(myObject)
-      let gameId = 2
-      console.log(allGamesObj[gameId])
-      for (let game of allGamesObj) {
-
-        //let aceHigh = allGames[game]['aceHigh'].toNumber()
-        console.log(game, allGames[game])
-      }
-      
-      // SET GAME ID DYANMICALLy
-
-      //this.continueBetBC()
-
-    },
-    // Interact with the contract
+    // Interact with the contract    
+    async betBC() {        
+      const activeAccount = await this.wallet.client.getActiveAccount()   
+      if (!activeAccount) {
+          return
+      }          
+      await this.getSigner(activeAccount)
+      await this.tezos.wallet
+          .at(AD_CONTRACT_ADDRESS)
+          .then((contract) => {
+              return contract.methodsObject.bet().send({amount: 0.5})
+          })
+          .then((op) => {
+              console.log(`Waiting for ${op.opHash} to be confirmed...`);
+              return op.confirmation().then(() => op.opHash)
+          })
+          .then((hash) => {
+              console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)
+              this.card3.visible = true
+          })
+          .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
+    }, 
     async continueBetBC() {      
       const activeAccount = await this.wallet.client.getActiveAccount()   
       if (!activeAccount) {
           return
       }    
-      this.getSigner(activeAccount)
+      await this.getSigner(activeAccount)
       await this.tezos.wallet
           .at(AD_CONTRACT_ADDRESS)
           .then((contract) => {
-              return contract.methodsObject.bet({
-                extraBet: 750000,
-                halfBet: 250000,
-                aceHigh: 1
-                }).send({amount: 0.5})
+              return contract.methodsObject.continueBet(this.gameId).send({amount: this.thisBet})
           })
           .then((op) => {
               console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -197,60 +225,6 @@ export default {
               this.getPotBalance()})
           .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
     }, 
-    async betBC() {      
-      const activeAccount = await this.wallet.client.getActiveAccount()   
-      if (!activeAccount) {
-          return
-      }    
-
-      /// 
-      let aceHigh = 0
-      if (this.highLow == 'Ace High') {
-        aceHigh = 1
-      } else {
-        aceHigh = 0
-      }
-      this.getSigner(activeAccount)
-      await this.tezos.wallet
-          .at(AD_CONTRACT_ADDRESS)
-          .then((contract) => {
-              return contract.methodsObject.bet({
-                extraBet: 750000,
-                halfBet: 250000,
-                aceHigh: aceHigh
-                }).send({amount: 0.5})
-          })
-          .then((op) => {
-              console.log(`Waiting for ${op.opHash} to be confirmed...`);
-              return op.confirmation().then(() => op.opHash)
-          })
-          .then((hash) => {
-              console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)
-              this.getPotBalance()
-              this.flipCards()
-              this.card3.visible = true
-          })
-          .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-    }, 
-    async getRandomNumberBC() {      
-      const activeAccount = await this.wallet.client.getActiveAccount()   
-      if (!activeAccount) {
-          return
-      }    
-      this.getSigner(activeAccount)
-      await this.tezos.wallet
-        .at(ORACLE_ADDRESS)
-        .then((contract) => {
-            return contract.methodsObject.default().send()
-        })
-        .then((op) => {
-            console.log(`Waiting for ${op.opHash} to be confirmed...`);
-            return op.confirmation().then(() => op.opHash)
-        })
-        .then((hash) => {
-            console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
-        .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-     }, 
     async getSigner(activeAccount) { 
       const signer = new RemoteSigner(activeAccount.address, NODE_URL )
       await this.tezos.setProvider({signer:signer})
@@ -259,26 +233,61 @@ export default {
     },
     // Read the contract
     async getPotBalance() {
-    const contract = await this.tezos.wallet.at(AD_CONTRACT_ADDRESS)
-    const storage = await contract.storage()
-    this.potBalance = storage.pot.toNumber() * 1e-6
-    this.thisBets = []
-    let bet = this.ante
-    while (bet < this.potBalance + this.betIncrement) {
-      this.thisBets.push(bet)
-      bet += this.betIncrement
-    }
+      const response = await fetch(this.apiUrl);
+      const data = await response.json();
+      this.potBalance = data['pot'] * 1e-6
+      this.thisBets = []
+      let bet = this.ante
+      while (bet < this.potBalance + this.betIncrement) {
+          this.thisBets.push(bet)
+          bet += this.betIncrement
+        }
     },
-    // Read the contract
     async getGamesFromContractBC() {
-      const contract = await this.tezos.wallet.at(AD_CONTRACT_ADDRESS)
-      const storage = await contract.storage()        
-      const games = await storage.games
-      for (let game in games) {
-        console.log('a')
-        console.log(games[game].value)
+      const activeAccount = await this.wallet.client.getActiveAccount()   
+      if (!activeAccount) {
+          return
+      } 
+      const response = await fetch(this.apiUrl);
+      const data = await response.json();
+      this.myGames = {}
+      let i = 0
+      for (let game in data['games']) {
+        if (data['games'][game]['player'] == activeAccount.address) {
+          let gameStatus = 'No Game'
+          if (data['games'][game]['gameStatus'] == '3') {
+            gameStatus = 'Game Over'
+          } else if (data['games'][game]['gameStatus'] == '1') {
+            gameStatus = 'Play for Acey Duecey'
+          }
+          this.myGames[i] = {
+            gameId: game,
+            gameStatus: gameStatus
+          }
+        }
+        i ++
       }
-      return games
+    },
+    // Populate Interface
+    async setGameId(gameId) {
+      this.gameId = gameId
+      this.loadGame()
+    },
+    async myGameHub() {
+      this.getGamesFromContractBC()
+      for (let game in this.myGames) {
+        console.log(game, this.myGames[game])
+      }
+      this.getPotBalance()
+    },
+    async loadGame() {
+      const response = await fetch(this.apiUrl);
+      const data = await response.json();
+      console.log(data['games'][this.gameId]['hand'])
+      this.firstCard = Number(data['games'][this.gameId]['hand'][1])
+      this.secondCard = Number(data['games'][this.gameId]['hand'][2])
+      this.lastCard = Number(data['games'][this.gameId]['hand'][3])
+      this.flipCards()
     },
     async showLearnMore() {
         if (this.showInfo)  {
@@ -305,8 +314,10 @@ export default {
     </div>  
     <div class="rowFlex">
         <div class="gameInfo">MY GAME HUB </div>
+        <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
     </div>    
     <div class="rowFlex"> 
+      <div class="gameInfo">Game Id: {{ gameId }}  </div>
       <div class="gameInfo">Pot Balance: {{ potBalance }} {{this.tezosSymbol}} </div>
       <div class="gameInfo">Your Bet: {{ thisBet }} {{this.tezosSymbol}} </div>
     </div> 
@@ -314,20 +325,21 @@ export default {
       ref="container"
     >
     </div>
-
     <div class="rowFlex">
       <select class="selectBox" v-model="highLow"> PICK: 
         <option v-for="key in ['Ace Low', 'Ace High']" :key="key" > {{ key }} </option>
       </select>
       <div class="actionButton" @click="betBC">Ante up and play!</div>     
-      <div class="actionButton" @click="continueBet">Bet On Acey Deucey</div>
+      <div class="actionButton" @click="continueBetBC">Bet On Acey Deucey</div>
       <div> 
         <div class="gameInfo"> Bet {{ thisBet }} {{ tezosSymbol }}</div>
+        <div class="rowFlex">
+          <div> {{ firstCard }}</div> <div> {{ secondCard }}</div> <div> {{ lastCard }}</div>
+        </div>
         <select class="selectBox" v-model="thisBet"> 
           <option v-for="key in thisBets" :key="key" > {{ key }}  </option> 
         </select>
       </div>
-      <div class="actionButton" @click="getRandomNumberBC"> Ask the Oracle </div>
     </div> 
   </div>
 </template>
