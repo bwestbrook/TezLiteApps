@@ -326,22 +326,23 @@ export default {
           }else if (await data['games'][game]['gameStatus'] == '5') {
             gameStatus = 'Loss'
           }
-          if (Number(data['games'][game]['gameStatus']) > 2 ){
-            this.myOldGames[i] = {
-            gameId: game,
-            gameStatus: gameStatus
-          }
-
-          } else {
-            this.myGames[i] = {
+          if (data['games'][game]['player'] == activeAccount.address) {
+            this.gameCount = i - 1
+            if (Number(data['games'][game]['gameStatus']) > 2 ){
+              this.myOldGames[i] = {
               gameId: game,
               gameStatus: gameStatus
             }
+            } else {
+              this.myGames[i] = {
+                gameId: game,
+                gameStatus: gameStatus
+              }
+            }
           }
-          
         }
         i ++ 
-        this.gameCount = i - 1
+        
       }
     },
     async loadGame() {
@@ -378,10 +379,14 @@ export default {
     },
     async monitorContract() {
       await this.getGamesFromContractBC()
-      if (this.gameId == 'NA') {
-        this.gameId = this.gameCount
+      if (this.gameId == 'NA' && this.gameCount >= 0) {
+        const gameIds = Object.keys(this.myGames)
+        const mostRecentGameId = gameIds[gameIds.length - 1]
+        this.gameId = mostRecentGameId
         this.blockChainStatus = 'Game ' + this.gameId + ' loaded'
         this.loadGame()
+      } else if (this.gameCount < 0) {
+        this.blockChainStatus = 'User has no games' 
       }
     },
     // Render Interface
@@ -433,7 +438,7 @@ export default {
       </div>
     </div>  
     <div class="gameInfo" @click="myGameHub()">MY GAME HUB </div>
-    <div class="actionButton" @click="toggleOldGames()"> {{hideOldGamesStatus}} </div>
+    <div class="actionButton" v-if="gameCount >= 0" @click="toggleOldGames()"> {{hideOldGamesStatus}} </div>
     <div class="rowFlex">
         
         <div v-if="hideOldGames" class="rowFlex">
