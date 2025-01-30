@@ -31,7 +31,7 @@ export default {
       betIncrement: 0.25, 
       thisBet: 0.5,
       myGames: {},
-      gameCount: 0,
+      gameCount: -1,
       thisBets: [],
       hideOldGames: false,
       hideOldGamesStatus: 'Show Old Games'
@@ -439,6 +439,7 @@ export default {
         <div v-if="hideOldGames" class="rowFlex">
           <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myOldGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
         </div>
+        <div class="gameInfo" v-if="gameCount < 0">No Active Games</div>
         <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
     </div>    
     <div class="rowFlex"> 
