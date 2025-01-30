@@ -315,10 +315,10 @@ export default {
             gameStatus = 'Waiting for cards'
             this.blockChainStatus = 'Waiting for cards'
           } else if (await data['games'][game]['gameStatus'] == '1') {
-            gameStatus = 'Active'
+            gameStatus = game + 'is Active'
           } else if (await data['games'][game]['gameStatus'] == '2') {
             gameStatus = 'Waiting for final card'
-            this.blockChainStatus = 'Waiting for final card'
+            this.blockChainStatus = 'Waiting for final card for ' + game
           } else if (await data['games'][game]['gameStatus'] == '3') {
             gameStatus = 'Win'            
           } else if (await data['games'][game]['gameStatus'] == '4') {
@@ -327,7 +327,7 @@ export default {
             gameStatus = 'Loss'
           }
           if (data['games'][game]['player'] == activeAccount.address) {
-            this.gameCount = i - 1
+            this.gameCount = i
             if (Number(data['games'][game]['gameStatus']) > 2 ){
               this.myOldGames[i] = {
               gameId: game,
