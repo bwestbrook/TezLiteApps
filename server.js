@@ -95,6 +95,10 @@ io.on('connection', (socket) => {
     io.to(gameId).emit("updatePlayerTurn", playerTurn, gameId)
   });
 
+  socket.on("selectGame", function(game) {
+    io.to(socket.id).emit("selectGame", game)
+  });
+
   socket.on("setUserActiveGameRoom", function(address, gameCount, gameId) { // Each user can only be in one game at a time
     for (let i = 0; i < gameCount; i++ ) {
       if (i == gameId) {

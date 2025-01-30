@@ -472,7 +472,7 @@ export default {
 
 <template>
     
-      <div class="canvas-container"
+      <div class="canvasContainer"
           @mousedown="checkClickDown"
           @mouseup="checkClickUp"   
           @mousemove="highlightMove"

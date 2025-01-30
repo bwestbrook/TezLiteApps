@@ -315,7 +315,7 @@ export default {
             gameStatus = 'Waiting for cards'
             this.blockChainStatus = 'Waiting for cards'
           } else if (await data['games'][game]['gameStatus'] == '1') {
-            gameStatus = game + 'is Active'
+            gameStatus = 'is Active'
           } else if (await data['games'][game]['gameStatus'] == '2') {
             gameStatus = 'Waiting for final card'
             this.blockChainStatus = 'Waiting for final card for ' + game
@@ -426,7 +426,7 @@ export default {
 </script>
 
 <template>
-  <div class="canvas-container" >        
+  <div class="canvasContainer" >        
     <div class="rowFlex">
       <div class="actionButtonHelp" @click="showLearnMore"> HOW TO PLAY </div>
         <div class="infoPopup" v-if="showInfo" @click="showLearnMore"> 

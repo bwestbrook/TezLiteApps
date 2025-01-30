@@ -3,25 +3,31 @@
 import aceyDuecey from "./aceyDuecey.vue"
 import tezTacToe from "./tezTacToe.vue"
 import browseNFTs from "./browseNFTs.vue"
+import welcomeIn from './welcomeIn.vue'
 
 export default {
   props: ['wallet', 'socket', 'tezos'],
   components: { 
         aceyDuecey,
         tezTacToe,
-        browseNFTs
+        browseNFTs,
+        welcomeIn
   },
   data () {
     return {
       showTezTactoe: false,
       showAceyDuecy: false,
-      showBrowseNFTs: true,
+      showBrowseNFTs: false,
+      showWelcome: true,
       walletAddress: 'SYNC WALLET'
     }
   },
   created () {
     this.socket.on("newWallet", (newWallet) => {
       this.walletAddress = newWallet
+    })
+    this.socket.on("selectGame", (game) => {
+      this.selectGame(game)
     })
   },
   methods: {
@@ -30,15 +36,23 @@ export default {
         this.showTezTactoe = false
         this.showAceyDuecy = true
         this.showBrowseNFTs = false
+        this.showWelcome = false
       } else if (game == 'TezTacToe') {
         this.showTezTactoe = true
         this.showAceyDuecy = false
         this.showBrowseNFTs = false
+        this.showWelcome = false
         this.socket.emit('updatePlayerControl')
       } else if (game == 'browseNFTs') {
         this.showTezTactoe = false
         this.showAceyDuecy = false
         this.showBrowseNFTs = true
+        this.showWelcome = false
+      } else if (game == 'welcome') {
+        this.showTezTactoe = false
+        this.showAceyDuecy = false
+        this.showBrowseNFTs = false
+        this.showWelcome = true
       }
     },
     async toggleWallet(){
@@ -60,13 +74,16 @@ export default {
       <div class="gameManagement">
         <div class="rowFlex" >     
           <div>
-            <div class="label"> ALL GAMES IN BETA GHOSTNET ONLY!!! NFTS ON MAINNET AT OBJKT.COM</div>
+            <div class="label"> ALL GAMES GHOSTNET ONLY!!! NFTS LIVE ON MAINNET @ OBJKT.COM</div>
           </div>
           <div class="actionButton" @click="toggleWallet">
               {{walletAddress}} 
           </div>  
         </div>   
-        <div class="rowFlex" >     
+        <div class="rowFlex" >   
+          <div @click="selectGame('welcome')" :class="{ 'actionButtonSelected': showWelcome, 'actionButton': !showWelcome }" >
+              TXL Home
+          </div>   
           <div @click="selectGame('browseNFTs')" :class="{ 'actionButtonSelected': showBrowseNFTs, 'actionButton': !showBrowseNFTs }" >
               Browse 2.725K
           </div>     
@@ -77,6 +94,11 @@ export default {
               Acey Duecey Beta!
           </div>
         </div>    
+        <welcomeIn v-if="showWelcome"
+          :socket="socket"
+          :wallet="wallet"
+          :tezos="tezos"
+        />
         <tezTacToe v-if="showTezTactoe"
           :socket="socket"
           :wallet="wallet"
@@ -174,11 +196,23 @@ export default {
   flex: 1;
   cursor: default;
 }
-.canvas-container {
+.canvasContainer {
   border-style: ridge;
   border-radius: 2px;
   border-width: 0px;
   border-color: #080606;
+}
+.imageViewer {
+  width: 49%;
+  border-style: ridge;
+  border-radius: 2px;
+  border-width: 2px;
+  border-color: #5f5f5f;
+  cursor: pointer;
+}
+.imageViewerBox {
+  width: 100%;
+  cursor: pointer;
 }
 .infoPopup {
   position: relative;
@@ -195,13 +229,8 @@ export default {
   position: relative;
   justify-content: left;
   text-align: left;
-  top: 0;
-  left: 0;
+  list-style-type: none;
   width: 100%;
-  height: 100%;
-  justify-content: left;
-  align-items: left;
-  cursor: not-allowed;
 }
 .actionButton {
   align-content: center;

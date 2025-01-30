@@ -873,7 +873,7 @@ export default {
     this.camera.position.z = 200;
     this.camera.lookAt(this.scene.position)
     this.loader = new Three.TextureLoader();  
-    this.nftTexture = this.loader.load(''); 
+    this.nftTexture = this.loader.load(require('../assets/nftExample.jpeg')); 
     this.nftMaterial = new Three.MeshMatcapMaterial({ map: this.nftTexture, opacity: 0.75, transparent: true});
     this.defaultGeometry = new Three.BoxGeometry(130, 130, 3, 1)
     // Socket Management
