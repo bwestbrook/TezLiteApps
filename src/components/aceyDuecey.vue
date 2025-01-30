@@ -20,9 +20,9 @@ export default {
       showInfo: false, 
       highLow: 'Ace High',
       aceHigh: 1,
-      blockChainStatus: 'No Activity',
+      blockChainStatus: '',
       tezosSymbol: 'ꜩ',
-      gameId: 'None', 
+      gameId: 'NA', 
       firstCard: -1,
       secondCard: -1,
       lastCard: 0,
@@ -31,14 +31,16 @@ export default {
       betIncrement: 0.25, 
       thisBet: 0.5,
       myGames: {},
-      thisBets: []
+      gameCount: 0,
+      thisBets: [],
+      hideOldGames: false,
+      hideOldGamesStatus: 'Show Old Games'
     }
   },
-
   created () {
-
     this.apiUrl = 'https://api.ghostnet.tzkt.io/v1/contracts/' + AD_CONTRACT_ADDRESS + '/storage'
     //Three 
+    this.fee = 0.1
     this.gameSize = window.innerWidth * GAME_WIDTH_FRACTION
     this.maxGameSize = MAX_GAME_SIZE
     this.board = new Three.Group();
@@ -59,7 +61,6 @@ export default {
     this.card3Material = new Three.MeshBasicMaterial({ map: this.card2Texture });
     this.cardTextures = [this.card1Texture, this.card2Texture, this.card3Texture]
     this.defaultGeometry = new Three.BoxGeometry(130, 130, 1, 1)
-    ///
     this.deck = [     
       require('../assets/02_of_clubs.png'),
       require('../assets/02_of_diamonds.png'),
@@ -114,17 +115,10 @@ export default {
       require('../assets/14_of_hearts.png'),
       require('../assets/14_of_spades.png'),       
     ]
-    const path = require('path');
-    const threeModulePath = require.resolve('three');
-    console.log(path, threeModulePath)
     this.cardGeometry = new Three.BoxGeometry(50, 100, 0.1, 1)
     //Socket 
     this.socket.on('resizeGame', (width) => {
       this.resizeGameRender(width)
-    }); 
-    this.socket.on('newRandomNumber', (randomNumber) => {
-      console.log("RN", randomNumber)
-      this.randomNumber = randomNumber
     }); 
     try {
       const subFirstTwoCards = this.tezos.stream.subscribeEvent({
@@ -133,9 +127,9 @@ export default {
         //excludeFailedOperations: true
       });
       subFirstTwoCards.on('data', (data) => {   
-        console.log(data) 
+        console.log('twoCardData', data) 
+        this.gameId = Number(data.payload[0]['int'])
         this.myGameHub()
-        this.loadGame()
         this.blockChainStatus = 'Cards Dealt!'
       })
       const subLastCard = this.tezos.stream.subscribeEvent({
@@ -144,9 +138,9 @@ export default {
         //excludeFailedOperations: true
       });
       subLastCard.on('data', (data) => { 
-        console.log(data)         
+        console.log('lastCardData', data)     
+        this.gameId = Number(data.payload[0]['int']) 
         this.myGameHub()
-        this.loadGame()
         this.blockChainStatus = 'Final Card Dealt!'
       })
       } catch (e) {
@@ -154,6 +148,11 @@ export default {
     }
   },
   mounted () {
+    this.blockChainStatus = 'Loading Games'
+    this.intervalId = setInterval(() => {
+      this.monitorContract();
+    }, 5000);
+
     this.renderer = new Three.WebGLRenderer({antialias: true});
     this.renderer.setSize(this.gameSize, this.gameSize)   
     this.$refs.container.appendChild(this.renderer.domElement);
@@ -180,8 +179,11 @@ export default {
       this.renderer.render(this.scene, this.camera);
     },
     async flipCards() {
-      //requestAnimationFrame(this.flipCards);  
-      if (this.lastCard == -1) {
+      //requestAnimationFrame(this.flipCards);
+      if (this.lastCard >= 0) {
+        //this.lastCard = 0
+        this.cards[2].visible = true
+      } else if (this.lastCard == -1 ) {
         this.lastCard = 0
       }
       if (this.firstCard < 0) {
@@ -193,6 +195,7 @@ export default {
       this.loadCardAsset(1, card1asset)
       this.loadCardAsset(2, card2asset)
       this.loadCardAsset(3, card3asset)
+      
     },
     async loadCardAsset(card, cardasset) {
       this.loader.load((cardasset), (texture) => {
@@ -241,7 +244,7 @@ export default {
       await this.tezos.wallet
           .at(AD_CONTRACT_ADDRESS)
           .then((contract) => {
-            return contract.methods.bet(this.aceHigh).send({amount: 0.5})
+            return contract.methods.bet(this.aceHigh).send({amount: 0.5 + this.fee})
           })
           .then((op) => {
             console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -249,7 +252,7 @@ export default {
           })
           .then((hash) => {
             console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)
-            this.blockChainStatus = 'Getting Cards'
+            this.blockChainStatus = 'Getting cards for game ' + this.gameId 
           })
           .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
     }, 
@@ -259,11 +262,12 @@ export default {
           return
       }    
       this.blockChainStatus = 'Submitting Bet'
+      console.log(this.thisBet)
       await this.getSigner(activeAccount)
       await this.tezos.wallet
           .at(AD_CONTRACT_ADDRESS)
           .then((contract) => {
-            return contract.methodsObject.continueBet(this.gameId).send({amount: this.thisBet})
+            return contract.methodsObject.continueBet(this.gameId).send({amount: Number(this.thisBet) + this.fee})
           })
           .then((op) => {
             console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -271,7 +275,8 @@ export default {
           })
           .then((hash) => {
             console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)
-            this.blockChainStatus = 'Getting Final Card' 
+            this.gameId = Number(this.gameId) + 1
+            this.blockChainStatus = 'Getting Final Card for Game ' + this.gameId 
           })
           .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
     }, 
@@ -301,31 +306,86 @@ export default {
       const response = await fetch(this.apiUrl);
       const data = await response.json();
       this.myGames = {}
+      this.myOldGames = {}
       let i = 0
       for (let game in data['games']) {
         if (data['games'][game]['player'] == activeAccount.address) {
-          let gameStatus = 'No Game'
-          if (data['games'][game]['gameStatus'] == '1') {
-            gameStatus = 'Play for Acey Duecey'
-          } else if (data['games'][game]['gameStatus'] == '2') {
-            gameStatus = 'Waiting For Card'
-          } else if (data['games'][game]['gameStatus'] == '3') {
-            gameStatus = 'Game Over Win'
-          } else if (data['games'][game]['gameStatus'] == '4') {
-            gameStatus = 'Game Over Loss'
-          }else if (data['games'][game]['gameStatus'] == '5') {
-            gameStatus = 'Game Over Pair Loss'
+          let gameStatus = ''
+          if (await data['games'][game]['gameStatus'] == '0') {
+            gameStatus = 'Waiting for cards'
+            this.blockChainStatus = 'Waiting for cards'
+          } else if (await data['games'][game]['gameStatus'] == '1') {
+            gameStatus = 'Active'
+          } else if (await data['games'][game]['gameStatus'] == '2') {
+            gameStatus = 'Waiting for final card'
+            this.blockChainStatus = 'Waiting for final card'
+          } else if (await data['games'][game]['gameStatus'] == '3') {
+            gameStatus = 'Win'            
+          } else if (await data['games'][game]['gameStatus'] == '4') {
+            gameStatus = 'Loss'
+          }else if (await data['games'][game]['gameStatus'] == '5') {
+            gameStatus = 'Loss'
           }
-          this.myGames[i] = {
+          if (Number(data['games'][game]['gameStatus']) > 2 ){
+            this.myOldGames[i] = {
             gameId: game,
             gameStatus: gameStatus
           }
+
+          } else {
+            this.myGames[i] = {
+              gameId: game,
+              gameStatus: gameStatus
+            }
+          }
+          
         }
-        i ++
+        i ++ 
+        this.gameCount = i - 1
+      }
+    },
+    async loadGame() {
+      if (this.gameId == 'NA') {
+        return
+      }
+      const response = await fetch(this.apiUrl);
+      const data = await response.json();
+      if (!data['games'][this.gameId]) {
+        return
+      }
+      this.firstCard = Number(data['games'][this.gameId]['hand'][1])
+      this.secondCard = Number(data['games'][this.gameId]['hand'][2])
+      this.lastCard = Number(data['games'][this.gameId]['hand'][3])
+      if (this.lastCard >= 1) {
+        this.card3.visible = true
+      } else {
+        this.card3.visible = false
+      }
+      let gameStatus = 'No Game'
+      if (data['games'][this.gameId]['gameStatus'] == '1') {
+            gameStatus = 'Play for Acey Duecey ' + this.gameId 
+          } else if (data['games'][this.gameId]['gameStatus'] == '2') {
+            gameStatus = 'Waiting For Card for Game ' + this.gameId 
+          } else if (data['games'][this.gameId]['gameStatus'] == '3') {
+            gameStatus = 'Game ' + this.gameId + 'Over - Win!'            
+          } else if (data['games'][this.gameId]['gameStatus'] == '4') {
+            gameStatus = 'Game ' + this.gameId + ' Over Loss'
+          }else if (data['games'][this.gameId]['gameStatus'] == '5') {
+            gameStatus = 'Game ' + this.gameId + ' Over Pair Loss'
+          }
+      this.blockChainStatus = gameStatus
+      this.flipCards()
+    },
+    async monitorContract() {
+      await this.getGamesFromContractBC()
+      if (this.gameId == 'NA') {
+        this.gameId = this.gameCount
+        this.blockChainStatus = 'Game ' + this.gameId + ' loaded'
+        this.loadGame()
       }
     },
     // Render Interface
-    async setGameId(gameId) {
+    async setGameId(gameId) {      
       this.gameId = gameId
       this.loadGame()
     },
@@ -337,31 +397,23 @@ export default {
       }
     },
     async myGameHub() {
-      this.getGamesFromContractBC()
-      this.getPotBalance()
-    },
-    async loadGame() {
-      if (this.gameId == 'None') {
-        return
-      }
-      const response = await fetch(this.apiUrl);
-      const data = await response.json();
-      this.firstCard = Number(data['games'][this.gameId]['hand'][1])
-      this.secondCard = Number(data['games'][this.gameId]['hand'][2])
-      this.lastCard = Number(data['games'][this.gameId]['hand'][3])
-      console.log(this.firstCard, this.secondCard)
-      if (this.lastCard >= 1) {
-        this.card3.visible = true
-      } else {
-        this.card3.visible = false
-      }
-      this.flipCards()
+      await this.getPotBalance()
+      await this.loadGame()
     },
     async showLearnMore() {
         if (this.showInfo)  {
             this.showInfo = false
         } else {
             this.showInfo = true
+        }
+    },
+    async toggleOldGames() {
+        if (this.hideOldGames)  {
+            this.hideOldGames = false
+            this.hideOldGamesStatus = 'Show Old Games'
+        } else {
+            this.hideOldGames = true
+            this.hideOldGamesStatus = 'Hide Old Games'
         }
     }
   },
@@ -380,16 +432,28 @@ export default {
         </div>
       </div>
     </div>  
+    <div class="gameInfo" @click="myGameHub()">MY GAME HUB </div>
+    <div class="actionButton" @click="toggleOldGames()"> {{hideOldGamesStatus}} </div>
     <div class="rowFlex">
-        <div class="actionButton" @click="myGameHub()">MY GAME HUB </div>
+        
+        <div v-if="hideOldGames" class="rowFlex">
+          <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myOldGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
+        </div>
         <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
     </div>    
     <div class="rowFlex"> 
       <div class="gameInfo">Game Id: {{ gameId }}  </div>
       <div class="gameInfo">Pot Balance: {{ potBalance }} {{this.tezosSymbol}} </div>
+      <div> 
+        <div class="gameInfo"> Bet up to pot </div>
+        <select class="selectBox" v-model="thisBet"> 
+          <option v-for="key in thisBets" :key="key" > {{ key }}  </option> 
+        </select>
+      </div>
       <div class="gameInfo">Your Bet: {{ thisBet }} {{this.tezosSymbol}} </div>
-      <div class="gameInfo">Blockchain Status: {{ blockChainStatus }}  </div>
+      
     </div> 
+    <div class="gameInfo">Blockchain Status: {{ blockChainStatus }}  </div>
     <div 
       ref="container"
     >
@@ -400,12 +464,7 @@ export default {
       </select>
       <div class="actionButton" @click="betBC">Ante up and play!</div>     
       <div class="actionButton" @click="continueBetBC">Bet On Acey Deucey</div>
-      <div> 
-        <div class="gameInfo"> Bet {{ thisBet }} {{ tezosSymbol }}</div>
-        <select class="selectBox" v-model="thisBet"> 
-          <option v-for="key in thisBets" :key="key" > {{ key }}  </option> 
-        </select>
-      </div>
+      
     </div> 
   </div>
 </template>

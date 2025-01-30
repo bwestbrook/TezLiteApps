@@ -874,7 +874,7 @@ export default {
     this.camera.lookAt(this.scene.position)
     this.loader = new Three.TextureLoader();  
     this.nftTexture = this.loader.load(''); 
-    this.nftMaterial = new Three.MeshBasicMaterial({ map: this.nftTexture, transperant: true, alpha: 0.2});
+    this.nftMaterial = new Three.MeshMatcapMaterial({ map: this.nftTexture, opacity: 0.75, transparent: true});
     this.defaultGeometry = new Three.BoxGeometry(130, 130, 3, 1)
     // Socket Management
     this.socket.on('resizeGame', (width) => {
