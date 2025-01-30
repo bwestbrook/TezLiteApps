@@ -191,6 +191,18 @@ export default {
   align-items: left;
   cursor: not-allowed;
 }
+.listItem {
+  position: relative;
+  justify-content: left;
+  text-align: left;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  justify-content: left;
+  align-items: left;
+  cursor: not-allowed;
+}
 .actionButton {
   align-content: center;
   vertical-align: center;

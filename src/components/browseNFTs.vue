@@ -1124,8 +1124,8 @@ export default {
         </div>        
         <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
           <div>
-            <ul>
-              <li class="infoPopup" v-for="(key, value) in nftInfo" :key="key" :value="value">{{ key }}</li>
+            <ul >
+              <li class="listItem" v-for="(key, value) in nftInfo" :key="key" :value="value">{{ key }}</li>
             </ul>
           </div>
         </div>

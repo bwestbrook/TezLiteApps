@@ -520,7 +520,7 @@ export default {
             <div class="infoPopup" v-if="showInfo" @click="showLearnMore" > 
             <div>
             <ul>
-              <li v-for="(key, value) in gameInfo" :key="key" :value="value">{{ key }}</li>
+              <li class="listItem" v-for="(key, value) in gameInfo" :key="key" :value="value">{{ key }}</li>
             </ul>
             </div>
             </div>

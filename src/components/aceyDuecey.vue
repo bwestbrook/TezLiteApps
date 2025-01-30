@@ -368,7 +368,7 @@ export default {
           } else if (data['games'][this.gameId]['gameStatus'] == '2') {
             gameStatus = 'Waiting For Card for Game ' + this.gameId 
           } else if (data['games'][this.gameId]['gameStatus'] == '3') {
-            gameStatus = 'Game ' + this.gameId + 'Over - Win!'            
+            gameStatus = 'Game ' + this.gameId + ' Over - Win!'            
           } else if (data['games'][this.gameId]['gameStatus'] == '4') {
             gameStatus = 'Game ' + this.gameId + ' Over Loss'
           }else if (data['games'][this.gameId]['gameStatus'] == '5') {
@@ -432,7 +432,7 @@ export default {
         <div class="infoPopup" v-if="showInfo" @click="showLearnMore"> 
         <div>
           <ul>
-            <li v-for="(key, value) in gameInfo" :key="key" :value="value">{{ key }}  </li>
+            <li class="listItem" v-for="(key, value) in gameInfo" :key="key" :value="value">{{ key }}  </li>
           </ul>
         </div>
       </div>
@@ -465,10 +465,10 @@ export default {
     >
     </div>
     <div class="rowFlex">
+      <div class="actionButton" @click="betBC">Ante up and play!</div>     
       <select @change="toggleAceHigh()" class="selectBox" v-model="highLow"> PICK: 
         <option   v-for="key in ['Ace Low', 'Ace High']" :key="key" > {{ key }} </option>
       </select>
-      <div class="actionButton" @click="betBC">Ante up and play!</div>     
       <div class="actionButton" @click="continueBetBC">Bet On Acey Deucey</div>
       
     </div> 
