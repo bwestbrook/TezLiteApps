@@ -24,7 +24,7 @@ export const OBJECT_CONTRACT = 'KT1FvqJwEDWb1Gwc55Jd1jjTHRVWbYKUUpyq'
 
 export const TXL_CONTRACT_ADDRESS = 'KT1Vra2j7Mmfj3jc8PjoCWCpeD9sCj2XAiBY'
 
-export const AD_CONTRACT_ADDRESS = 'KT1CAwLWZYNMqRvZ9rmREjhe5ARRjuri2UdA'
+export const AD_CONTRACT_ADDRESS = 'KT1XXGacXza9czpFj5dDUnsGRrLRGvcxcJ2s'
 
 
 //export const CONTRACT_ADDRESS = 'KT1BHFYWTKyfErwx491rQ3P4c5MuFEXU2Wja' // V0.1
@@ -50,10 +50,10 @@ export const NFT_INFO = [
 ]
 
 export const AD_GAME_INFO = [
-    "Ante up for 0.5 XTZ and choose Ace High or Ace Low",
-    "Your bet goes into the pot (plus you pay a 0.1 XTZ 2.725K holder fee)",
-    'If you get a pair to start, you get half your bet back and the game is over',
-    "If the cards don't match, then you can bet up to the pot (plust 0.1 XTZ fee) that the next card will between your low and high card",
+    "Choose Ace High or Ace Low and then Ante up for 0.3 XTZ (plus you pay a 0.1 XTZ 2.725K holder fee)",
+    "Your bet goes into the pot",
+    'If you get a pair to start, you get half your bet back and the game is over (holders get the other half of your bet)',
+    "If the cards don't match, then you can bet up to the pot (plus a 0.1 XTZ fee) that the next card will between your low and high card",
     "Get good cards on your ante and then big on your Acey Duecey Hand!",
     "Submit your bet (along with another 0.1 XTZ 2.725K holder fee) and try your luck",
     "NOTE: If the next card hits the rail, your bet is removed from the pot and sent the the 2.725K fund!",

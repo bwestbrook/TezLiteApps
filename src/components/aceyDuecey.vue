@@ -27,7 +27,7 @@ export default {
       secondCard: -1,
       lastCard: 0,
       potBalance: 0,
-      ante: 0.1, 
+      ante: 0.2, 
       fee: 0.1,
       thisBet: 0.1,
       myOldGames: {},
@@ -192,14 +192,22 @@ export default {
         this.lastCard = 0
       }
       if (this.firstCard < 0) {
-        return
+        const card1asset = this.pokerCardLoader
+        const card2asset = this.pokerCardLoader
+        const card3asset = this.pokerCardLoader
+        this.loadCardAsset(1, card1asset)
+        this.loadCardAsset(2, card2asset)
+        this.loadCardAsset(3, card3asset)
+      } else {
+        const card1asset = this.deck[this.firstCard]
+        const card2asset = this.deck[this.secondCard]
+        const card3asset = this.deck[this.lastCard] 
+        this.loadCardAsset(1, card1asset)
+        this.loadCardAsset(2, card2asset)
+        this.loadCardAsset(3, card3asset)
       }
-      const card1asset = this.deck[this.firstCard]
-      const card2asset = this.deck[this.secondCard]
-      const card3asset = this.deck[this.lastCard] 
-      this.loadCardAsset(1, card1asset)
-      this.loadCardAsset(2, card2asset)
-      this.loadCardAsset(3, card3asset)
+      
+     
       
     },
     async loadCardAsset(card, cardasset) {
@@ -243,15 +251,18 @@ export default {
       if (!activeAccount) {
           return
       }     
+      let totalBet = Number(this.ante) + this.fee
+      totalBet = Number(totalBet).toFixed(1)
 
       this.loadGame = false
       this.blockChainStatus = 'Submitting Bet'
       this.resetGame()
+      this.gameId = 'NA'
       await this.getSigner(activeAccount)
       await this.tezos.wallet
           .at(AD_CONTRACT_ADDRESS)
           .then((contract) => {
-            return contract.methods.bet(this.aceHigh).send({amount: this.ante + this.fee})
+            return contract.methods.bet(this.aceHigh).send({amount: totalBet})
           })
           .then((op) => {
             console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -301,13 +312,13 @@ export default {
       const data = await response.json();
       this.potBalance = data['pot'] * 1e-6
       this.thisBets = []
-      let bet = this.ante 
-      while (bet < this.potBalance + this.ante) {
+      let bet = this.fee 
+      while (bet < this.potBalance + this.fee) {
           const betEntry = Number(bet).toFixed(1)
           if (bet < this.potBalance) {
             this.thisBets.push(betEntry)
           }
-          bet += this.ante
+          bet += this.fee
         }
       this.potBalance = Number(data['pot'] * 1e-6).toFixed(3)
     },
@@ -325,13 +336,13 @@ export default {
         if (data['games'][game]['player'] == activeAccount.address) {
           let gameStatus = ''
           if (await data['games'][game]['gameStatus'] == '0') {
-            gameStatus = 'Waiting for cards'
-            this.blockChainStatus = 'Waiting for cards ' + this.gameId
+            gameStatus = 'Waiting for first cards'
+            this.blockChainStatus = 'Waiting for first cards ' + this.gameId
           } else if (await data['games'][game]['gameStatus'] == '1') {
-            gameStatus = 'is ready for Acey Duecey'
+            gameStatus = ''
           } else if (await data['games'][game]['gameStatus'] == '2') {
             gameStatus = 'Waiting for final card'
-            this.blockChainStatus = 'Waiting for final card for ' + game
+            this.blockChainStatus = 'Waiting for final card ' + game
           } else if (await data['games'][game]['gameStatus'] == '3') {
             gameStatus = 'Win'            
           } else if (await data['games'][game]['gameStatus'] == '4') {
@@ -359,17 +370,13 @@ export default {
       }
     },
     async loadGameInfo() {
-      if (!this.loadGame) {
-        return
-      }
+      console.log(this.gameId)
       if (this.gameId == 'NA') {
         return
       }
       const response = await fetch(this.apiUrl);
       const data = await response.json();
-      if (!data['games'][this.gameId]) {
-        return
-      }
+     
       this.firstCard = Number(data['games'][this.gameId]['hand'][1])
       this.secondCard = Number(data['games'][this.gameId]['hand'][2])
       this.lastCard = Number(data['games'][this.gameId]['hand'][3])
@@ -379,10 +386,12 @@ export default {
         this.card3.visible = false
       }
       let gameStatus = 'Loading'
-      if (data['games'][this.gameId]['gameStatus'] == '1') {
+          if (data['games'][this.gameId]['gameStatus'] == '0') {
+            gameStatus = 'Waiting for first cards ' + this.gameId 
+          } else if (data['games'][this.gameId]['gameStatus'] == '1') {
             gameStatus = 'Play for Acey Duecey ' + this.gameId 
           } else if (data['games'][this.gameId]['gameStatus'] == '2') {
-            gameStatus = 'Waiting For Card for Game ' + this.gameId 
+            gameStatus = 'Waiting for final card ' + this.gameId 
           } else if (data['games'][this.gameId]['gameStatus'] == '3') {
             gameStatus = 'Game ' + this.gameId + ' Over - Win!'            
           } else if (data['games'][this.gameId]['gameStatus'] == '4') {
@@ -400,14 +409,13 @@ export default {
         const mostRecentGameId = gameIds[gameIds.length - 1]
         this.gameId = mostRecentGameId
         this.blockChainStatus = 'Game ' + this.gameId + ' loaded'
-        this.loadGameInfo()
-        this.getPotBalance()
+        if (this.loadGame) {
+          this.loadGameInfo()
+          this.getPotBalance()
+        }
       } else if (this.gameCount < 0) {
         this.blockChainStatus = 'User has no games' 
-      } else {
-        this.loadGameInfo()
-        this.getPotBalance()
-      }
+      } 
     },
     // Render Interface
     async setGameId(gameId) {      
@@ -457,26 +465,7 @@ export default {
         </div>
       </div>
     </div>  
-    <div class="gameInfo" @click="myGameHub()">MY GAME HUB </div>
-    
-    <div class="rowFlex">
-        
-       
-        <div class="gameInfo" v-if="gameCount < 0">No Active Games</div>
-        <div class="gameInfo">
-          <div class="actionButton" > Active Games </div>
-          <div class="rowFlex">
-            <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
-          </div>
-        </div>
-        <div class="gameInfo">
-          <div class="actionButton" v-if="gameCount >= 0" @click="toggleOldGames()"> {{hideOldGamesStatus}} </div>
-          <div v-if="hideOldGames" class="rowFlex">
-            <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myOldGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
-          </div>
-        </div>
-        
-    </div>    
+     
     <div class="rowFlex"> 
       <div class="gameInfo">Game Id: {{ gameId }}  </div>
       <div class="gameInfo">Pot Balance: {{ potBalance }} {{this.tezosSymbol}} </div>
@@ -494,6 +483,22 @@ export default {
       ref="container"
     >
     </div>
+    <div class="gameInfo" @click="myGameHub()">MY GAME HUB </div>
+    <div class="rowFlex">
+        <div class="gameInfo" v-if="gameCount < 0">No Active Games</div>
+        <div class="gameInfo">
+          <div class="actionButton" > Active Games </div>
+          <div class="rowFlex">
+            <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
+          </div>
+        </div>
+        <div class="gameInfo">
+          <div class="actionButton" v-if="gameCount >= 0" @click="toggleOldGames()"> {{hideOldGamesStatus}} </div>
+          <div v-if="hideOldGames" class="rowFlex">
+            <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myOldGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
+          </div>
+        </div>
+    </div>  
     <div class="rowFlex">
       <div class="actionButton" @click="betBC">Ante up and play!</div>     
       <select @change="toggleAceHigh()" class="selectBox" v-model="highLow"> PICK: 
