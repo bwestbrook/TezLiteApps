@@ -51,7 +51,6 @@ export default {
         <div class="gameInfo"> Win big a big pot in Acey Duecey! </div>
         <img class="imageViewerBox" @click="selectGame('AceyDuecey')" src="../assets/aceyDuecey.png">
       </div>
-
     </div>
   </div>
   </div>

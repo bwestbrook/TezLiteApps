@@ -27,9 +27,9 @@ export default {
       secondCard: -1,
       lastCard: 0,
       potBalance: 0,
-      ante: 0.5, 
-      betIncrement: 0.25, 
-      thisBet: 0.5,
+      ante: 0.125, 
+      fee: 0.125,
+      thisBet: 0.125,
       myGames: {},
       gameCount: -1,
       thisBets: [],
@@ -40,7 +40,6 @@ export default {
   created () {
     this.apiUrl = 'https://api.ghostnet.tzkt.io/v1/contracts/' + AD_CONTRACT_ADDRESS + '/storage'
     //Three 
-    this.fee = 0.1
     this.gameSize = window.innerWidth * GAME_WIDTH_FRACTION
     this.maxGameSize = MAX_GAME_SIZE
     this.board = new Three.Group();
@@ -151,7 +150,7 @@ export default {
     this.blockChainStatus = 'Loading Games'
     this.intervalId = setInterval(() => {
       this.monitorContract();
-    }, 5000);
+    }, 2000);
 
     this.renderer = new Three.WebGLRenderer({antialias: true});
     this.renderer.setSize(this.gameSize, this.gameSize)   
@@ -244,7 +243,7 @@ export default {
       await this.tezos.wallet
           .at(AD_CONTRACT_ADDRESS)
           .then((contract) => {
-            return contract.methods.bet(this.aceHigh).send({amount: 0.5 + this.fee})
+            return contract.methods.bet(this.aceHigh).send({amount: this.ante + this.fee})
           })
           .then((op) => {
             console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -292,10 +291,10 @@ export default {
       const data = await response.json();
       this.potBalance = data['pot'] * 1e-6
       this.thisBets = []
-      let bet = this.ante
-      while (bet < this.potBalance + this.betIncrement) {
+      let bet = this.ante 
+      while (bet < this.potBalance + this.ante) {
           this.thisBets.push(bet)
-          bet += this.betIncrement
+          bet += this.ante
         }
     },
     async getGamesFromContractBC() {
