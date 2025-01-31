@@ -482,6 +482,13 @@ export default {
     <div 
       ref="container"
     >
+    <div class="rowFlex">
+      <div class="actionButton" @click="betBC">Ante up and play!</div>     
+      <select @change="toggleAceHigh()" class="selectBox" v-model="highLow"> PICK: 
+        <option   v-for="key in ['Ace Low', 'Ace High']" :key="key" > {{ key }} </option>
+      </select>
+      <div class="actionButton" @click="continueBetBC">Bet On Acey Deucey</div>
+    </div> 
     </div>
     <div class="gameInfo" @click="myGameHub()">MY GAME HUB </div>
     <div class="rowFlex">
@@ -499,14 +506,7 @@ export default {
           </div>
         </div>
     </div>  
-    <div class="rowFlex">
-      <div class="actionButton" @click="betBC">Ante up and play!</div>     
-      <select @change="toggleAceHigh()" class="selectBox" v-model="highLow"> PICK: 
-        <option   v-for="key in ['Ace Low', 'Ace High']" :key="key" > {{ key }} </option>
-      </select>
-      <div class="actionButton" @click="continueBetBC">Bet On Acey Deucey</div>
-      
-    </div> 
+
   </div>
 </template>
 
