@@ -24,9 +24,8 @@ export default {
 <template>
   <div class="mainBody">     
     <div class="centerBody">
-      <div class ="rowFlex"> 
-        <div> 
-          <div class="gameInfo"> Welcome to the xtz dot life !!!</div>
+      <div class ="rowFlex">         
+          <div> Welcome to the xtz dot life !!!</div>
             <ul class="gameInfo">
               <li class="listItem"> TXL is a lite gaming platform on the Tezos Blockchain </li> 
               <li class="listItem"> The dApp with built with love for Tezos by @jamin_b </li> 
@@ -37,11 +36,11 @@ export default {
               <li class="listItem"> Make sure to click "How to Play" in each tab</li>
             </ul>
           <div > 
-        </div>
+        
       </div>
         <div class ="rowFlex"> 
           <div class="imageViewer" >
-            <div class="gameInfo"> Browse the TXL collection and earn XTZ!  </div>
+            <div class="gameInfo"> Browse TXL earn XTZ!  </div>
             <img class="imageViewerBox" @click="selectGame('browseNFTs')" src="../assets/nftExample.jpeg">
           </div>
           <div class="imageViewer" >

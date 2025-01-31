@@ -204,7 +204,7 @@ export default {
   border-color: #080606;
 }
 .imageViewer {
-  width: 31 %;
+  width: 32.5%;
   border-style: ridge;
   border-radius: 2px;
   border-width: 2px;
