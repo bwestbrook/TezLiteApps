@@ -79,11 +79,12 @@ export default {
           <div class="actionButton" @click="toggleWallet">
               {{walletAddress}} 
           </div>  
-        </div>   
+        </div>  
+        <div @click="selectGame('welcome')" :class="{ 'actionButtonSelected': showWelcome, 'actionButton': !showWelcome }" >
+          TXL Home
+        </div>     
         <div class="rowFlex" >   
-          <div @click="selectGame('welcome')" :class="{ 'actionButtonSelected': showWelcome, 'actionButton': !showWelcome }" >
-              TXL Home
-          </div>   
+         
           <div @click="selectGame('browseNFTs')" :class="{ 'actionButtonSelected': showBrowseNFTs, 'actionButton': !showBrowseNFTs }" >
               Browse 2.725K
           </div>     
@@ -203,7 +204,7 @@ export default {
   border-color: #080606;
 }
 .imageViewer {
-  width: 48%;
+  width: 31 %;
   border-style: ridge;
   border-radius: 2px;
   border-width: 2px;
