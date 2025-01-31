@@ -208,6 +208,7 @@ export default {
 }
 .imageViewer {
   width: 47%;
+  vertical-align: center;
   border-style: ridge;
   border-radius: 2px;
   border-width: 1px;

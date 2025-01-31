@@ -26,10 +26,7 @@ export default {
       <div class="imageViewer"> 
         <div class="gameInfo"> Welcome to TXL!!! </div>
           TXL is a lite gaming platform on the Tezos Blockchain. The dApps were built with love for Tezos by @jamin_b.
-          Each game is revenue generating for TXL holders! The NFT collection was minted in 2022 and is live on Object.
-          TezTacToe is 3D H2H Get-4-in-a-row and win with the opption to wager ꜩ against your opponents! 
-          Acey Deucey is simple-stragey card game where a small ante and set you up for a big win! 
-          Make sure to click "How to Play" in each tab.          
+          Each game is revenue generating for TXL holders! Click on each to Learn More!        
       </div>
       <div class="imageViewer" >
         <div class="gameInfo"> Browse TXL earn ꜩ!  </div>
