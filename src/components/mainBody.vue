@@ -170,10 +170,11 @@ export default {
   padding: 2px;
   border-style: ridge;
   border-radius: 3px;
-  border-width: 0px;
+  border-width: 2px;
   border-color: #ffffff;
   cursor: default;
   font-family: 'EB Garamond';
+  flex: 1;
 }
 .gameSelect {
   margin: 2px;
@@ -206,10 +207,10 @@ export default {
   border-color: #080606;
 }
 .imageViewer {
-  width: 32%;
+  width: 100%;
   border-style: ridge;
   border-radius: 2px;
-  border-width: 1px;
+  border-width: 4px;
   padding: 1px;
   margin: 1px;
   border-color: #5f5f5f;
