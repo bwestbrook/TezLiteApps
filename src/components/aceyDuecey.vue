@@ -27,14 +27,14 @@ export default {
       secondCard: -1,
       lastCard: 0,
       potBalance: 0,
-      ante: 0.125, 
-      fee: 0.125,
-      thisBet: 0.125,
+      ante: 0.1, 
+      fee: 0.1,
+      thisBet: 0.1,
       myGames: {},
       gameCount: -1,
       thisBets: [],
-      hideOldGames: false,
-      hideOldGamesStatus: 'Show Old Games'
+      hideOldGames: true,
+      hideOldGamesStatus: 'Hide Old Games'
     }
   },
   created () {
@@ -314,7 +314,7 @@ export default {
             gameStatus = 'Waiting for cards'
             this.blockChainStatus = 'Waiting for cards'
           } else if (await data['games'][game]['gameStatus'] == '1') {
-            gameStatus = 'is Active'
+            gameStatus = 'is ready for Acey Duecey'
           } else if (await data['games'][game]['gameStatus'] == '2') {
             gameStatus = 'Waiting for final card'
             this.blockChainStatus = 'Waiting for final card for ' + game
