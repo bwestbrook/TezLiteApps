@@ -22,25 +22,35 @@ export default {
 </script>
 
 <template>      
-    <div class ="rowFlex gameManagement">         
-      <div class="imageViewer"> 
-        <div class="gameInfo"> Welcome to TXL!!! </div>
+    <div class="gameManagement"> 
+      <div class="gameInfo"> Welcome to TXL!!! </div>
+      <div class="gameManagement ">
           TXL is a lite gaming platform on the Tezos Blockchain. The dApps were built with love for Tezos by @jamin_b.
-          Each game is revenue generating for TXL holders! Click on each to Learn More!        
+          Each game is revenue generating for TXL holders! Click on each to Learn More!   
+        </div>
+        
+      <div class="gameManagement"> 
+        
+        <div class ="rowFlex gameManagement">       
+          <div class="imageViewer" >
+            <div class="actionButton" @click="selectGame('browseNFTs')"> Browse TXL earn ꜩ!  </div>
+            <img class="imageViewerBox" @click="selectGame('browseNFTs')" src="../assets/nftExample.jpeg">
+          </div>
+          <div class="imageViewer" >
+            <div class="actionButton" @click="selectGame('TezTacToe')"> H2H 3D-4-in-a-row for ꜩ!  </div>
+            <img class="imageViewerBox" @click="selectGame('TezTacToe')" src="../assets/tezTacToe.png">
+          </div>
+          <div class="imageViewer" >
+            <div class="actionButton" @click="selectGame('AceyDuecey')"> Win big ꜩ in Acey Duecey! </div>
+            <img class="imageViewerBox" @click="selectGame('AceyDuecey')" src="../assets/aceyDuecey.png">
+          </div>
+          <div class="imageViewer" >
+            <div class="actionButton"> Coming Soon! </div>
+            <img class="imageViewerBox" src="../assets/questionMark.jpg">
+          </div>
+        </div> 
       </div>
-      <div class="imageViewer" >
-        <div class="gameInfo"> Browse TXL earn ꜩ!  </div>
-        <img class="imageViewerBox" @click="selectGame('browseNFTs')" src="../assets/nftExample.jpeg">
-      </div>
-      <div class="imageViewer" >
-        <div class="gameInfo"> H2H 3D-4-in-a-row for ꜩ!  </div>
-        <img class="imageViewerBox" @click="selectGame('TezTacToe')" src="../assets/tezTacToe.png">
-      </div>
-      <div class="imageViewer" >
-        <div class="gameInfo"> Win big ꜩ in Acey Duecey! </div>
-        <img class="imageViewerBox" @click="selectGame('AceyDuecey')" src="../assets/aceyDuecey.png">
-      </div>
-    </div> 
+    </div>
 </template>
 
 <style>

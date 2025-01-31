@@ -137,9 +137,18 @@ export default {
   color: rgb(255, 255, 255);
 }
 .centerBody{
+  margin:5px;
+  padding:1px;
+  max-width: 610px;
+  font-family: 'EB Garamond';
   display: flex;
-  margin:auto;
   flex-direction: column;
+  margin: auto;
+  border-style: ridge;
+  border-radius: 5px;
+  border-width: 0px;
+  border-color: #fff;
+  color: rgb(255, 255, 255);
 }
 .gameManagement {
   justify-content: center;
@@ -148,6 +157,18 @@ export default {
   padding: auto;
   flex: 1;
   cursor: default;
+}
+.infoBox {
+  justify-content: center;
+  vertical-align: center;
+  text-align: center;
+  width: 95%;
+  flex: 1;
+  cursor: default;
+  border-style: ridge;
+  border-radius: 5px;
+  border-width: 2px;
+  border-color: #fff;
 }
 .rowFlex {
   display: flex;
@@ -212,12 +233,13 @@ export default {
   border-style: ridge;
   border-radius: 2px;
   border-width: 1px;
-  padding: 1px;
+  padding: 3px;
   margin: 1px;
   border-color: #5f5f5f;
   cursor: pointer;
 }
 .imageViewerBox {
+  vertical-align: center;
   width: 100%;
   cursor: pointer;
 }
