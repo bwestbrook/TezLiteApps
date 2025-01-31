@@ -30,6 +30,7 @@ export default {
       ante: 0.1, 
       fee: 0.1,
       thisBet: 0.1,
+      myOldGames: {},
       myGames: {},
       gameCount: -1,
       thisBets: [],
@@ -293,9 +294,12 @@ export default {
       this.thisBets = []
       let bet = this.ante 
       while (bet < this.potBalance + this.ante) {
-          this.thisBets.push(bet)
+          const betEntry = Number(bet).toFixed(1)
+          bet += this.ante
+          this.thisBets.push(betEntry)
           bet += this.ante
         }
+      this.potBalance = Number(data['pot'] * 1e-6).toFixed(3)
     },
     async getGamesFromContractBC() {
       const activeAccount = await this.wallet.client.getActiveAccount()   
@@ -386,6 +390,8 @@ export default {
         this.loadGame()
       } else if (this.gameCount < 0) {
         this.blockChainStatus = 'User has no games' 
+      } else {
+        this.loadGame()
       }
     },
     // Render Interface
@@ -437,14 +443,21 @@ export default {
       </div>
     </div>  
     <div class="gameInfo" @click="myGameHub()">MY GAME HUB </div>
-    <div class="actionButton" v-if="gameCount >= 0" @click="toggleOldGames()"> {{hideOldGamesStatus}} </div>
+    
     <div class="rowFlex">
-        
-        <div v-if="hideOldGames" class="rowFlex">
-          <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myOldGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
+        <div class="actionButton" v-if="gameCount >= 0" @click="toggleOldGames()"> {{hideOldGamesStatus}} </div>
+        <div v-if="hideOldGames" class="gameInfo">
+          <div v-if="hideOldGames" class="rowFlex">
+            <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myOldGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
+          </div>
         </div>
         <div class="gameInfo" v-if="gameCount < 0">No Active Games</div>
-        <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
+        <div class="gameInfo">
+          <div class="rowFlex">
+            <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
+          </div>
+        </div>
+        
     </div>    
     <div class="rowFlex"> 
       <div class="gameInfo">Game Id: {{ gameId }}  </div>
