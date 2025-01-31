@@ -170,7 +170,7 @@ export default {
   padding: 2px;
   border-style: ridge;
   border-radius: 3px;
-  border-width: 2px;
+  border-width: 1px;
   border-color: #ffffff;
   cursor: default;
   font-family: 'EB Garamond';
@@ -207,10 +207,10 @@ export default {
   border-color: #080606;
 }
 .imageViewer {
-  width: 100%;
+  width: 47%;
   border-style: ridge;
   border-radius: 2px;
-  border-width: 4px;
+  border-width: 1px;
   padding: 1px;
   margin: 1px;
   border-color: #5f5f5f;

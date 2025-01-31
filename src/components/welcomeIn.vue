@@ -21,35 +21,29 @@ export default {
 }
 </script>
 
-<template>
-  <div class="mainBody">     
-    <div class="centerBody">      
-      <div class ="rowFlex "> 
-        <div class="gameInfo">
-          <div class="imageViewer"> 
-            <div class="gameInfo"> Welcome to TXL!!! </div>
-              TXL is a lite gaming platform on the Tezos Blockchain. The dApps were built with love for Tezos by @jamin_b.
-              Each game is revenue generating for TXL holders! The NFT collection was minted in 2022 and is live on Object.
-              TezTacToe is 3D H2H Get-4-in-a-row and win with the opption to wager ꜩ against your opponents! 
-              Acey Deucey is simple-stragey card game where a small ante and set you up for a big win! 
-              Make sure to click "How to Play" in each tab.          
-          </div>
-          <div class="imageViewer" >
-            <div class="gameInfo"> Browse TXL earn ꜩ!  </div>
-            <img class="imageViewerBox" @click="selectGame('browseNFTs')" src="../assets/nftExample.jpeg">
-          </div>
-          <div class="imageViewer" >
-            <div class="gameInfo"> H2H 3D-4-in-a-row for ꜩ!  </div>
-            <img class="imageViewerBox" @click="selectGame('TezTacToe')" src="../assets/tezTacToe.png">
-          </div>
-          <div class="imageViewer" >
-            <div class="gameInfo"> Win big ꜩ in Acey Duecey! </div>
-            <img class="imageViewerBox" @click="selectGame('AceyDuecey')" src="../assets/aceyDuecey.png">
-          </div>
-        </div>
+<template>      
+    <div class ="rowFlex gameManagement">         
+      <div class="imageViewer"> 
+        <div class="gameInfo"> Welcome to TXL!!! </div>
+          TXL is a lite gaming platform on the Tezos Blockchain. The dApps were built with love for Tezos by @jamin_b.
+          Each game is revenue generating for TXL holders! The NFT collection was minted in 2022 and is live on Object.
+          TezTacToe is 3D H2H Get-4-in-a-row and win with the opption to wager ꜩ against your opponents! 
+          Acey Deucey is simple-stragey card game where a small ante and set you up for a big win! 
+          Make sure to click "How to Play" in each tab.          
       </div>
-    </div>    
-  </div>
+      <div class="imageViewer" >
+        <div class="gameInfo"> Browse TXL earn ꜩ!  </div>
+        <img class="imageViewerBox" @click="selectGame('browseNFTs')" src="../assets/nftExample.jpeg">
+      </div>
+      <div class="imageViewer" >
+        <div class="gameInfo"> H2H 3D-4-in-a-row for ꜩ!  </div>
+        <img class="imageViewerBox" @click="selectGame('TezTacToe')" src="../assets/tezTacToe.png">
+      </div>
+      <div class="imageViewer" >
+        <div class="gameInfo"> Win big ꜩ in Acey Duecey! </div>
+        <img class="imageViewerBox" @click="selectGame('AceyDuecey')" src="../assets/aceyDuecey.png">
+      </div>
+    </div> 
 </template>
 
 <style>
