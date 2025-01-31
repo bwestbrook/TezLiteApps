@@ -129,8 +129,10 @@ export default {
       subFirstTwoCards.on('data', (data) => {   
         console.log('twoCardData', data) 
         this.gameId = Number(data.payload[0]['int'])
-        this.myGameHub()
+        
         this.blockChainStatus = 'Cards Dealt!'
+        this.myGameHub()
+        this.loadGame()
       })
       const subLastCard = this.tezos.stream.subscribeEvent({
         tag: 'lastCard',
@@ -140,8 +142,9 @@ export default {
       subLastCard.on('data', (data) => { 
         console.log('lastCardData', data)     
         this.gameId = Number(data.payload[0]['int']) 
-        this.myGameHub()
         this.blockChainStatus = 'Final Card Dealt!'
+        this.myGameHub()
+        this.loadGame()
       })
       } catch (e) {
         console.log('Error', e);
@@ -262,12 +265,14 @@ export default {
           return
       }    
       this.blockChainStatus = 'Submitting Bet'
-      console.log(this.thisBet)
+      let totalBet = Number(this.thisBet) + this.fee
+      totalBet = Number(totalBet).toFixed(1)
+      console.log(totalBet)
       await this.getSigner(activeAccount)
       await this.tezos.wallet
           .at(AD_CONTRACT_ADDRESS)
           .then((contract) => {
-            return contract.methodsObject.continueBet(this.gameId).send({amount: Number(this.thisBet) + this.fee})
+            return contract.methodsObject.continueBet(this.gameId).send({amount: totalBet})
           })
           .then((op) => {
             console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -275,7 +280,7 @@ export default {
           })
           .then((hash) => {
             console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)
-            this.gameId = Number(this.gameId) + 1
+            this.gameId = Number(this.gameId)
             this.blockChainStatus = 'Getting Final Card for Game ' + this.gameId 
           })
           .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
@@ -295,8 +300,9 @@ export default {
       let bet = this.ante 
       while (bet < this.potBalance + this.ante) {
           const betEntry = Number(bet).toFixed(1)
-          bet += this.ante
-          this.thisBets.push(betEntry)
+          if (bet < this.potBalance) {
+            this.thisBets.push(betEntry)
+          }
           bet += this.ante
         }
       this.potBalance = Number(data['pot'] * 1e-6).toFixed(3)
@@ -316,7 +322,7 @@ export default {
           let gameStatus = ''
           if (await data['games'][game]['gameStatus'] == '0') {
             gameStatus = 'Waiting for cards'
-            this.blockChainStatus = 'Waiting for cards'
+            this.blockChainStatus = 'Waiting for cards ' + this.gameId
           } else if (await data['games'][game]['gameStatus'] == '1') {
             gameStatus = 'is ready for Acey Duecey'
           } else if (await data['games'][game]['gameStatus'] == '2') {
@@ -365,7 +371,7 @@ export default {
       } else {
         this.card3.visible = false
       }
-      let gameStatus = 'No Game'
+      let gameStatus = 'Loading'
       if (data['games'][this.gameId]['gameStatus'] == '1') {
             gameStatus = 'Play for Acey Duecey ' + this.gameId 
           } else if (data['games'][this.gameId]['gameStatus'] == '2') {
@@ -388,10 +394,12 @@ export default {
         this.gameId = mostRecentGameId
         this.blockChainStatus = 'Game ' + this.gameId + ' loaded'
         this.loadGame()
+        this.getPotBalance()
       } else if (this.gameCount < 0) {
         this.blockChainStatus = 'User has no games' 
       } else {
         this.loadGame()
+        this.getPotBalance()
       }
     },
     // Render Interface
@@ -445,16 +453,19 @@ export default {
     <div class="gameInfo" @click="myGameHub()">MY GAME HUB </div>
     
     <div class="rowFlex">
-        <div class="actionButton" v-if="gameCount >= 0" @click="toggleOldGames()"> {{hideOldGamesStatus}} </div>
-        <div v-if="hideOldGames" class="gameInfo">
-          <div v-if="hideOldGames" class="rowFlex">
-            <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myOldGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
-          </div>
-        </div>
+        
+       
         <div class="gameInfo" v-if="gameCount < 0">No Active Games</div>
         <div class="gameInfo">
+          <div class="actionButton" > Active Games </div>
           <div class="rowFlex">
             <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
+          </div>
+        </div>
+        <div class="gameInfo">
+          <div class="actionButton" v-if="gameCount >= 0" @click="toggleOldGames()"> {{hideOldGamesStatus}} </div>
+          <div v-if="hideOldGames" class="rowFlex">
+            <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myOldGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
           </div>
         </div>
         
