@@ -24,7 +24,7 @@ export const OBJECT_CONTRACT = 'KT1FvqJwEDWb1Gwc55Jd1jjTHRVWbYKUUpyq'
 
 export const TXL_CONTRACT_ADDRESS = 'KT1Vra2j7Mmfj3jc8PjoCWCpeD9sCj2XAiBY'
 
-export const AD_CONTRACT_ADDRESS = 'KT1XuVhnqFcaezcz42bmj53hYqJrHif29CDA'
+export const AD_CONTRACT_ADDRESS = 'KT1CAwLWZYNMqRvZ9rmREjhe5ARRjuri2UdA'
 
 
 //export const CONTRACT_ADDRESS = 'KT1BHFYWTKyfErwx491rQ3P4c5MuFEXU2Wja' // V0.1

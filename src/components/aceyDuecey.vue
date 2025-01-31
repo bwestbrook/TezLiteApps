@@ -34,6 +34,7 @@ export default {
       myGames: {},
       gameCount: -1,
       thisBets: [],
+      loadGame: true,
       hideOldGames: true,
       hideOldGamesStatus: 'Hide Old Games'
     }
@@ -132,7 +133,8 @@ export default {
         
         this.blockChainStatus = 'Cards Dealt!'
         this.myGameHub()
-        this.loadGame()
+        this.loadGameInfo()
+        this.loadGame = true
       })
       const subLastCard = this.tezos.stream.subscribeEvent({
         tag: 'lastCard',
@@ -144,7 +146,7 @@ export default {
         this.gameId = Number(data.payload[0]['int']) 
         this.blockChainStatus = 'Final Card Dealt!'
         this.myGameHub()
-        this.loadGame()
+        this.loadGameInfo()
       })
       } catch (e) {
         console.log('Error', e);
@@ -241,6 +243,8 @@ export default {
       if (!activeAccount) {
           return
       }     
+
+      this.loadGame = false
       this.blockChainStatus = 'Submitting Bet'
       this.resetGame()
       await this.getSigner(activeAccount)
@@ -354,7 +358,10 @@ export default {
         
       }
     },
-    async loadGame() {
+    async loadGameInfo() {
+      if (!this.loadGame) {
+        return
+      }
       if (this.gameId == 'NA') {
         return
       }
@@ -393,19 +400,19 @@ export default {
         const mostRecentGameId = gameIds[gameIds.length - 1]
         this.gameId = mostRecentGameId
         this.blockChainStatus = 'Game ' + this.gameId + ' loaded'
-        this.loadGame()
+        this.loadGameInfo()
         this.getPotBalance()
       } else if (this.gameCount < 0) {
         this.blockChainStatus = 'User has no games' 
       } else {
-        this.loadGame()
+        this.loadGameInfo()
         this.getPotBalance()
       }
     },
     // Render Interface
     async setGameId(gameId) {      
       this.gameId = gameId
-      this.loadGame()
+      this.loadGameInfo()
     },
     async toggleAceHigh() {
       if (this.highLow == 'Ace High') {
@@ -416,7 +423,7 @@ export default {
     },
     async myGameHub() {
       await this.getPotBalance()
-      await this.loadGame()
+      await this.loadGameInfo()
     },
     async showLearnMore() {
         if (this.showInfo)  {
