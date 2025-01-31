@@ -91,7 +91,7 @@ export default {
               Play TezTacToe!
           </div>   
           <div @click="selectGame('AceyDuecey')" :class="{ 'actionButtonSelected': showAceyDuecy, 'actionButton': !showAceyDuecy }">
-              Acey Duecey Beta!
+              Play Acey Duecey!
           </div>
         </div>    
         <welcomeIn v-if="showWelcome"
