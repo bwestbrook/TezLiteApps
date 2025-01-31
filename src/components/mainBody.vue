@@ -163,13 +163,15 @@ export default {
   flex: 1;
 }
 .gameInfo {
+  display: flex;
+  align-content: center;
+  justify-content: center;
   margin: 2px;
   padding: 2px;
   border-style: ridge;
   border-radius: 3px;
-  border-width: 2px;
+  border-width: 0px;
   border-color: #ffffff;
-  flex: 1;
   cursor: default;
   font-family: 'EB Garamond';
 }
@@ -207,7 +209,9 @@ export default {
   width: 32%;
   border-style: ridge;
   border-radius: 2px;
-  border-width: 2px;
+  border-width: 1px;
+  padding: 1px;
+  margin: 1px;
   border-color: #5f5f5f;
   cursor: pointer;
 }

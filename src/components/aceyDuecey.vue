@@ -318,7 +318,15 @@ export default {
           if (bet < this.potBalance) {
             this.thisBets.push(betEntry)
           }
-          bet += this.fee
+          if (this.potBalance < 2) {
+            bet += this.fee
+          } else if (this.potBalance < 5) {
+            bet += this.fee * 2
+          }
+          else if (this.potBalance < 10) {
+            bet += this.fee * 3
+          }
+            
         }
       this.potBalance = Number(data['pot'] * 1e-6).toFixed(3)
     },

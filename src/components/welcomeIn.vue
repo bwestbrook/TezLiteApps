@@ -24,7 +24,7 @@ export default {
 <template>
   <div class="mainBody">     
     <div class="centerBody">
-      <div class="gameManagement">
+      <div class="gameInfo">
         <div>         
             <div > Welcome to TXL!!!</div>
               <ul class="gameInfo">
@@ -38,7 +38,7 @@ export default {
             <div > 
         </div>
         <div class="gameInfo">
-          <div class ="rowFlex"> 
+          <div class ="rowFlex gameInfo"> 
             <div class="imageViewer" >
               <div class="gameInfo"> Browse TXL earn ꜩ!  </div>
               <img class="imageViewerBox" @click="selectGame('browseNFTs')" src="../assets/nftExample.jpeg">
@@ -48,7 +48,7 @@ export default {
               <img class="imageViewerBox" @click="selectGame('TezTacToe')" src="../assets/tezTacToe.png">
             </div>
             <div class="imageViewer" >
-              <div class="gameInfo"> Win big in Acey Duecey! </div>
+              <div class="gameInfo"> Win big ꜩ in Acey Duecey! </div>
               <img class="imageViewerBox" @click="selectGame('AceyDuecey')" src="../assets/aceyDuecey.png">
             </div>
           </div>
