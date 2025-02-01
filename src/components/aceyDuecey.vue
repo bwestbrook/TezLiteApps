@@ -315,7 +315,7 @@ export default {
       let bet = this.fee 
       while (bet < this.potBalance + this.fee) {
           const betEntry = Number(bet).toFixed(1)
-          if (bet < this.potBalance) {
+          if (bet < this.potBalance + this.fee) {
             this.thisBets.push(betEntry)
           }
           if (this.potBalance < 2) {
@@ -412,6 +412,7 @@ export default {
     },
     async monitorContract() {
       await this.getGamesFromContractBC()
+      await this.getPotBalance() 
       if (this.gameId == 'NA' && this.gameCount >= 0) {
         const gameIds = Object.keys(this.myGames)
         const mostRecentGameId = gameIds[gameIds.length - 1]
