@@ -22,18 +22,9 @@ export const TTT_CONTRACT_ADDRESS = 'KT1QZPPy4zPsxcpBivCAWPPwcH6t89nCHgy2' // V0
 
 export const OBJECT_CONTRACT = 'KT1FvqJwEDWb1Gwc55Jd1jjTHRVWbYKUUpyq'  
 
-export const TXL_CONTRACT_ADDRESS = 'KT1Vra2j7Mmfj3jc8PjoCWCpeD9sCj2XAiBY'
+export const TXL_CONTRACT_ADDRESS = 'KT1KiKQEQFmfabdURypH7WHQAH4VDJrXgykp'
 
-export const AD_CONTRACT_ADDRESS = 'KT1XXGacXza9czpFj5dDUnsGRrLRGvcxcJ2s'
-
-
-//export const CONTRACT_ADDRESS = 'KT1BHFYWTKyfErwx491rQ3P4c5MuFEXU2Wja' // V0.1
-
-//export const CONTRACT_ADDRESS = 'KT1BvZ1nhgtEMghqTqqz2UG8rDcjvJrQLomx' // V0.2
-
-//export const CONTRACT_ADDRESS = 'KT1HppAwogv3bd7zoaoB9mFtEuKtxa6qEA1R' // V0.3
-
-//export const CONTRACT_ADDRESS = 'KT1RxAUU7GXn2xqrAhLH9Eu8MCFnC8Zt9bjT' // V0.4
+export const AD_CONTRACT_ADDRESS = 'KT1Ps9AqwrovWpNC7V9UqLhR2gvhh7ovWjiZ'
 
 ////// ADDRESSES ///////
 export const ADMIN_ADDRESS = 'tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w'

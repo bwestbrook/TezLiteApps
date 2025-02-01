@@ -8,9 +8,9 @@ def main():
             '''
             '''               
             #Game Control         
-            self.data.admin = sp.address("tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w")
+            self.data.oracle = sp.address("tz1XbrvTMVa5dWQQBSCn2jgX7BPZyLRhgtKS")
             new_data = sp.record(
-                owner = self.data.admin,
+                owner = self.data.oracle,
                 balance = sp.mutez(0)
             )
             self.data.idLookUp = {
@@ -291,16 +291,18 @@ def main():
         @sp.entrypoint
         def updateOwner(self, params):
             '''
-            Needs to listen for sales and update by admin/oracle
+           Listen for sales with oracle update by admin/oracle
             '''
-            # assert sp.sender == self.data.admin
-            sp.cast(params.txlId, sp.int_or_nat)
-            sp.cast(sp.sender, sp.address)
-            self.data.idLookUp[params.txlId].owner = sp.sender
+            if sp.sender == self.data.oracle:
+                sp.cast(params.txlId, sp.int_or_nat)
+                sp.cast(params.address, sp.address)
+                self.data.idLookUp[params.txlId].owner = params.address
+            else:
+                sp.emit('not Oracle Error', tag='notOracle')
 
 
         @sp.entrypoint
-        def payTxlHolders(self):
+        def payTxlHolder(self):
             '''
             '''    
             payAmount = sp.mutez(0)
@@ -314,22 +316,21 @@ def main():
                 sp.emit(payAmount)
                 sp.send(sp.sender, payAmount)
                 self.data.totalRewards -= payAmount
-
+              
+               
         @sp.entrypoint
-        def fundPool(self):
-            '''
-            '''
+        def default(self):
             sp.cast(sp.amount, sp.mutez)
-            # assert sp.sender == self.data.admin
-            sp.emit(sp.amount, tag='TXLFunded')
-            self.data.totalRewards += sp.amount
-            fundAmountPerNft = sp.split_tokens(sp.amount, 1, 271)
-            for txlId in self.data.idLookUp.keys():
-                #sp.emit(txlId)
-                self.data.idLookUp[txlId].balance += fundAmountPerNft
-               
-               
-      
+            if sp.sender == self.data.oracle:
+                sp.emit(sp.amount, tag='TXLFunded')
+                self.data.totalRewards += sp.amount
+                fundAmountPerNft = sp.split_tokens(sp.amount, 1, 271)
+                for txlId in self.data.idLookUp.keys():
+                    #sp.emit(txlId)
+                    self.data.idLookUp[txlId].balance += fundAmountPerNft
+            else:
+                sp.emit('not Oracle', tag='notOracle')
+            pass
 
        
 @sp.add_test()
@@ -343,47 +344,51 @@ def test():
     player2 = sp.test_account("player2")
     player3 = sp.test_account("player3")
     player4 = sp.test_account("tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w")
-    a.fundPool(
-        _amount = sp.tez(10)
-    )
-    a.fundPool(
-        _amount = sp.tez(10)
-    )
+
     s.show(a.balance)
+    a.default(
+        _sender = a.data.oracle,
+        _amount = sp.mutez(20000000)
+    )
     a.updateOwner(
-        _sender = player1.address,
-        txlId = sp.int_or_nat(60199)
+        _sender = a.data.oracle,
+        txlId = sp.int_or_nat(60199),
+        address = player1.address
     )
   
     a.updateOwner(
-        _sender = player1.address,
-        txlId = sp.int_or_nat(60201)
+        _sender = a.data.oracle,
+        txlId = sp.int_or_nat(60201),
+        address = player3.address
     )
     
     a.updateOwner(
-        _sender = player2.address,
-        txlId = sp.int_or_nat(60202)
+        _sender = a.data.oracle,
+        txlId = sp.int_or_nat(60202),
+        address = player3.address
     )
     
     a.updateOwner(
-        _sender = player2.address,
-        txlId = sp.int_or_nat(60207)
+        _sender = a.data.oracle,
+        txlId = sp.int_or_nat(60207),
+        address = player1.address
     )
 
     a.updateOwner(
-        _sender = player2.address,
-        txlId = sp.int_or_nat(60203)
+        _sender = a.data.oracle,
+        txlId = sp.int_or_nat(60203),
+        address = player2.address
     )
 
-    a.payTxlHolders(
+    a.payTxlHolder(
         _sender = player1.address
     )
     
-    a.payTxlHolders(
+    a.payTxlHolder(
         _sender = player2.address
     )
 
-    a.payTxlHolders(
+    a.payTxlHolder(
         _sender = player4.address
     )
   

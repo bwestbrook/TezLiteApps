@@ -15,17 +15,23 @@ def main():
             5: Pair Drawn
             '''
             #Game Control         
-            self.data.admin = sp.address("tz1XbrvTMVa5dWQQBSCn2jgX7BPZyLRhgtKS")
-            self.data.txlContract = sp.address("KT1NCTnB4hYTgZvUqF5JgzTGpAtnfKSKYxwc")
+            self.data.oracle = sp.address("tz1XbrvTMVa5dWQQBSCn2jgX7BPZyLRhgtKS")
+            self.data.txlContract = sp.address("KT19GUQe9LtCStgFpXMdfaMFwSBJrt2pQaqU")
             self.data.games = {}
             self.data.currentGameIndex = 0
             self.data.pot = sp.mutez(100000)   
             self.data.potReserve = sp.tez(2)
-            self.data.ante = sp.mutez(125000)
-            self.data.txlBalance = sp.mutez(0)
+            self.data.ante = sp.mutez(200000)
             self.data.fee = sp.mutez(100000)
 
 
+        @sp.entrypoint()
+        def updateTxlContract(self, params):
+            '''
+            '''
+            if sp.sender == self.data.oracle:
+                self.data.txlContract = params.newContract
+        
         @sp.entrypoint()
         def bet(self, params):
             '''
@@ -46,7 +52,6 @@ def main():
                 finalBet = sp.mutez(0)
             )
             self.data.pot += sp.amount - self.data.fee
-            #self.data.txlBalance += self.data.fee
             sp.send(self.data.txlContract, self.data.fee)
             self.data.games[self.data.currentGameIndex] = new_game
             self.data.currentGameIndex += 1                 
@@ -58,7 +63,7 @@ def main():
             '''
             '''
             sp.cast(sp.sender, sp.address)
-            if sp.sender == self.data.admin:
+            if sp.sender == self.data.oracle:
                 self.data.games[params.gameId].handValue[1] = params.firstCardValue
                 self.data.games[params.gameId].handValue[2] = params.secondCardValue
                 self.data.games[params.gameId].hand[1] = params.firstCard
@@ -83,7 +88,7 @@ def main():
                     else:
                         sp.emit('bad game status', tag='badGameStatus')
             else:
-                sp.emit('notAdmin', tag='notAdmin')
+                sp.emit('notOracleADFirst2C', tag='notOracleADFirst2C')
 
 
         @sp.entrypoint()
@@ -101,7 +106,7 @@ def main():
                         sp.cast(sp.sender, sp.address)
                         self.data.games[params.gameId].finalBet = sp.amount - self.data.fee
                         self.data.pot += sp.amount - self.data.fee
-                        self.data.txlBalance += self.data.fee
+                        sp.send(self.data.txlContract, self.data.fee)
                         sp.emit(self.data.pot, tag='pot')
                         if self.data.pot > sp.tez(2):
                             self.data.pot -= self.data.fee
@@ -124,11 +129,9 @@ def main():
         def lastCard(self, params):
             '''
             '''
-            # verify sender is game owner 
             sp.cast(sp.sender, sp.address)
-            #assert sp.sender == self.data.admin
             sp.emit(self.data.pot, tag='startingPot')
-            if sp.sender == self.data.admin:
+            if sp.sender == self.data.oracle:
                 if self.data.games[params.gameId].gameStatus == 2:  
                     sp.cast(params.gameId, sp.int_or_nat)
                     sp.cast(sp.sender, sp.address) 
@@ -141,20 +144,19 @@ def main():
                         self.data.games[params.gameId].gameStatus = 4
                     if params.lastCardValue == lowCard:
                         self.data.pot -= self.data.games[params.gameId].finalBet + self.data.ante
-                        self.data.txlBalance += self.data.games[params.gameId].finalBet + self.data.ante
+                        sp.send(self.data.txlContract, self.data.games[params.gameId].finalBet + self.data.ante)
                         self.data.games[params.gameId].gameStatus = 4
                     if params.lastCardValue > lowCard and params.lastCardValue < highCard:    
                         winAmount = self.data.games[params.gameId].finalBet
                         winAmount = sp.split_tokens(winAmount, 2, 1)
                         sp.send(self.data.games[params.gameId].player, winAmount) 
-                        self.data.games[params.gameId].gameStatus = 3 
-                        
+                        self.data.games[params.gameId].gameStatus = 3                         
                         self.data.pot -= winAmount
                         sp.emit(self.data.pot, tag='finalPot')
                         sp.emit(winAmount, tag='winAmount')
                     if params.lastCardValue == highCard:
                         self.data.pot -= self.data.games[params.gameId].finalBet + self.data.ante
-                        self.data.txlBalance += self.data.games[params.gameId].finalBet + self.data.ante
+                        sp.send(self.data.txlContract, self.data.games[params.gameId].finalBet + self.data.ante)
                         self.data.games[params.gameId].gameStatus = 4
                     if params.lastCardValue > highCard:   
                         self.data.games[params.gameId].gameStatus = 4
@@ -166,14 +168,11 @@ def main():
                 else:
                     sp.emit('bad Game Status', tag='badGameStatus')
             else:
-                sp.emit('not Admin', tag='notAdmin')
+                sp.emit('not Oracle', tag='notOracleLastCard')
                             
 
                 
-                   
-    
-
-
+                
        
 @sp.add_test()
 def test():
@@ -185,7 +184,7 @@ def test():
     #s.set_initial_balance(sp.tez(2))
     player1 = sp.test_account("player1")
     player2 = sp.test_account("player2")
-    admin = a.data.admin    
+    oracle = a.data.oracle    
     tzMutezBet = sp.mutez(250000)
     a.data
     #a.set_initial_balance(sp.tez(2))
@@ -197,7 +196,7 @@ def test():
         aceHigh=sp.int_or_nat(1)
     )
     a.firstTwoCards(
-        _sender=admin, 
+        _sender=oracle, 
         firstCard = sp.int_or_nat(30),
         secondCard = sp.int_or_nat(8),
         firstCardValue = sp.int_or_nat(3),
@@ -210,7 +209,7 @@ def test():
         gameId = 0
     )
     a.lastCard(
-        _sender=admin, 
+        _sender=oracle, 
         gameId = 0,
         lastCard = sp.int_or_nat(33),
         lastCardValue = sp.int_or_nat(5)
@@ -222,7 +221,7 @@ def test():
         aceHigh=sp.int_or_nat(1)
     )
     a.firstTwoCards(
-        _sender=admin, 
+        _sender=oracle, 
         firstCard = sp.int_or_nat(2),
         secondCard = sp.int_or_nat(13),
         firstCardValue = sp.int_or_nat(3),
@@ -238,7 +237,7 @@ def test():
     )
     s.show(a.balance)
     a.lastCard(
-        _sender=admin, 
+        _sender=oracle, 
         gameId = 1,
         lastCard = sp.int_or_nat(33),
         lastCardValue = sp.int_or_nat(7)

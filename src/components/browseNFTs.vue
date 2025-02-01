@@ -3,6 +3,7 @@
 <script>
 import { RemoteSigner } from '@taquito/remote-signer';
 import { getRandomIntInclusive, reduceAddress } from '@/utilities';
+
 import * as Three from 'three'
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { GAME_WIDTH_FRACTION, MAX_GAME_SIZE, NFT_INFO, TXL_CONTRACT_ADDRESS, NODE_URL } from '../constants'
@@ -1054,20 +1055,19 @@ export default {
         this.countDownSeconds -= 1 
       }
     },
-    async leaveGameBC(gameId) { 
-      if (gameId < 0) {
-          return
-      }    
+    async payNftHolderBC() { 
       const activeAccount = await this.wallet.client.getActiveAccount() 
       if (!activeAccount) {
           return
       }    
-      this.blockchainStatus = 'Joining Game on Smart Contract'              
+      const address = reduceAddress(activeAccount.address)
+      this.blockchainStatus = 'Paying out NFT earnings'              
       this.getSigner(activeAccount)  
-      this.tezos.wallet
+      await this.tezos.wallet
           .at(TXL_CONTRACT_ADDRESS)
           .then((contract) => {
-              return contract.methods.leaveGame(gameId).send()
+              console.log(contract)
+              return contract.methodsObject.payTxlHolder().send()
           })
           .then((op) => {
               console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -1076,7 +1076,7 @@ export default {
           .then((op) => {
               console.log(`Operation injected: https://ghost.tzstats.com/${op.hash}`)
             })
-          .then(() => this.blockchainStatus = `Joined Game on Smart Contract ${{gameId}}` )
+          .then(() => this.blockchainStatus = `Paid out  ${{address}}` )
           .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
     },
     async getSigner(activeAccount) { 
@@ -1139,7 +1139,7 @@ export default {
           <div class="actionButton" @click="toggleAnimation"> {{pauseAnimationState}}  </div>
           <div class="gameInfo"> Random TXL in {{ countDownSeconds }} </div> 
           <div class="actionButton" @click="togglePauseRandom"> {{pauseState}} Random </div>
-          <div class="actionButton" @click="payNftHolderBC"> Pay out TXL </div>
+          <div class="actionButton" @click="payNftHolderBC"> Cash out TXL Earning! </div>
         </div>     
         <div class="rowFlex">       
           <div class="txlRank"> Rank: {{ txlRanking }}</div>
