@@ -307,6 +307,7 @@ def main():
             '''    
             payAmount = sp.mutez(0)
             isOwner = 0
+            sp.emit(sp.sender)
             for txlId in self.data.idLookUp.keys():
                 if self.data.idLookUp[txlId].owner == sp.sender:
                     payAmount += self.data.idLookUp[txlId].balance
@@ -316,20 +317,19 @@ def main():
                 sp.emit(payAmount)
                 sp.send(sp.sender, payAmount)
                 self.data.totalRewards -= payAmount
+            else:
+                sp.emit('notTXLOwner', tag='notTXLOwner')
               
                
         @sp.entrypoint
         def default(self):
             sp.cast(sp.amount, sp.mutez)
-            if sp.sender == self.data.oracle:
-                sp.emit(sp.amount, tag='TXLFunded')
-                self.data.totalRewards += sp.amount
-                fundAmountPerNft = sp.split_tokens(sp.amount, 1, 271)
-                for txlId in self.data.idLookUp.keys():
-                    #sp.emit(txlId)
-                    self.data.idLookUp[txlId].balance += fundAmountPerNft
-            else:
-                sp.emit('not Oracle', tag='notOracle')
+            sp.emit(sp.amount, tag='TXLFunded')
+            self.data.totalRewards += sp.amount
+            fundAmountPerNft = sp.split_tokens(sp.amount, 1, 271)
+            for txlId in self.data.idLookUp.keys():
+                #sp.emit(txlId)
+                self.data.idLookUp[txlId].balance += fundAmountPerNft
             pass
 
        
