@@ -4,14 +4,17 @@ import aceyDuecey from "./aceyDuecey.vue"
 import tezTacToe from "./tezTacToe.vue"
 import browseNFTs from "./browseNFTs.vue"
 import welcomeIn from './welcomeIn.vue'
+import oracleInfo from './oracleInfo.vue'
 
 export default {
   props: ['wallet', 'socket', 'tezos'],
   components: { 
         aceyDuecey,
-        tezTacToe,
         browseNFTs,
-        welcomeIn
+        oracleInfo,
+        tezTacToe,
+        welcomeIn,
+        
   },
   data () {
     return {
@@ -33,13 +36,13 @@ export default {
   },
   methods: {
     async selectGame(game) {
-      if (game == 'AceyDuecey') {
+      if (game == 'aceyDuecey') {
         this.showTezTactoe = false
         this.showAceyDuecy = true
         this.showBrowseNFTs = false
         this.showWelcome = false
         this.showOracle = false
-      } else if (game == 'TezTacToe') {
+      } else if (game == 'tezTacToe') {
         this.showTezTactoe = true
         this.showAceyDuecy = false
         this.showBrowseNFTs = false
@@ -52,7 +55,7 @@ export default {
         this.showBrowseNFTs = true
         this.showWelcome = false
         this.showOracle = false
-      } else if (game == 'oracle') {
+      } else if (game == 'oracleInfo') {
         this.showTezTactoe = false
         this.showAceyDuecy = false
         this.showBrowseNFTs = false
@@ -92,16 +95,16 @@ export default {
           TXL Home
         </div>     
         <div class="rowFlex" >   
-          <div @click="selectGame('AceyDuecey')" :class="{ 'actionButtonSelected': showOracle, 'actionButton': !showOracle }">
+          <div @click="selectGame('oracleInfo')" :class="{ 'actionButtonSelected': showOracle, 'actionButton': !showOracle }">
               Oracle
           </div>         
           <div @click="selectGame('browseNFTs')" :class="{ 'actionButtonSelected': showBrowseNFTs, 'actionButton': !showBrowseNFTs }" >
               Browse 2.725K
           </div>     
-          <div @click="selectGame('TezTacToe')" :class="{ 'actionButtonSelected': showTezTactoe, 'actionButton': !showTezTactoe }">
+          <div @click="selectGame('tezTacToe')" :class="{ 'actionButtonSelected': showTezTactoe, 'actionButton': !showTezTactoe }">
               Play TezTacToe!
           </div>   
-          <div @click="selectGame('AceyDuecey')" :class="{ 'actionButtonSelected': showAceyDuecy, 'actionButton': !showAceyDuecy }">
+          <div @click="selectGame('aceyDuecey')" :class="{ 'actionButtonSelected': showAceyDuecy, 'actionButton': !showAceyDuecy }">
               Play Acey Duecey!
           </div>    
         </div>    
@@ -124,7 +127,12 @@ export default {
           :socket="socket"
           :wallet="wallet"
           :tezos="tezos"
-        />      
+        />   
+        <oracleInfo v-if="showOracle" 
+          :socket="socket"
+          :wallet="wallet"
+          :tezos="tezos"
+        />     
       </div>
     </div>
     <div class="label"> Made with love by @jamin_b on telegram/discord and @jaminb12 on X</div>
