@@ -37,22 +37,32 @@ export default {
         this.showAceyDuecy = true
         this.showBrowseNFTs = false
         this.showWelcome = false
+        this.showOracle = false
       } else if (game == 'TezTacToe') {
         this.showTezTactoe = true
         this.showAceyDuecy = false
         this.showBrowseNFTs = false
         this.showWelcome = false
+        this.showOracle = false
         this.socket.emit('updatePlayerControl')
       } else if (game == 'browseNFTs') {
         this.showTezTactoe = false
         this.showAceyDuecy = false
         this.showBrowseNFTs = true
         this.showWelcome = false
+        this.showOracle = false
+      } else if (game == 'oracle') {
+        this.showTezTactoe = false
+        this.showAceyDuecy = false
+        this.showBrowseNFTs = false
+        this.showWelcome = false
+        this.showOracle = true
       } else if (game == 'welcome') {
         this.showTezTactoe = false
         this.showAceyDuecy = false
         this.showBrowseNFTs = false
         this.showWelcome = true
+        this.showOracle = false
       }
     },
     async toggleWallet(){

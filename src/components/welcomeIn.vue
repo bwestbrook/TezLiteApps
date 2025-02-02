@@ -45,8 +45,8 @@ export default {
             <img class="imageViewerBox" @click="selectGame('AceyDuecey')" src="../assets/aceyDuecey.png">
           </div>
           <div class="imageViewer" >
-            <div class="actionButton"> Coming Soon! </div>
-            <img class="imageViewerBox" src="../assets/questionMark.jpg">
+            <div class="actionButton"> Oracle Stats </div>
+            <img class="imageViewerBox" src="../assets/oracleLogo.jpg">
           </div>
         </div> 
       </div>
