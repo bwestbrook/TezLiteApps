@@ -15,10 +15,11 @@ export default {
   },
   data () {
     return {
-      showTezTactoe: false,
+      showWelcome: true,     
       showAceyDuecy: false,
       showBrowseNFTs: false,
-      showWelcome: true,
+      showTezTactoe: false,
+      showOracle: false,
       walletAddress: 'SYNC WALLET'
     }
   },
@@ -83,9 +84,6 @@ export default {
     <div class="centerBody">
       <div class="gameManagement">
         <div class="rowFlex" >     
-          <div>
-            <div class="label"> ALL GAMES GHOSTNET ONLY!!! NFTS LIVE ON MAINNET @ OBJKT.COM</div>
-          </div>
           <div class="actionButton" @click="toggleWallet">
               {{walletAddress}} 
           </div>  
@@ -94,7 +92,9 @@ export default {
           TXL Home
         </div>     
         <div class="rowFlex" >   
-         
+          <div @click="selectGame('AceyDuecey')" :class="{ 'actionButtonSelected': showOracle, 'actionButton': !showOracle }">
+              Oracle
+          </div>         
           <div @click="selectGame('browseNFTs')" :class="{ 'actionButtonSelected': showBrowseNFTs, 'actionButton': !showBrowseNFTs }" >
               Browse 2.725K
           </div>     
@@ -103,7 +103,7 @@ export default {
           </div>   
           <div @click="selectGame('AceyDuecey')" :class="{ 'actionButtonSelected': showAceyDuecy, 'actionButton': !showAceyDuecy }">
               Play Acey Duecey!
-          </div>
+          </div>    
         </div>    
         <welcomeIn v-if="showWelcome"
           :socket="socket"

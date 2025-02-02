@@ -156,7 +156,7 @@ export default {
     this.blockChainStatus = 'Loading Games'
     this.intervalId = setInterval(() => {
       this.monitorContract();
-    }, 2000);
+    }, 1000);
 
     this.renderer = new Three.WebGLRenderer({antialias: true});
     this.renderer.setSize(this.gameSize, this.gameSize)   
@@ -411,6 +411,7 @@ export default {
       this.flipCards()
     },
     async monitorContract() {
+      console.log('chcking contact')
       await this.getGamesFromContractBC()
       await this.getPotBalance() 
       if (this.gameId == 'NA' && this.gameCount >= 0) {
