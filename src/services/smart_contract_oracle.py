@@ -9,6 +9,8 @@ def main():
             '''               
             #Game Control         
             self.data.admin = sp.address("tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w")
+            self.data.oracle = sp.address("tz1XbrvTMVa5dWQQBSCn2jgX7BPZyLRhgtKS")
+            self.data.txlContract = sp.address("KT1HD71gj4ZdehpS4Ri8nasjpDTPDQ574Sxy")
             self.data.requests = {}
             self.data.currentRequestIndex = 0
            

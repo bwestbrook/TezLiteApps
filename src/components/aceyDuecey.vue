@@ -54,6 +54,7 @@ export default {
     this.degrees = 0
     this.loader = new Three.TextureLoader();
     this.pokerCardLoader = require('../assets/pokerCard.png')
+    this.pokerCardTexture = this.loader.load(this.pokerCardLoader); 
     this.card1Texture = this.loader.load(this.pokerCardLoader); 
     this.card2Texture = this.loader.load(this.pokerCardLoader); 
     this.card3Texture = this.loader.load(this.pokerCardLoader);
@@ -220,8 +221,12 @@ export default {
     },
     async buildGame() {      
       this.card1 = new Three.Mesh(this.cardGeometry, this.card1Material); 
+      this.backCard1 =  new Three.Mesh(this.cardGeometry, this.pokerCardTexture); 
       this.card1.position.set(-60, -30, 0);
+      this.backCard1.position.set(0, 0, 0)
+      console.log(this.backCard1)
       await this.board.add(this.card1)    
+      await this.board.add(this.backCard1)  
       this.card2 = new Three.Mesh(this.cardGeometry, this.card2Material); 
       this.card2.position.set(60, -30, 0);
       await this.board.add(this.card2)   
@@ -373,8 +378,7 @@ export default {
             }
           }
         }
-        i ++ 
-        
+        i ++         
       }
     },
     async loadGameInfo() {
@@ -411,7 +415,6 @@ export default {
       this.flipCards()
     },
     async monitorContract() {
-      console.log('chcking contact')
       await this.getGamesFromContractBC()
       await this.getPotBalance() 
       if (this.gameId == 'NA' && this.gameCount >= 0) {
