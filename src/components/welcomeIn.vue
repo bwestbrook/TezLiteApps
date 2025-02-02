@@ -23,14 +23,8 @@ export default {
 
 <template>      
     <div class="gameManagement"> 
-      <div class="gameInfo"> Welcome to TXL!!! </div>
-      <div class="gameManagement ">
-          TXL is a lite gaming platform on the Tezos Blockchain. The dApps were built with love for Tezos by @jamin_b.
-          Each game is revenue generating for TXL holders! Click on each to Learn More!   
-        </div>
-        
-      <div class="gameManagement"> 
-        
+      <div class="gameInfo"> Welcome to TXL!!! </div>       
+      <div class="gameManagement">         
         <div class ="rowFlex gameManagement">       
           <div class="imageViewer" >
             <div class="actionButton"> Oracle </div>

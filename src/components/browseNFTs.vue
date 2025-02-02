@@ -863,6 +863,7 @@ export default {
     this.tzktMetadataEndPoint = 'https://api.tzkt.io/v1/bigmaps/861/keys?key.eq='
     this.tzktOwnerEndPoint ='https://api.tzkt.io/v1/bigmaps/857/keys?active=true&value.eq=1&select=key&key.nat.eq='
     this.rankingsHashUrl = 'https://ipfs.io/ipfs/QmTY4jY9q4XwcyEVNfsQJj8t4Liesi7nhzKcqyPYwMdm1t'
+
     //Three
     this.board = new Three.Group()
     this.scene = new Three.Scene();    
