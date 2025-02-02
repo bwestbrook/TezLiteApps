@@ -35,17 +35,17 @@ export default {
           <div class="imageViewer" >
             <div class="actionButton" @click="selectGame('browseNFTs')"> Browse TXL earn ꜩ!  </div>
             <img class="imageViewerBox" @click="selectGame('browseNFTs')" src="../assets/nftExample.jpeg">
+          </div>      
+          <div class="imageViewer" >
+            <div class="actionButton" @click="selectGame('AceyDuecey')"> Win big ꜩ in Acey Duecey! </div>
+            <img class="imageViewerBox" @click="selectGame('AceyDuecey')" src="../assets/aceyDuecey.png">
           </div>
           <div class="imageViewer" >
             <div class="actionButton" @click="selectGame('TezTacToe')"> H2H 3D-4-in-a-row for ꜩ!  </div>
             <img class="imageViewerBox" @click="selectGame('TezTacToe')" src="../assets/tezTacToe.png">
           </div>
           <div class="imageViewer" >
-            <div class="actionButton" @click="selectGame('AceyDuecey')"> Win big ꜩ in Acey Duecey! </div>
-            <img class="imageViewerBox" @click="selectGame('AceyDuecey')" src="../assets/aceyDuecey.png">
-          </div>
-          <div class="imageViewer" >
-            <div class="actionButton"> Oracle Stats </div>
+            <div class="actionButton"> Oracle </div>
             <img class="imageViewerBox" src="../assets/oracleLogo.jpg">
           </div>
         </div> 
