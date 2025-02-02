@@ -379,7 +379,7 @@ export default {
     },
     async loadGameInfo() {
       console.log(this.gameId)
-      if (this.gameId == 'NA') {
+      if (this.gameId == 'NA' || !this.gameId) {
         return
       }
       const response = await fetch(this.apiUrl);

@@ -18,7 +18,7 @@ export const NODE_URL = 'https://ghostnet.tezos.ecadinfra.com/'
 //export const NODE_URL = 'https://rpc.tzkt.io/ghostnet' 
 
 ////// CONTRACTS ///////
-export const TTT_CONTRACT_ADDRESS = 'KT1QZPPy4zPsxcpBivCAWPPwcH6t89nCHgy2' // V0.5 Version 1 will be on mainnet
+export const TTT_CONTRACT_ADDRESS = 'KT1FsKda1m7CR2YwXRM9Awzctq1Js7TjmTmM' // V0.5 Version 1 will be on mainnet
 
 export const OBJECT_CONTRACT = 'KT1FvqJwEDWb1Gwc55Jd1jjTHRVWbYKUUpyq'  
 

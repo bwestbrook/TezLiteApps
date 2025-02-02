@@ -31,6 +31,7 @@ export default {
             viewableGames: false, 
             loadedGames: false,
             blockWaits: '',
+            fee: 0.1,
             gameStatus: 'No Players',
             playerTurnStr: 'No Game',
             playerTurn: -1, 
@@ -171,17 +172,12 @@ export default {
             if (!activeAccount) {
                 return
             }   
-            const feeAmount = tezAmount * 0.95 
-            const tzSurrenderAmount = Math.floor(0.25 * feeAmount * 1e6)
-            const tzSurrenderOtherAmount =  Math.ceil(0.75 * feeAmount * 1e6)
+            const sendAmount = tezAmount + this.fee
             this.getSigner(activeAccount)
             this.tezos.wallet
                 .at(TTT_CONTRACT_ADDRESS)
                 .then((contract) => {
-                    return contract.methodsObject.startGame({
-                            tzSurrenderAmount: tzSurrenderAmount,
-                            tzSurrenderOtherAmount: tzSurrenderOtherAmount
-                        }).send({amount: tezAmount});
+                    return contract.methodsObject.startGame().send({amount: sendAmount});
                 })
                 .then((op) => {
                     console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -204,7 +200,7 @@ export default {
                 .at(TTT_CONTRACT_ADDRESS)
                 .then((contract) => {
                     return contract.methods.joinGame(gameId)
-                        .send({amount: 1})
+                        .send({amount: 1 + this.fee})
                 })
                 .then((op) => {
                     console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -224,12 +220,13 @@ export default {
             if (!activeAccount) {
                 return
             }    
-            this.blockchainStatus = 'Joining Game on Smart Contract'              
+            console.log(gameId)
+            this.blockchainStatus = 'Leaving Game on Smart Contract'              
             this.getSigner(activeAccount)  
             this.tezos.wallet
                 .at(TTT_CONTRACT_ADDRESS)
                 .then((contract) => {
-                    return contract.methods.leaveGame(gameId).send()
+                    return contract.methods.leaveGame(Number(gameId)).send()
                 })
                 .then((op) => {
                     console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -292,7 +289,7 @@ export default {
                 .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
         },
         async getSigner(activeAccount) { 
-            const signer = await RemoteSigner(activeAccount.address, NODE_URL )
+            const signer = new RemoteSigner(activeAccount.address, NODE_URL)
             await this.tezos.setProvider({signer:signer})
             await this.tezos.setWalletProvider(this.wallet)  
             return signer
@@ -449,7 +446,7 @@ export default {
                     } else if (gamesObject[i].gameStatus == 1 ) {
                         this.leavableGames = true
                     }
-                } else if (gamesObject[i].gameStatus == 1 ) {
+                } else if (gamesObject[i].gameStatus <= 1 ) {
                     this.allGamesStatus[i] = 4
                     this.joinableGames = true
                 } else {
@@ -486,6 +483,7 @@ export default {
                 this.gameId = await game.gameId
                 this.walletPlayerTurn1 = await reduceAddress(game.players[0])
                 this.walletPlayerTurn2 = await reduceAddress(game.players[1])
+                console.log(game)
                 this.playersInGame = [this.walletPlayerTurn1, this.walletPlayerTurn2]
                 this.playerTurn = await game.playerTurn
                 this.socket.emit('updatePlayerTurn', this.playerTurn, this.gameId)

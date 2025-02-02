@@ -16,7 +16,7 @@ def main():
             '''
             #Game Control         
             self.data.oracle = sp.address("tz1XbrvTMVa5dWQQBSCn2jgX7BPZyLRhgtKS")
-            self.data.txlContract = sp.address("KT19GUQe9LtCStgFpXMdfaMFwSBJrt2pQaqU")
+            self.data.txlContract = sp.address("KT1HD71gj4ZdehpS4Ri8nasjpDTPDQ574Sxy")
             self.data.games = {}
             self.data.currentGameIndex = 0
             self.data.pot = sp.mutez(100000)   
@@ -32,6 +32,13 @@ def main():
             if sp.sender == self.data.oracle:
                 self.data.txlContract = params.newContract
         
+        @sp.entrypoint()
+        def updateOracle(self, params):
+            '''
+            '''
+            if sp.sender == self.data.admin:
+                self.data.txlContract = params.newContract
+
         @sp.entrypoint()
         def bet(self, params):
             '''
@@ -117,6 +124,7 @@ def main():
                         sp.send(sp.sender, sp.amount)
                 else:
                     sp.emit('Bet Too Big', tag='betTooBigError')
+                    sp.send(sp.sender, sp.amount)
             else:
                 sp.emit('not Player', tag='notPlayer')
 
