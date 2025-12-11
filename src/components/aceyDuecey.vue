@@ -61,6 +61,7 @@ export default {
     this.card1Material = new Three.MeshBasicMaterial({ map: this.card1Texture });
     this.card2Material = new Three.MeshBasicMaterial({ map: this.card2Texture });
     this.card3Material = new Three.MeshBasicMaterial({ map: this.card2Texture });
+    this.pokerCardMaterial = new Three.MeshBasicMaterial({ map: this.pokerCardTexture });
     this.cardTextures = [this.card1Texture, this.card2Texture, this.card3Texture]
     this.defaultGeometry = new Three.BoxGeometry(130, 130, 1, 1)
     this.deck = [     
@@ -117,22 +118,34 @@ export default {
       require('../assets/14_of_hearts.png'),
       require('../assets/14_of_spades.png'),       
     ]
-    this.cardGeometry = new Three.BoxGeometry(50, 100, 0.1, 1)
+    this.cardGeometry = new Three.BoxGeometry(50, 100, 0.5, 1)
     //Socket 
     this.socket.on('resizeGame', (width) => {
       this.resizeGameRender(width)
     }); 
     try {
-      const subFirstTwoCards = this.tezos.stream.subscribeEvent({
-        tag: 'firstTwoCards',
+      const subFirstCard = this.tezos.stream.subscribeEvent({
+        tag: 'firstCard',
         address: AD_CONTRACT_ADDRESS,
         //excludeFailedOperations: true
       });
-      subFirstTwoCards.on('data', (data) => {   
-        console.log('twoCardData', data) 
-        this.gameId = Number(data.payload[0]['int'])
-        
-        this.blockChainStatus = 'Cards Dealt!'
+      subFirstCard.on('data', (data) => {   
+        console.log('firstCard', data) 
+        this.gameId = Number(data.payload[0]['int'])        
+        this.blockChainStatus = 'First card dealt!'
+        this.myGameHub()
+        this.loadGameInfo()
+        this.loadGame = true
+      })
+      const subSecondCard = this.tezos.stream.subscribeEvent({
+        tag: 'secondCard',
+        address: AD_CONTRACT_ADDRESS,
+        //excludeFailedOperations: true
+      });
+      subSecondCard.on('data', (data) => {   
+        console.log('secondCard', data) 
+        this.gameId = Number(data.payload[0]['int'])        
+        this.blockChainStatus = 'Second card dealt!'
         this.myGameHub()
         this.loadGameInfo()
         this.loadGame = true
@@ -199,6 +212,13 @@ export default {
         this.loadCardAsset(1, card1asset)
         this.loadCardAsset(2, card2asset)
         this.loadCardAsset(3, card3asset)
+      } else if (this.secondCard < 0) {
+        const card1asset = this.deck[this.firstCard]
+        const card2asset = this.pokerCardLoader
+        const card3asset = this.pokerCardLoader
+        this.loadCardAsset(1, card1asset)
+        this.loadCardAsset(2, card2asset)
+        this.loadCardAsset(3, card3asset)
       } else {
         const card1asset = this.deck[this.firstCard]
         const card2asset = this.deck[this.secondCard]
@@ -220,20 +240,27 @@ export default {
       });
     },
     async buildGame() {      
-      this.card1 = new Three.Mesh(this.cardGeometry, this.card1Material); 
-      this.backCard1 =  new Three.Mesh(this.cardGeometry, this.pokerCardTexture); 
+      this.card1 = new Three.Mesh(this.cardGeometry, this.card1Material);      
       this.card1.position.set(-60, -30, 0);
-      this.backCard1.position.set(0, 0, 0)
-      console.log(this.backCard1)
-      await this.board.add(this.card1)    
-      await this.board.add(this.backCard1)  
+      this.backCard1 =  new Three.Mesh(this.cardGeometry, this.pokerCardMaterial); 
+      this.backCard1.position.set(-60, -30, -0.2)
+      console.log(this.backCard1)     
       this.card2 = new Three.Mesh(this.cardGeometry, this.card2Material); 
       this.card2.position.set(60, -30, 0);
-      await this.board.add(this.card2)   
+      this.backCard2 =  new Three.Mesh(this.cardGeometry, this.pokerCardMaterial); 
+      this.backCard2.position.set(60, -30, -0.2)     
       this.card3 = new Three.Mesh(this.cardGeometry, this.card3Material); 
       this.card3.position.set(0, 50, 0);
+      this.backCard3 =  new Three.Mesh(this.cardGeometry, this.pokerCardMaterial); 
+      this.backCard3.position.set(0, 50, -0.2)      
       this.card3.visible = false
+      this.backCard3.visible = false
+      await this.board.add(this.card1)    
+      await this.board.add(this.backCard1)
+      await this.board.add(this.card2)    
+      await this.board.add(this.backCard2)  
       await this.board.add(this.card3)   
+      await this.board.add(this.backCard3) 
       await this.scene.add(this.board)   
       this.cards = [this.card1, this.card2, this.card3]       
     },
@@ -241,7 +268,8 @@ export default {
       this.loadCardAsset(1, this.pokerCardLoader)  
       this.loadCardAsset(2, this.pokerCardLoader)  
       this.loadCardAsset(3, this.pokerCardLoader)  
-      this.card3.visible = false            
+      this.card3.visible = false   
+      this.backCard3.visible = false         
     },
     async resizeGameRender(width) {
       this.gameSize = width * GAME_WIDTH_FRACTION
@@ -394,8 +422,10 @@ export default {
       this.lastCard = Number(data['games'][this.gameId]['hand'][3])
       if (this.lastCard >= 1) {
         this.card3.visible = true
+        this.backCard3.visible = true
       } else {
         this.card3.visible = false
+        this.backCard3.visible = false
       }
       let gameStatus = 'Loading'
           if (data['games'][this.gameId]['gameStatus'] == '0') {
