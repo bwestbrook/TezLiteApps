@@ -143,7 +143,7 @@ export default {
     //this.socket.emit("resizeGame", window.innerWidth)
     this.buildGame()
     this.renderer.render(this.scene, this.camera);
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    //this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.showCards()
     this.socket.emit("resizeGame", window.innerWidth)    
     this.myGameHub()
