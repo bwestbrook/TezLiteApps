@@ -4,7 +4,7 @@
 
 import * as Three from 'three'
 import { toRaw } from 'vue';
-//import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { RemoteSigner } from '@taquito/remote-signer';
 import { GAME_WIDTH_FRACTION, MAX_GAME_SIZE, NODE_URL, AD_CONTRACT_ADDRESS, AD_GAME_INFO} from '../constants'
 //import { time } from 'node:console';
@@ -143,7 +143,7 @@ export default {
     //this.socket.emit("resizeGame", window.innerWidth)
     this.buildGame()
     this.renderer.render(this.scene, this.camera);
-    //this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.showCards()
     this.socket.emit("resizeGame", window.innerWidth)    
     this.myGameHub()
