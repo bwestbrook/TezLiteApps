@@ -34,7 +34,7 @@ export default {
       //this.socket = io('localhost:3000')
       this.socket = io('https://damp-spire-29654-cc0ffbb43258.herokuapp.com/')
       this.tezos = Tezos
-      this.getWallet()
+      this.getWallet() 
       this.socket.on('socketId', (socketId) => {
             this.user = socketId
         }) 

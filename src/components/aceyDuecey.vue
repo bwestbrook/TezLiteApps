@@ -3,9 +3,11 @@
 <script>
 
 import * as Three from 'three'
+import { toRaw } from 'vue';
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { RemoteSigner } from '@taquito/remote-signer';
 import { GAME_WIDTH_FRACTION, MAX_GAME_SIZE, NODE_URL, AD_CONTRACT_ADDRESS, AD_GAME_INFO} from '../constants'
+//import { time } from 'node:console';
 
 
 
@@ -16,24 +18,28 @@ export default {
   },
   data () {
     return {
+      pollInterval: null,
       gameInfo: AD_GAME_INFO,
       showInfo: false, 
+      needsLastCard: false,
       highLow: 'Ace High',
       aceHigh: 1,
       blockChainStatus: '',
       tezosSymbol: 'ꜩ',
       gameId: 'NA', 
+      lastGameId: -1,
       firstCard: -1,
       secondCard: -1,
       lastCard: 0,
       potBalance: 0,
       ante: 0.2, 
-      fee: 0.1,
+      fee: 0.0,
       thisBet: 0.1,
+      myPendingGames: {},
       myOldGames: {},
       myGames: {},
       gameCount: -1,
-      thisBets: [],
+      thisBets: [0.1, 0.5, 1, 5, 10],
       loadGame: true,
       hideOldGames: true,
       hideOldGamesStatus: 'Hide Old Games'
@@ -48,11 +54,16 @@ export default {
     this.scene = new Three.Scene();
     this.camera = new Three.PerspectiveCamera(45, 1, 1, 5000);
     this.camera.position.x = 0;
-    this.camera.position.y = -50;
-    this.camera.position.z = 250;
+    this.camera.position.y = -200;
+    this.camera.position.z = 175;
     this.camera.lookAt(this.scene.position)
     this.degrees = 0
     this.loader = new Three.TextureLoader();
+    this.tableGeometry = new Three.BoxGeometry(300, 600, 100, 1)
+    this.tableMaterialLoader = require('../assets/table2.jpg')
+    
+    this.tableTexture = this.loader.load(this.tableMaterialLoader)
+    this.tableMaterial = new Three.MeshBasicMaterial({ map: this.tableTexture });
     this.pokerCardLoader = require('../assets/pokerCard.png')
     this.pokerCardTexture = this.loader.load(this.pokerCardLoader); 
     this.card1Texture = this.loader.load(this.pokerCardLoader); 
@@ -123,55 +134,9 @@ export default {
     this.socket.on('resizeGame', (width) => {
       this.resizeGameRender(width)
     }); 
-    try {
-      const subFirstCard = this.tezos.stream.subscribeEvent({
-        tag: 'firstCard',
-        address: AD_CONTRACT_ADDRESS,
-        //excludeFailedOperations: true
-      });
-      subFirstCard.on('data', (data) => {   
-        console.log('firstCard', data) 
-        this.gameId = Number(data.payload[0]['int'])        
-        this.blockChainStatus = 'First card dealt!'
-        this.myGameHub()
-        this.loadGameInfo()
-        this.loadGame = true
-      })
-      const subSecondCard = this.tezos.stream.subscribeEvent({
-        tag: 'secondCard',
-        address: AD_CONTRACT_ADDRESS,
-        //excludeFailedOperations: true
-      });
-      subSecondCard.on('data', (data) => {   
-        console.log('secondCard', data) 
-        this.gameId = Number(data.payload[0]['int'])        
-        this.blockChainStatus = 'Second card dealt!'
-        this.myGameHub()
-        this.loadGameInfo()
-        this.loadGame = true
-      })
-      const subLastCard = this.tezos.stream.subscribeEvent({
-        tag: 'lastCard',
-        address: AD_CONTRACT_ADDRESS,
-        //excludeFailedOperations: true
-      });
-      subLastCard.on('data', (data) => { 
-        console.log('lastCardData', data)     
-        this.gameId = Number(data.payload[0]['int']) 
-        this.blockChainStatus = 'Final Card Dealt!'
-        this.myGameHub()
-        this.loadGameInfo()
-      })
-      } catch (e) {
-        console.log('Error', e);
-    }
   },
   mounted () {
-    this.blockChainStatus = 'Loading Games'
-    this.intervalId = setInterval(() => {
-      this.monitorContract();
-    }, 1000);
-
+    this.blockChainStatus = 'None'   
     this.renderer = new Three.WebGLRenderer({antialias: true});
     this.renderer.setSize(this.gameSize, this.gameSize)   
     this.$refs.container.appendChild(this.renderer.domElement);
@@ -182,6 +147,14 @@ export default {
     this.showCards()
     this.socket.emit("resizeGame", window.innerWidth)    
     this.myGameHub()
+    this.monitorContract()
+    const n_games = Object.keys(toRaw(this.myGames)).length + 1
+    this.lastGameId = n_games
+    // Then every N seconds
+    this.pollInterval = setInterval(() => {
+      //await fetch(this.apiUrl);     
+      this.monitorContract();
+    }, 6000); // 5 seconds
   },
   methods: {
     // Game Rendering
@@ -190,7 +163,7 @@ export default {
       requestAnimationFrame(this.showCards);  
       this.renderer.render(this.scene, this.camera);
     },
-    async teaseCards() {
+    async teaseCards() { 
       requestAnimationFrame(this.teaseCards);  
       let time = Date.now() * 0.001;
       this.card1.rotation.y = -time;
@@ -198,23 +171,17 @@ export default {
       this.renderer.render(this.scene, this.camera);
     },
     async flipCards() {
-      //requestAnimationFrame(this.flipCards);
-      if (this.lastCard >= 0) {
-        //this.lastCard = 0
-        this.cards[2].visible = true
-      } else if (this.lastCard == -1 ) {
-        this.lastCard = 0
-      }
-      if (this.firstCard < 0) {
+      //this.blockChainStatus = 'Flipping'
+      if (this.firstCard < 0 || this.secondCard < 0) {
         const card1asset = this.pokerCardLoader
         const card2asset = this.pokerCardLoader
         const card3asset = this.pokerCardLoader
         this.loadCardAsset(1, card1asset)
         this.loadCardAsset(2, card2asset)
         this.loadCardAsset(3, card3asset)
-      } else if (this.secondCard < 0) {
+      } else if (this.lastCard <= 0) {
         const card1asset = this.deck[this.firstCard]
-        const card2asset = this.pokerCardLoader
+        const card2asset = this.deck[this.secondCard]
         const card3asset = this.pokerCardLoader
         this.loadCardAsset(1, card1asset)
         this.loadCardAsset(2, card2asset)
@@ -227,24 +194,75 @@ export default {
         this.loadCardAsset(2, card2asset)
         this.loadCardAsset(3, card3asset)
       }
-      
-     
-      
+    },
+    flipCard(frontCard, backCard) {
+      const duration = 1200 // ms
+      const start = performance.now()
+      const startRotation = 0
+      const targetRotation = Math.PI 
+      const liftAmount = 64
+      //const maxOffset = 5 
+      //const startZFront = frontCard.position.z
+      //const startZBack = backCard.position.z
+      //const startX = frontCard.position.x
+      //const startY = frontCard.position.y
+      //const offsetX = (Math.random() - 0.5) * maxOffset
+      //const offsetY = (Math.random() - 0.5) * maxOffset
+      const offsetRot = (Math.random() - 0.5) * 0.15 // subtle twist
+
+      const animate = (time) => {
+        const elapsed = time - start
+        const t = Math.min(elapsed / duration, 1)
+        // ease-in-out
+        const eased = t < 0.5
+          ? 2 * t * t
+          : 1 - Math.pow(-2 * t + 2, 2) / 2    
+        const rot = startRotation + (targetRotation - startRotation) * eased
+        const rot2 = startRotation + (offsetRot - startRotation) * eased
+        const lift = Math.sin(Math.PI * t) * liftAmount
+        frontCard.rotation.y = rot
+        backCard.rotation.y = rot
+        frontCard.rotation.z = rot2
+        backCard.rotation.z = rot2
+        frontCard.rotation.y = rot
+        backCard.rotation.y = rot
+        frontCard.position.z = lift
+        backCard.position.z = lift - 0.2
+         if (frontCard.rotation.y % (2 * Math.PI) > Math.PI / 2) {
+          backCard.visible = false;
+          frontCard.visible = true;
+        } else {
+          backCard.visible = true;
+          frontCard.visible = false;
+        }
+        if (t < 1) {
+          requestAnimationFrame(animate)
+        } 
+        
+      }
+
+      requestAnimationFrame(animate)
     },
     async loadCardAsset(card, cardasset) {
-      this.loader.load((cardasset), (texture) => {
+      this.loader.load(cardasset, (texture) => {
         this.cardTextures[card - 1].dispose(); // Dispose old texture
         this.cardTextures[card - 1] = texture;
         this.cards[card - 1].material.map = texture;
         this.cards[card - 1].material.needsUpdate = true;
+        console.log('CHEEECCKING')
+        console.log(this.myGames[this.gameId].gameStatus)
+        this.flipCard(this.cards[0], this.backCards[0]);
+        this.flipCard(this.cards[1], this.backCards[1]);
+        this.flipCard(this.cards[2], this.backCards[2]); 
       });
     },
     async buildGame() {      
+      this.table = new Three.Mesh(this.tableGeometry, this.tableMaterial); 
+      this.table.position.set(0, 0, -50);     
       this.card1 = new Three.Mesh(this.cardGeometry, this.card1Material);      
       this.card1.position.set(-60, -30, 0);
       this.backCard1 =  new Three.Mesh(this.cardGeometry, this.pokerCardMaterial); 
       this.backCard1.position.set(-60, -30, -0.2)
-      console.log(this.backCard1)     
       this.card2 = new Three.Mesh(this.cardGeometry, this.card2Material); 
       this.card2.position.set(60, -30, 0);
       this.backCard2 =  new Three.Mesh(this.cardGeometry, this.pokerCardMaterial); 
@@ -253,8 +271,9 @@ export default {
       this.card3.position.set(0, 50, 0);
       this.backCard3 =  new Three.Mesh(this.cardGeometry, this.pokerCardMaterial); 
       this.backCard3.position.set(0, 50, -0.2)      
-      this.card3.visible = false
-      this.backCard3.visible = false
+      this.card3.visible = true
+      this.backCard3.visible = true
+      await this.board.add(this.table)
       await this.board.add(this.card1)    
       await this.board.add(this.backCard1)
       await this.board.add(this.card2)    
@@ -263,13 +282,12 @@ export default {
       await this.board.add(this.backCard3) 
       await this.scene.add(this.board)   
       this.cards = [this.card1, this.card2, this.card3]       
+      this.backCards = [this.backCard1, this.backCard2, this.backCard3]      
     },
     async resetGame() {    
       this.loadCardAsset(1, this.pokerCardLoader)  
       this.loadCardAsset(2, this.pokerCardLoader)  
       this.loadCardAsset(3, this.pokerCardLoader)  
-      this.card3.visible = false   
-      this.backCard3.visible = false         
     },
     async resizeGameRender(width) {
       this.gameSize = width * GAME_WIDTH_FRACTION
@@ -279,23 +297,25 @@ export default {
       await this.renderer.setSize(this.gameSize, this.gameSize)
     },  
     // Interact with the contract    
-    async betBC() {        
+    async startGameBC() {        
       const activeAccount = await this.wallet.client.getActiveAccount()   
       if (!activeAccount) {
           return
       }     
       let totalBet = Number(this.ante) + this.fee
       totalBet = Number(totalBet).toFixed(1)
-
+      let ts = this.timestamp()
+      let gameBcId = activeAccount['address'] + '-' + ts + '-R1'
       this.loadGame = false
       this.blockChainStatus = 'Submitting Bet'
       this.resetGame()
-      this.gameId = 'NA'
+      const n_games = Object.keys(toRaw(this.myGames)).length + 1
+      this.gameId = n_games
       await this.getSigner(activeAccount)
       await this.tezos.wallet
           .at(AD_CONTRACT_ADDRESS)
           .then((contract) => {
-            return contract.methods.bet(this.aceHigh).send({amount: totalBet})
+            return contract.methods.startGame(gameBcId).send({amount: totalBet})
           })
           .then((op) => {
             console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -312,15 +332,16 @@ export default {
       if (!activeAccount) {
           return
       }    
+      let gameBcId = this.myGames[this.gameId].gameId
       this.blockChainStatus = 'Submitting Bet'
-      let totalBet = Number(this.thisBet) + this.fee
+      this.needsLastCard = true
+      let totalBet = Number(this.thisBet) 
       totalBet = Number(totalBet).toFixed(1)
-      console.log(totalBet)
       await this.getSigner(activeAccount)
       await this.tezos.wallet
           .at(AD_CONTRACT_ADDRESS)
           .then((contract) => {
-            return contract.methodsObject.continueBet(this.gameId).send({amount: totalBet})
+            return contract.methodsObject.makeBet(gameBcId).send({amount: totalBet})
           })
           .then((op) => {
             console.log(`Waiting for ${op.opHash} to be confirmed...`);
@@ -341,26 +362,12 @@ export default {
     },
     // Read the contract
     async getPotBalance() {
+      //console.log('getting pot balance')
       const response = await fetch(this.apiUrl);
+      //console.log('api response')
       const data = await response.json();
+      //console.log(data)
       this.potBalance = data['pot'] * 1e-6
-      this.thisBets = []
-      let bet = this.fee 
-      while (bet < this.potBalance + this.fee) {
-          const betEntry = Number(bet).toFixed(1)
-          if (bet < this.potBalance + this.fee) {
-            this.thisBets.push(betEntry)
-          }
-          if (this.potBalance < 2) {
-            bet += this.fee
-          } else if (this.potBalance < 5) {
-            bet += this.fee * 2
-          }
-          else if (this.potBalance < 10) {
-            bet += this.fee * 3
-          }
-            
-        }
       this.potBalance = Number(data['pot'] * 1e-6).toFixed(3)
     },
     async getGamesFromContractBC() {
@@ -368,101 +375,109 @@ export default {
       if (!activeAccount) {
           return
       } 
-      const response = await fetch(this.apiUrl);
+      const response = await fetch(this.apiUrl);     
       const data = await response.json();
+       // minimal diffing
       this.myGames = {}
       this.myOldGames = {}
+      this.myPendingGames = {}
       let i = 0
       for (let game in data['games']) {
         if (data['games'][game]['player'] == activeAccount.address) {
-          let gameStatus = ''
-          if (await data['games'][game]['gameStatus'] == '0') {
-            gameStatus = 'Waiting for first cards'
-            this.blockChainStatus = 'Waiting for first cards ' + this.gameId
-          } else if (await data['games'][game]['gameStatus'] == '1') {
-            gameStatus = ''
-          } else if (await data['games'][game]['gameStatus'] == '2') {
-            gameStatus = 'Waiting for final card'
-            this.blockChainStatus = 'Waiting for final card ' + game
-          } else if (await data['games'][game]['gameStatus'] == '3') {
-            gameStatus = 'Win'            
-          } else if (await data['games'][game]['gameStatus'] == '4') {
-            gameStatus = 'Loss'
-          }else if (await data['games'][game]['gameStatus'] == '5') {
-            gameStatus = 'Loss'
-          }
           if (data['games'][game]['player'] == activeAccount.address) {
+            i ++
             this.gameCount = i
-            if (Number(data['games'][game]['gameStatus']) > 2 ){
-              this.myOldGames[i] = {
-              gameId: game,
-              gameStatus: gameStatus
-            }
-            } else {
-              this.myGames[i] = {
+            this.myGames[this.gameCount] = {
                 gameId: game,
-                gameStatus: gameStatus
-              }
+                gameStatus: data['games'][game]['status'],
+                flipped: false
             }
+            if (Number(data['games'][game]['status']) == 1){
+              this.myPendingGames[this.gameCount] = {
+                gameId: game,
+                gameStatus: data['games'][game]['status'],
+                flipped: false
+              }
+            } else if (Number(data['games'][game]['status']) >= 2) {
+              this.myOldGames[this.gameCount] = {
+                gameId: game,
+                gameStatus: data['games'][game]['status'],
+                flipped: false
+              }
+            }           
           }
-        }
-        i ++         
+        }         
       }
     },
     async loadGameInfo() {
-      console.log(this.gameId)
-      if (this.gameId == 'NA' || !this.gameId) {
-        return
-      }
       const response = await fetch(this.apiUrl);
       const data = await response.json();
-     
-      this.firstCard = Number(data['games'][this.gameId]['hand'][1])
-      this.secondCard = Number(data['games'][this.gameId]['hand'][2])
-      this.lastCard = Number(data['games'][this.gameId]['hand'][3])
-      if (this.lastCard >= 1) {
+      console.log(this.myGames[this.gameId]['gameId'])
+      let gameBcId = this.myGames[this.gameId]['gameId']
+      console.log('loading loading', data['games'][gameBcId] )
+      this.firstCard = Number(data['games'][gameBcId]['card1'])
+      this.secondCard = Number(data['games'][gameBcId]['card2'])
+      this.lastCard = Number(data['games'][gameBcId]['card3'])
+      console.log(this.firstCard, this.secondCard, this.lastCard)
+      if (this.lastCard >= 0) {
         this.card3.visible = true
         this.backCard3.visible = true
+      } 
+      let gameStatus = ''
+      if (data['games'][gameBcId]['status'] == '0') {
+        gameStatus = 'Waiting for first card32232342342s ' + this.gameId 
+      } else if (data['games'][gameBcId]['status'] == '1') {
+        gameStatus = 'Play for Acey Duecey in Game ' + this.gameId 
+      } else if (data['games'][gameBcId]['status'] == '2') {
+        gameStatus = 'Waiting for final card ' + this.gameId 
+      } else if (data['games'][gameBcId]['status'] == '3') {
+        gameStatus = 'Game Over: ' + this.gameId + ' Win!'            
+      } else if (data['games'][gameBcId]['status'] == '4') {
+        gameStatus = 'Game Over: ' + this.gameId + ' Pair Loss'
+      } else if (data['games'][gameBcId]['status'] == '5') {
+        gameStatus = 'Game Over: ' + this.gameId + ' Loss'
       } else {
-        this.card3.visible = false
-        this.backCard3.visible = false
+        gameStatus = 'None'
       }
-      let gameStatus = 'Loading'
-          if (data['games'][this.gameId]['gameStatus'] == '0') {
-            gameStatus = 'Waiting for first cards ' + this.gameId 
-          } else if (data['games'][this.gameId]['gameStatus'] == '1') {
-            gameStatus = 'Play for Acey Duecey ' + this.gameId 
-          } else if (data['games'][this.gameId]['gameStatus'] == '2') {
-            gameStatus = 'Waiting for final card ' + this.gameId 
-          } else if (data['games'][this.gameId]['gameStatus'] == '3') {
-            gameStatus = 'Game ' + this.gameId + ' Over - Win!'            
-          } else if (data['games'][this.gameId]['gameStatus'] == '4') {
-            gameStatus = 'Game ' + this.gameId + ' Over Loss'
-          }else if (data['games'][this.gameId]['gameStatus'] == '5') {
-            gameStatus = 'Game ' + this.gameId + ' Over Pair Loss'
-          }
       this.blockChainStatus = gameStatus
-      this.flipCards()
+      this.resetGame()
+      await this.flipCards()
     },
     async monitorContract() {
       await this.getGamesFromContractBC()
       await this.getPotBalance() 
-      if (this.gameId == 'NA' && this.gameCount >= 0) {
-        const gameIds = Object.keys(this.myGames)
-        const mostRecentGameId = gameIds[gameIds.length - 1]
-        this.gameId = mostRecentGameId
-        this.blockChainStatus = 'Game ' + this.gameId + ' loaded'
-        if (this.loadGame) {
-          this.loadGameInfo()
-          this.getPotBalance()
-        }
-      } else if (this.gameCount < 0) {
+      const n_games = Object.keys(toRaw(this.myGames)).length
+      //console.log('GAME COUNT', n_games)
+      if (Number.isNaN(this.gameId)) {
+        return
+      }
+      if (! this.gameId) {
+        return
+      }
+
+      if (this.gameId == 'NA') {
+        return
+      } else if (Number(this.gameId) > n_games) {
+        return
+      }
+
+      
+      
+      if (! this.lastGameId == this.gameId || this.needsLastCard) {
+        console.log('FLIPP ', this.gameId, this.lastGameId)
+        console.log(! this.lastGameId == this.gameId)
+        this.loadGameInfo()
+      }
+      this.lastGameId = this.gameId 
+  
+      if (this.gameCount < 0) {
         this.blockChainStatus = 'User has no games' 
       } 
     },
     // Render Interface
     async setGameId(gameId) {      
       this.gameId = gameId
+      console.log('changing to', this.gameId)
       this.loadGameInfo()
     },
     async toggleAceHigh() {
@@ -474,7 +489,7 @@ export default {
     },
     async myGameHub() {
       await this.getPotBalance()
-      await this.loadGameInfo()
+      await this.getGamesFromContractBC()
     },
     async showLearnMore() {
         if (this.showInfo)  {
@@ -491,6 +506,11 @@ export default {
             this.hideOldGames = true
             this.hideOldGamesStatus = 'Hide Old Games'
         }
+    },
+    timestamp() {
+    const d = new Date();
+    const p = n => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}_${p(d.getMonth()+1)}_${p(d.getDate())}_${p(d.getHours())}_${p(d.getMinutes())}`;
     }
   },
 }
@@ -521,12 +541,12 @@ export default {
       <div class="gameInfo">Your Bet: {{ thisBet }} {{this.tezosSymbol}} </div>
       
     </div> 
-    <div class="gameInfo">Blockchain Status: {{ blockChainStatus }}  </div>
+    <div class="gameInfo">{{ blockChainStatus }}  </div>
     <div 
       ref="container"
     >
     <div class="rowFlex">
-      <div class="actionButton" @click="betBC">Ante up and play!</div>     
+      <div class="actionButton" @click="startGameBC">Ante up and play!</div>     
       <select @change="toggleAceHigh()" class="selectBox" v-model="highLow"> PICK: 
         <option   v-for="key in ['Ace Low', 'Ace High']" :key="key" > {{ key }} </option>
       </select>
@@ -539,13 +559,13 @@ export default {
         <div class="gameInfo">
           <div class="actionButton" > Active Games </div>
           <div class="rowFlex">
-            <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
+            <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myPendingGames" :key="key" :value="value"> Game ID: {{ value }} </div>  
           </div>
         </div>
         <div class="gameInfo">
           <div class="actionButton" v-if="gameCount >= 0" @click="toggleOldGames()"> {{hideOldGamesStatus}} </div>
           <div v-if="hideOldGames" class="rowFlex">
-            <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myOldGames" :key="key" :value="value"> Game ID: {{ value }} {{ key['gameStatus'] }}</div>  
+            <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myOldGames" :key="key" :value="value"> Game ID: {{ value }} </div>  
           </div>
         </div>
     </div>  
