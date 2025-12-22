@@ -4,7 +4,7 @@
 
 import * as Three from 'three'
 import { toRaw } from 'vue';
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+//import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { RemoteSigner } from '@taquito/remote-signer';
 import { GAME_WIDTH_FRACTION, MAX_GAME_SIZE, NODE_URL, AD_CONTRACT_ADDRESS, AD_GAME_INFO} from '../constants'
 //import { time } from 'node:console';
