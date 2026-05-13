@@ -1,26 +1,31 @@
-import $ from 'jquery'
+// Shared math + helper utilities
 
-export const radsToDegs = function(rads) {
-    return rads * 180 / Math.PI;
+export const radsToDegs = (rads) => (rads * 180) / Math.PI
+
+export const degsToRads = (degs) => (degs * Math.PI) / 180
+
+/**
+ * Fetch and parse JSON from a URL.
+ * Throws if the response is not OK or not valid JSON.
+ */
+export const getJsonObjectFromString = async (url) => {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`)
+  }
+  return response.json()
 }
 
-export const degsToRads = function(degs) {
-    return degs * Math.PI / 180;
-}
-  
-export const getJsonObjectFromString = async(input_string) => {
-    const meta_data = await $.getJSON(input_string)
-    console.log(meta_data)
-    return meta_data
-}
+/**
+ * Shorten a Tezos address to "t.<last 4>" for compact display.
+ */
+export const reduceAddress = (address) => `t.${address.substring(address.length - 4)}`
 
-export const reduceAddress = function(address) {
-    return 't.' + address.substring(address.length - 4)
-}
-
+/**
+ * Random integer in [min, max], inclusive on both ends.
+ */
 export const getRandomIntInclusive = (min, max) => {
-    min = Math.ceil(min);
-    max = Math.floor(max);
-    return Math.floor(Math.random() * (max - min + 1)) + min; //The maximum is inclusive and the minimum is inclusive 
+  const lo = Math.ceil(min)
+  const hi = Math.floor(max)
+  return Math.floor(Math.random() * (hi - lo + 1)) + lo
 }
-

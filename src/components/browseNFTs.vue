@@ -1,18 +1,22 @@
-
-
 <script>
-import { RemoteSigner } from '@taquito/remote-signer';
-import { getRandomIntInclusive, reduceAddress } from '@/utilities';
+import { getRandomIntInclusive, reduceAddress } from '@/utilities'
+import { NFT_INFO, TXL_CONTRACT_ADDRESS } from '../constants'
+import { getBigmapKey } from '../services/tzkt'
 
-import * as Three from 'three'
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import { GAME_WIDTH_FRACTION, MAX_GAME_SIZE, NFT_INFO, TXL_CONTRACT_ADDRESS, NODE_URL } from '../constants'
+// The TXL primary-sale source on objkt — when this account holds an NFT it
+// hasn't been bought yet on the secondary market.
+const PRIMARY_OWNER_TAG = 't.Upyq'
+
+// TXL collection lives on mainnet, even when the rest of the app is on ghostnet.
+const TXL_NETWORK = 'mainnet'
+
+// TzKT bigmap ids the TXL collection uses.
+const TXL_METADATA_BIGMAP = 861 // key = kalaId,  value = { ipfs_hash, ... }
+const TXL_OWNER_BIGMAP = 857 // key = { address, nat: kalaId },  value = balance
 
 export default {
   name: 'browseNFTs',
-  props: ["socket", "wallet", "tezos"],
-  components: { 
-  },
+  props: ['socket', 'wallet', 'tezos'],
   data () {
     return {
       nftInfo: NFT_INFO,
@@ -29,7 +33,11 @@ export default {
       pauseState: 'Play',
       currentRotation: 0,
       pauseAnimation: false,
-      pauseAnimationState: 'Pause'
+      pauseAnimationState: 'Pause',
+      // URL of the current NFT image to show in the rotating CSS card.
+      // Falls back to the bundled example until setNewNftImage loads
+      // something from IPFS.
+      currentNftSrc: require('../assets/nftExample.jpeg'),
     }
   },
  
@@ -857,90 +865,41 @@ export default {
       272: 245
     }
     this.selectRandom()
-    this.objectUrl = 'https://objkt.com/users/tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w?fa_contract=KT1EpGgjQs73QfFJs9z7m1Mxm5MTnpC2tqse&availability=for_sale'
+    this.objectUrl =
+      'https://objkt.com/users/tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w?fa_contract=KT1EpGgjQs73QfFJs9z7m1Mxm5MTnpC2tqse&availability=for_sale'
     this.objectKalaUrl = 'https://objkt.com/tokens/kalamint/'
-    this.ipfsHttpsLink = "https://ipfs.io/ipfs/"
-    this.tzktMetadataEndPoint = 'https://api.tzkt.io/v1/bigmaps/861/keys?key.eq='
-    this.tzktOwnerEndPoint ='https://api.tzkt.io/v1/bigmaps/857/keys?active=true&value.eq=1&select=key&key.nat.eq='
+    this.ipfsHttpsLink = 'https://ipfs.io/ipfs/'
     this.rankingsHashUrl = 'https://ipfs.io/ipfs/QmTY4jY9q4XwcyEVNfsQJj8t4Liesi7nhzKcqyPYwMdm1t'
 
-    //Three
-    this.board = new Three.Group()
-    this.scene = new Three.Scene();    
-    this.gameSize = window.innerWidth * GAME_WIDTH_FRACTION
-    this.maxGameSize = MAX_GAME_SIZE
-    this.camera = new Three.PerspectiveCamera(45, 1, 1, 5000);
-    this.camera.position.x = 0;
-    this.camera.position.y = 0;
-    this.camera.position.z = 200;
-    this.camera.lookAt(this.scene.position)
-    this.loader = new Three.TextureLoader();  
-    this.nftTexture = this.loader.load(require('../assets/nftExample.jpeg')); 
-    this.nftMaterial = new Three.MeshMatcapMaterial({ map: this.nftTexture, opacity: 0.9, transparent: true});
-    this.defaultGeometry = new Three.BoxGeometry(130, 130, 3, 1)
-    // Socket Management
+    // The NFT card is a CSS 3D element (see template + styles). The socket
+    // 'resizeGame' listener is preserved for compatibility with the server
+    // fanout, but it's a no-op now — CSS handles sizing via clamp().
     this.socket.on('resizeGame', (width) => {
       this.resizeGameRender(width)
-    }); 
+    })
   },
-  mounted () {    
-    this.intervalId = setInterval(() => {
-      if (!this.pauseRandom) {
-        this.selectRandom()
-      }
-    }, 5000);
-    this.intervalId = setInterval(() => {
-      this.countDown();
-    }, 1000);
-    this.renderer = new Three.WebGLRenderer({antialias: true});
-    this.socket.emit("resizeGame", window.innerWidth)
-    this.$refs.container.appendChild(this.renderer.domElement);
+  mounted() {
+    // Single 1-second tick drives both the visible countdown and the actual
+    // NFT swap, so they can't drift apart. When countDownSeconds hits zero,
+    // tick() fires selectRandom() and resets the timer. Previously these
+    // were two independent setIntervals started a few ms apart in mounted()
+    // — they drifted over time and pause/resume could desync them further.
+    this.tickInterval = setInterval(() => this.tick(), 1000)
     this.selectRandom()
-    this.buildGame()
     this.getNftData()
-    this.renderer.render(this.scene, this.camera);
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    if (this.pauseAnimation) {
-      this.dislplayNft()
-    } else {
-      this.animateNft()
-    }    
-    this.socket.emit("resizeGame", window.innerWidth) 
   },
   methods: {
-    async animateNft() {
-      this.animationFrame = requestAnimationFrame(this.animateNft); 
-      //this.nftDisplay.rotation.y = this.currentRotation
-      
-      let time = 0
-      time = Date.now() * 0.001;
-      this.nftDisplay.rotation.y = this.currentRotation + time;
-      this.renderer.render(this.scene, this.camera);
-    },
-    async dislplayNft() {
-      this.displayFrame = requestAnimationFrame(this.dislplayNft); 
-      this.nftDisplay.rotation.y = this.currentRotation
-      this.renderer.render(this.scene, this.camera);
-    },
+    // CSS animation handles the spin — we only flip `pauseAnimation`, which
+    // toggles `animation-play-state` on the rotating card via :class binding.
     async toggleAnimation() {
       if (this.pauseAnimation) {
         this.pauseAnimation = false
         this.pauseAnimationState = 'Pause'
-        cancelAnimationFrame(this.displayFrame); 
-        this.animateNft()
       } else {
         this.pauseAnimation = true
         this.pauseAnimationState = 'Animate'
-        cancelAnimationFrame(this.animationFrame); 
-        this.currentRotation = this.nftDisplay.rotation.y 
-        this.dislplayNft()        
       }
     },
-    async buildGame() {
-      this.nftDisplay = new Three.Mesh(this.defaultGeometry, this.nftMaterial); 
-      this.nftDisplay.position.set(0, 0, 0);
-      this.scene.add(this.nftDisplay)                
-      },
     async browseAllOnObjkt () {
       window.open(this.objectUrl, '_blank');
     },
@@ -948,13 +907,11 @@ export default {
       const kalaId = this.idLookUp[this.txlId]
       window.open(this.objectKalaUrl + kalaId, '_blank');
     },
-    async resizeGameRender(width) {
-      this.gameSize = width * GAME_WIDTH_FRACTION
-      if (this.gameSize > this.maxGameSize) {
-        this.gameSize = this.maxGameSize
-      }
-      await this.renderer.setSize(this.gameSize, this.gameSize)
-    }, 
+    // Kept so the socket 'resizeGame' handler still resolves cleanly.
+    // CSS clamp() handles all real sizing now.
+    resizeGameRender(_width) {
+      // intentionally empty
+    },
     async getNftDataId() {
       await this.getNftData()
     },
@@ -973,46 +930,49 @@ export default {
       const data = await response.json();
       this.txlData = await data[this.txlId]
     },
-    async getIpfsHash () {
+    async getIpfsHash() {
       const kalaId = this.idLookUp[this.txlId]
-      const tzktApiUrl = this.tzktMetadataEndPoint + kalaId
-      const response = await fetch(tzktApiUrl);
-      const data = await response.json();
-      const ipfsHash = data[0].value.ipfs_hash
-      return ipfsHash
+      const data = await getBigmapKey(TXL_METADATA_BIGMAP, kalaId, {}, { network: TXL_NETWORK })
+      return data?.[0]?.value?.ipfs_hash ?? null
     },
-    async getOwner () {
+    async getOwner() {
       const kalaId = this.idLookUp[this.txlId]
-      const tzktApiUrl = this.tzktOwnerEndPoint + kalaId
-      const response = await fetch(tzktApiUrl);
-      const data = await response.json();
-      const address = data[0].address
-      if (reduceAddress(address) == 't.Upyq') {
-        this.owner = 'PRIMARY - OBJKT.COM'
-      } else {
-        this.owner = reduceAddress(address)
-      }      
+      // Owner lookup: in this bigmap, key = { address, nat }, value = balance.
+      // Filter to active rows where balance == 1, then read the key.address.
+      const data = await getBigmapKey(
+        TXL_OWNER_BIGMAP,
+        kalaId,
+        { active: 'true', 'value.eq': '1', select: 'key', 'key.nat.eq': String(kalaId) },
+        { network: TXL_NETWORK }
+      )
+      const address = data?.[0]?.address ?? data?.[0]?.key?.address
+      if (!address) {
+        this.owner = 'unknown'
+        return
+      }
+      this.owner =
+        reduceAddress(address) === PRIMARY_OWNER_TAG
+          ? 'PRIMARY - OBJKT.COM'
+          : reduceAddress(address)
     },
     async setNewNftImage() {
       const ipfsHash = await this.getIpfsHash()
-      const displayLink = this.ipfsHttpsLink + ipfsHash.split('//')[1]
-      this.loader.load(displayLink, (texture) => {
-        this.nftTexture.dispose(); // Dispose old texture
-        this.nftTexture = texture;
-        this.nftDisplay.material.map = texture;
-        this.nftDisplay.material.needsUpdate = true;
-      });
+      if (!ipfsHash) return
+      const parts = ipfsHash.split('//')
+      // The browser fetches the image directly — no texture loader needed.
+      // currentNftSrc is reactive, so the <img> in the rotating card updates.
+      this.currentNftSrc = this.ipfsHttpsLink + (parts[1] ?? parts[0])
     },
-    async selectRandom() {        
+    async selectRandom() {
       const newId = await getRandomIntInclusive(1, 273)
-      this.txlId = newId    
-      this.getNftData()  
-      if (!this.pauseRandom) {
-        this.countDownSeconds = 5    
-      }
+      this.txlId = newId
+      this.getNftData()
+      // The tick() handler owns countdown resets so the display can't drift.
     },
-    async togglePauseRandom() {  
+    async togglePauseRandom() {
       if (this.pauseRandom) {
+        // Resuming — start from a clean 5 so the user sees the full countdown.
+        this.countDownSeconds = 5
         this.pauseRandom = false
         this.pauseState = 'Pause'
       } else {
@@ -1051,42 +1011,42 @@ export default {
         this.showInfo = true
       }
     },
-    async countDown() {
-      if (!this.pauseRandom) {
-        this.countDownSeconds -= 1 
+    // Single source of truth for "random NFT in N seconds". Fires once per
+    // second. When the timer expires we swap to a new random NFT and reset
+    // the visible countdown — so the on-screen number and the actual swap
+    // are guaranteed to agree.
+    tick() {
+      if (this.pauseRandom) return
+      this.countDownSeconds -= 1
+      if (this.countDownSeconds <= 0) {
+        this.selectRandom()
+        this.countDownSeconds = 5
       }
     },
-    async payNftHolderBC() { 
-      const activeAccount = await this.wallet.client.getActiveAccount() 
-      if (!activeAccount) {
-          return
-      }    
+    async payNftHolderBC() {
+      const activeAccount = await this.wallet.client.getActiveAccount()
+      if (!activeAccount) return
       const address = reduceAddress(activeAccount.address)
-      this.blockchainStatus = 'Paying out NFT earnings'              
-      this.getSigner(activeAccount)  
+      this.blockchainStatus = 'Paying out NFT earnings'
+      this.useWalletProvider()
       await this.tezos.wallet
-          .at(TXL_CONTRACT_ADDRESS)
-          .then((contract) => {
-              console.log(contract)
-              return contract.methodsObject.payTxlHolder().send()
-          })
-          .then((op) => {
-              console.log(`Waiting for ${op.opHash} to be confirmed...`);
-              return op.confirmation().then(() => op.opHash);
-          })
-          .then((op) => {
-              console.log(`Operation injected: https://ghost.tzstats.com/${op.hash}`)
-            })
-          .then(() => this.blockchainStatus = `Paid out  ${{address}}` )
-          .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
+        .at(TXL_CONTRACT_ADDRESS)
+        .then((contract) => contract.methodsObject.payTxlHolder().send())
+        .then((op) => op.confirmation().then(() => op.opHash))
+        .then(() => {
+          this.blockchainStatus = `Paid out ${address}`
+        })
+        .catch((error) => console.error('payNftHolderBC failed:', error))
     },
-    async getSigner(activeAccount) { 
-            const signer = new RemoteSigner(activeAccount.address, NODE_URL )
-            await this.tezos.setProvider({signer:signer})
-            await this.tezos.setWalletProvider(this.wallet)  
-            return signer
+    // The connected Beacon wallet IS the signer — Beacon proxies signing
+    // requests to the user's wallet. RemoteSigner is for remote signing servers.
+    useWalletProvider() {
+      this.tezos.setWalletProvider(this.wallet)
     },
-  }
+  },
+  beforeUnmount() {
+    if (this.tickInterval) clearInterval(this.tickInterval)
+  },
 }
 </script>
 
@@ -1130,11 +1090,26 @@ export default {
             </ul>
           </div>
         </div>
-        <div >    
-          <div 
-            ref="container"
-          >
-          </div> 
+        <div class="nftCardStage">
+          <div :class="['nftCard', pauseAnimation ? 'nftCard--paused' : '']">
+            <div class="nftCardFace nftCardFace--front">
+              <img
+                :src="currentNftSrc"
+                :alt="'TXL #' + txlId"
+                class="nftCardImg"
+                draggable="false"
+              />
+            </div>
+            <div class="nftCardFace nftCardFace--back">
+              <img
+                :src="currentNftSrc"
+                :alt="'TXL #' + txlId"
+                class="nftCardImg"
+                draggable="false"
+              />
+            </div>
+          </div>
+          <div class="nftCardShadow" aria-hidden="true"></div>
         </div>
         <div class="rowFlex">
           <div class="actionButton" @click="toggleAnimation"> {{pauseAnimationState}}  </div>
@@ -1152,6 +1127,78 @@ export default {
     
 </template>
 
-<!-- Add "scoped" attribute to limit CSS to this component only -->
-<style >
+<style scoped>
+/* CSS 3D NFT card. Replaces the Three.js WebGLRenderer + rotating box. */
+.nftCardStage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 16px auto;
+  perspective: 1200px;
+  /* Reserve space so layout doesn't reflow mid-spin. */
+  width: clamp(180px, 60vw, 320px);
+}
+.nftCard {
+  position: relative; /* anchor for .nftCardFace inset:0 */
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  transform-style: preserve-3d;
+  animation: nftSpin 6s linear infinite;
+  will-change: transform;
+  /* Flex items default to min-width:auto = content size. Without this, the
+     intrinsic size of the bundled example image briefly pushes the card to
+     ~2000px before the first paint settles. */
+  min-width: 0;
+  min-height: 0;
+}
+.nftCard--paused {
+  animation-play-state: paused;
+}
+@keyframes nftSpin {
+  from { transform: rotateY(0deg); }
+  to   { transform: rotateY(360deg); }
+}
+.nftCardFace {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #0a0a0a;
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.nftCardFace--back {
+  transform: rotateY(180deg);
+}
+.nftCardImg {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;  /* belt-and-suspenders against intrinsic overflow */
+  max-height: 100%;
+  object-fit: cover;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.nftCardShadow {
+  width: 70%;
+  height: 14px;
+  margin-top: 14px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 70%);
+  filter: blur(3px);
+  /* Subtle pulse to suggest the card is hovering. */
+  animation: nftShadowPulse 6s ease-in-out infinite;
+}
+.nftCard--paused + .nftCardShadow,
+.nftCardStage .nftCard--paused ~ .nftCardShadow {
+  animation-play-state: paused;
+}
+@keyframes nftShadowPulse {
+  0%, 100% { opacity: 0.7; transform: scaleX(1); }
+  50%      { opacity: 0.45; transform: scaleX(0.85); }
+}
 </style>

@@ -1,0 +1,65 @@
+{
+  "prim": "Pair",
+  "args": [
+    {
+      "string": "tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q"
+    },
+    {
+      "prim": "Pair",
+      "args": [
+        {
+          "int": "200000"
+        },
+        {
+          "prim": "Pair",
+          "args": [
+            {
+              "int": "0"
+            },
+            {
+              "prim": "Pair",
+              "args": [
+                {
+                  "int": "100000"
+                },
+                {
+                  "prim": "Pair",
+                  "args": [
+                    [],
+                    {
+                      "prim": "Pair",
+                      "args": [
+                        {
+                          "string": "tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q"
+                        },
+                        {
+                          "prim": "Pair",
+                          "args": [
+                            {
+                              "int": "100000"
+                            },
+                            {
+                              "prim": "Pair",
+                              "args": [
+                                {
+                                  "int": "0"
+                                },
+                                {
+                                  "string": "KT1Ro63rVDUx2x8pMChCLSySso8t6JH47oRQ"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

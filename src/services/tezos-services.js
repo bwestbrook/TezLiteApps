@@ -10,6 +10,6 @@ export const getContractService = async(nft_contract_address) => {
 }
 
 export const createGameService = async() => {
-  console.log('createGame')
+  // intentionally empty — placeholder for future contract origination flow
 }
 

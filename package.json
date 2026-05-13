@@ -1,61 +1,83 @@
 {
-  "name": "newteztac",
+  "name": "tezliteapps",
+  "version": "0.1.0",
+  "private": true,
   "engines": {
     "node": "22.12.0"
   },
-  "version": "0.1.0",
-  "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
     "lint": "vue-cli-service lint",
-    "start": "vue-cli-service serve & node server.js",
+    "format": "prettier --write \"src/**/*.{js,vue,json,css}\"",
+    "start": "node server.js",
+    "dev": "vue-cli-service serve & node server.js",
     "heroku-postinstall": "npm install && npm run build"
   },
   "dependencies": {
     "@airgap/beacon-sdk": "^4.3.1",
-    "@babel/core": "^7.12.16",
-    "@babel/eslint-parser": "^7.12.16",
     "@taquito/beacon-wallet": "^21.0.0",
     "@taquito/remote-signer": "^21.0.0",
     "@taquito/signer": "^21.0.2",
     "@taquito/taquito": "^21.0.0",
-    "@vue/cli-plugin-babel": "~5.0.0",
-    "@vue/cli-plugin-eslint": "~5.0.0",
-    "@vue/cli-service": "~5.0.0",
-    "browserify": "^17.0.1",
     "cool-ascii-faces": "^1.3.4",
     "core-js": "^3.8.3",
     "cors": "^2.8.5",
-    "eslint": "^7.32.0",
-    "eslint-plugin-vue": "^8.0.3",
     "express": "^4.21.2",
-    "heroku": "^10.0.2",
-    "jquery": "^3.7.1",
     "js-sha256": "^0.11.0",
-    "node": "^22.13.0",
-    "nuxt": "^3.15.1",
     "pg": "^8.13.1",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "three": "^0.172.0",
-    "vue": "^3.2.13",
-    "vue-cli-service": "^5.0.10",
-    "vue-socket.io": "^3.0.10"
+    "vue": "^3.2.13"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.12.16",
+    "@babel/eslint-parser": "^7.12.16",
+    "@vue/cli-plugin-babel": "~5.0.0",
+    "@vue/cli-plugin-eslint": "~5.0.0",
+    "@vue/cli-service": "~5.0.0",
+    "buffer": "^6.0.3",
+    "eslint": "^8.57.0",
+    "eslint-plugin-vue": "^9.25.0",
+    "path-browserify": "^1.0.1",
+    "prettier": "^3.2.5",
+    "process": "^0.11.10",
+    "stream-browserify": "^3.0.0"
   },
   "eslintConfig": {
     "root": true,
     "env": {
-      "node": true
+      "node": true,
+      "browser": true,
+      "es2022": true
     },
     "extends": [
       "plugin:vue/vue3-essential",
       "eslint:recommended"
     ],
     "parserOptions": {
-      "parser": "@babel/eslint-parser"
+      "parser": "@babel/eslint-parser",
+      "ecmaVersion": 2022,
+      "sourceType": "module"
     },
-    "rules": {}
+    "rules": {
+      "no-unused-vars": [
+        "warn",
+        {
+          "argsIgnorePattern": "^_"
+        }
+      ],
+      "no-console": [
+        "warn",
+        {
+          "allow": [
+            "warn",
+            "error"
+          ]
+        }
+      ]
+    }
   },
   "browserslist": [
     "> 1%",

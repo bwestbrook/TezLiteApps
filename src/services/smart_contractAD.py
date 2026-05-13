@@ -14,13 +14,27 @@ def main():
             4: Game ended Loss
             5: Pair Drawn
             '''
-            #Game Control     
+            # Game control
             self.data.admin = sp.address("tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w")
             self.data.oracle = sp.address("tz1XbrvTMVa5dWQQBSCn2jgX7BPZyLRhgtKS")
             self.data.txlContract = sp.address("KT1HD71gj4ZdehpS4Ri8nasjpDTPDQ574Sxy")
-            self.data.games = {}
-            self.data.currentGameIndex = 0
-            self.data.pot = sp.mutez(100000)   
+
+            # Outstanding & historical games, keyed by monotonic
+            # currentGameIndex. The empty {} needs an explicit type cast so
+            # the compiled storage doesn't end up with unresolved generic
+            # type variables (same fix as the RandomOracle).
+            self.data.games = sp.cast({}, sp.map[sp.nat, sp.record(
+                hand=sp.map[sp.nat, sp.int],
+                handValue=sp.map[sp.nat, sp.int],
+                handHashes=sp.map[sp.nat, sp.string],
+                player=sp.address,
+                aceHigh=sp.int,
+                gameStatus=sp.nat,
+                finalBet=sp.mutez,
+            )])
+
+            self.data.currentGameIndex = sp.nat(0)
+            self.data.pot = sp.mutez(100000)
             self.data.potReserve = sp.tez(0)
             self.data.ante = sp.mutez(200000)
             self.data.fee = sp.mutez(100000)
@@ -101,13 +115,13 @@ def main():
             sp.cast(sp.sender, sp.address)
             if sp.sender == self.data.oracle:
  
-                cardValue = sp.to_int(params.card / 4)
+                cardValue = sp.to_int(params.card / 4) + 2
                 card = sp.to_int(params.card / 1)
                 sp.cast(params.hash, sp.string)
-                self.data.games[params.gameId].handValue[2] = cardValue + 2
+                self.data.games[params.gameId].handValue[2] = cardValue
                 self.data.games[params.gameId].hand[2] = card
                 self.data.games[params.gameId].handHashes[2] = params.hash
-                if self.data.games[params.gameId].handValue[1] == cardValue:                    
+                if self.data.games[params.gameId].handValue[1] == cardValue:
                     sp.emit('pairDraw Half Bet', tag='pairDrawn')
                     halfAmount = sp.split_tokens(self.data.ante, 1, 2)
                     sp.send(self.data.games[params.gameId].player, halfAmount)
@@ -170,12 +184,12 @@ def main():
                     sp.cast(params.gameId, sp.int_or_nat)
                     sp.cast(sp.sender, sp.address) 
                     sp.cast(params.card, sp.int_or_nat)
-                    cardValue = sp.to_int(params.card / 4)
+                    cardValue = sp.to_int(params.card / 4) + 2
                     card = sp.to_int(params.card / 1)
                     sp.cast(params.hash, sp.string)
                     self.data.games[params.gameId].handHashes[3] = params.hash
-                    self.data.games[params.gameId].hand[3] = card    
-                    self.data.games[params.gameId].handValue[3] = cardValue + 2
+                    self.data.games[params.gameId].hand[3] = card
+                    self.data.games[params.gameId].handValue[3] = cardValue
                     sp.cast(params.gameId, sp.int_or_nat)         
                     lowCard = self.data.games[params.gameId].handValue[1]
                     highCard = self.data.games[params.gameId].handValue[2]

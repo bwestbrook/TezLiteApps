@@ -1,193 +1,173 @@
-const port = process.env.PORT || 3000
-//const isProd = process.env.NODE_ENV === 'production'
-const express = require('express')
+// Express + Socket.IO server for TezLiteApps. Serves the built `dist/` folder
+// and brokers game state between connected clients. No game logic lives here —
+// the source of truth is the Tezos smart contracts. The server only relays
+// messages and tracks which sockets are in which game room.
+
 const path = require('path')
-const cool = require('cool-ascii-faces')
+const http = require('http')
+const express = require('express')
+const cors = require('cors')
+const { Server } = require('socket.io')
 
-
+const PORT = process.env.PORT || 3000
 
 const app = express()
-const cors = require("cors");
-const http = require('http')
-app.use(cors());
+app.use(cors())
 app.use(express.static(path.join(__dirname, 'dist')))
-//app.set('views', path.join(__dirname, 'views'))
-//app.set('view engine', 'ejs')
-
-
-
 
 const server = http.createServer(app)
-const io = require('socket.io')(server, {
-  cors: {
-    origin: '*',
-  }
-});
+const io = new Server(server, {
+  cors: { origin: '*' },
+})
 
+// ─── Server state ────────────────────────────────────────────────────────────
+// Map of wallet address -> array of socket ids it's connected from.
+// One wallet can have multiple tabs open, and one socket disconnect should not
+// drop the wallet from the others.
+const connectedUsers = {}
 
-
-
-// Listen the server
-server.listen(port, '0.0.0.0')
-console.log('Server listening on localhost:' + port) // eslint-disable-line no-console
-
-// User
-let gameData = {};
-let gameRoom = {};
-let gameRooms = {}
-let connectedUsers = {}
-let usersInGame = []
-let addressesInGame = []
-
-// Socket.io
-const messages = []
-io.on('connection', (socket) => {
-
-    io.emit("socketId", socket.id)
-    socket.join(socket.id) // for self stuff like resize events
-    //console.log(io.sockets.adapter.rooms)
-
-    // Game Play
-    socket.on("initGameGrid", function(gameId) {
-      gameData.gameBalance = 0
-      usersInGame = []  
-      addressesInGame = []
-      gameGrid = {}
-      let i = -1;
-      for (i; i < 3; i++) {
-          let j = -1
-          if (!gameGrid[i]) {
-            gameGrid[i] = {}
-          }
-          for (j; j < 3; j++) {
-              if (!gameGrid[i][j]) {
-                gameGrid[i][j] = {}
-              }
-              let k = -1
-              for (k; k < 3; k++) {  
-                  gameGrid[i][j][k] = 0
-              }
-          }
+// Build an empty 4x4x4 cube initialized to 0 — the game grid for Connect4D.
+function buildEmptyGameGrid() {
+  const grid = {}
+  for (let i = -1; i < 3; i++) {
+    grid[i] = {}
+    for (let j = -1; j < 3; j++) {
+      grid[i][j] = {}
+      for (let k = -1; k < 3; k++) {
+        grid[i][j][k] = 0
       }
-    io.emit("gameGrid", gameGrid, gameId)
-  });
-
-
-  socket.on("updateBCStatus", function(bcStatus, gameId) {
-    io.to(gameId).emit("updateBCStatus", bcStatus)
-  });
-
-  socket.on("updateGameId", function(gameId) {
-    io.to(gameId).emit("updateGameId", gameId)
-  });
-
-
-  
-  socket.on("updateGameGrid", function(gameGrid, gameId, updateGrid) {
-    if (updateGrid) {
-      io.to(gameId).emit("updateGameGrid", gameGrid)
-    } else {
-      io.to(socket.id).emit("updateGameGrid", gameGrid)
     }
-  });
+  }
+  return grid
+}
 
-  socket.on("updatePlayerTurn", function(playerTurn, gameId) {
-    io.to(gameId).emit("updatePlayerTurn", playerTurn, gameId)
-  });
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server listening on 0.0.0.0:${PORT}`) // eslint-disable-line no-console
+})
 
-  socket.on("selectGame", function(game) {
-    io.to(socket.id).emit("selectGame", game)
-  });
+// ─── Socket.IO ───────────────────────────────────────────────────────────────
+io.on('connection', (socket) => {
+  io.emit('socketId', socket.id)
+  socket.join(socket.id) // self-room — used for unicast events like resize
 
-  socket.on("setUserActiveGameRoom", function(address, gameCount, gameId) { // Each user can only be in one game at a time
-    for (let i = 0; i < gameCount; i++ ) {
-      if (i == gameId) {
+  // Game lifecycle
+  socket.on('initGameGrid', (gameId) => {
+    io.emit('gameGrid', buildEmptyGameGrid(), gameId)
+  })
+
+  socket.on('updateBCStatus', (bcStatus, gameId) => {
+    io.to(gameId).emit('updateBCStatus', bcStatus)
+  })
+
+  socket.on('updateGameId', (gameId) => {
+    io.to(gameId).emit('updateGameId', gameId)
+  })
+
+  socket.on('updateGameGrid', (gameGrid, gameId, broadcastToRoom) => {
+    if (broadcastToRoom) {
+      io.to(gameId).emit('updateGameGrid', gameGrid)
+    } else {
+      io.to(socket.id).emit('updateGameGrid', gameGrid)
+    }
+  })
+
+  socket.on('updatePlayerTurn', (playerTurn, gameId) => {
+    io.to(gameId).emit('updatePlayerTurn', playerTurn, gameId)
+  })
+
+  socket.on('selectGame', (game) => {
+    io.to(socket.id).emit('selectGame', game)
+  })
+
+  // Each user can only be in one game room at a time. Join the active one,
+  // leave all others.
+  socket.on('setUserActiveGameRoom', (_address, gameCount, gameId) => {
+    for (let i = 0; i < gameCount; i++) {
+      if (i === gameId) {
         socket.join(i)
       } else {
         socket.leave(i)
       }
     }
-  });
+  })
 
-  socket.on("updateConnectedUsersInGame", function(address, gameId) {
-    let socketsInRoom = io.sockets.adapter.rooms.get(gameId) 
-    socketsInRoom = Array.from(socketsInRoom)
-    let activeUsers = []
-    let i = 0
-    for (let connectedUser in connectedUsers) {
-      for (let socketConnection in connectedUsers[connectedUser]) {
-        if (socketsInRoom.includes(connectedUsers[connectedUser][socketConnection])) {
-          activeUsers.push(connectedUser)
-          i++;
-        }
+  socket.on('updateConnectedUsersInGame', (_address, gameId) => {
+    const socketsSet = io.sockets.adapter.rooms.get(gameId)
+    if (!socketsSet) return
+    const socketsInRoom = Array.from(socketsSet)
+
+    const activeUsers = []
+    for (const wallet of Object.keys(connectedUsers)) {
+      const socketIds = connectedUsers[wallet]
+      if (socketIds.some((id) => socketsInRoom.includes(id))) {
+        activeUsers.push(wallet)
       }
     }
-    io.to(gameId).emit("updateConnectedUsers", activeUsers)
-    io.to(gameId).emit("updateGameId", gameId)
-  });
 
+    io.to(gameId).emit('updateConnectedUsers', activeUsers)
+    io.to(gameId).emit('updateGameId', gameId)
+  })
 
-  socket.on("resizeGame", function(width) {
-    io.to(socket.id).emit("resizeGame", width)
-  });
+  socket.on('resizeGame', (width) => {
+    io.to(socket.id).emit('resizeGame', width)
+  })
 
-  socket.on("updatePlayedPoint", function(playedPoint, bcStatus, gameId) {
-    io.to(socket.id).emit("playedPoint", playedPoint, bcStatus)
-  });
+  socket.on('updatePlayedPoint', (playedPoint, bcStatus) => {
+    io.to(socket.id).emit('playedPoint', playedPoint, bcStatus)
+  })
 
-  socket.on("updateGamePaused", function(gamePaused, gameId) {
+  socket.on('updateGamePaused', (gamePaused, gameId) => {
     io.to(gameId).emit('updateGamePaused', gamePaused)
-  });
+  })
 
-  socket.on("updatePlayerControl", function() {
+  socket.on('updatePlayerControl', () => {
     io.emit('updatePlayerControl')
-  });
+  })
 
-  socket.on("updatePlayersInGame", function(playersInGame, gameId) {
+  socket.on('updatePlayersInGame', (playersInGame, gameId) => {
     io.to(gameId).emit('updatePlayersInGame', playersInGame)
-  });
+  })
 
-  socket.on("updateGamePlayable", function(gamePlayabe, gameId) {
-    io.to(socket.id).emit('updateGamePlayable', gamePlayabe, gameId)
-  });
+  socket.on('updateGamePlayable', (gamePlayable, gameId) => {
+    io.to(socket.id).emit('updateGamePlayable', gamePlayable, gameId)
+  })
 
-  socket.on("getRandomNumber", function(number) {
-    min = Math.ceil(0);
-    max = Math.floor(100);
-    const randomNumber = Math.floor(Math.random() * (max - min + 1)) + min; //The maximum is inclusive and the minimum is inclusive 
-    console.log('new Number req', number)
+  // Random number 0-100 inclusive — used as a fallback before the on-chain
+  // oracle responds.
+  socket.on('getRandomNumber', () => {
+    const randomNumber = Math.floor(Math.random() * 101)
     io.to(socket.id).emit('newRandomNumber', randomNumber)
-  });
+  })
 
-  socket.on("updateGames", function() {
+  socket.on('updateGames', () => {
     io.to(socket.id).emit('updateGames')
-  });
+  })
 
-  socket.on("loadGame", function(gameId, updateGrid) {
+  socket.on('loadGame', (gameId, updateGrid) => {
     io.to(socket.id).emit('loadGame', gameId, updateGrid)
-  });
+  })
 
-  socket.on("newWallet", function(newWallet) {
+  socket.on('newWallet', (newWallet) => {
     io.to(socket.id).emit('newWallet', newWallet)
-  });
+  })
 
-  socket.on("walletConnection", function(address) {
-    // Determine all the sockets a single user/wallet is connected to
-    if (connectedUsers.hasOwnProperty(address)) {
-      connectedUsers[address].push(socket.id)
-    } else {
-      connectedUsers[address] = [socket.id]
+  socket.on('walletConnection', (address) => {
+    if (!connectedUsers[address]) {
+      connectedUsers[address] = []
     }
+    connectedUsers[address].push(socket.id)
     io.to(socket.id).emit('newWallet', address)
-  });
+  })
 
-  socket.on("disconnect", function() {
-    for (let wallet in connectedUsers) {
-      if (connectedUsers[wallet].includes(socket.id)) {
-        const index = connectedUsers[wallet].indexOf(socket.id);
-        connectedUsers[wallet].splice(index, 1)
+  socket.on('disconnect', () => {
+    for (const wallet of Object.keys(connectedUsers)) {
+      const idx = connectedUsers[wallet].indexOf(socket.id)
+      if (idx !== -1) {
+        connectedUsers[wallet].splice(idx, 1)
+      }
+      if (connectedUsers[wallet].length === 0) {
+        delete connectedUsers[wallet]
       }
     }
-  });
-});
-  
+  })
+})

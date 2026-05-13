@@ -1,0 +1,187 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sqBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0e3b22"/>
+      <stop offset="100%" stop-color="#07291a"/>
+    </linearGradient>
+    <linearGradient id="sqGold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f5c451"/>
+      <stop offset="100%" stop-color="#d4a24e"/>
+    </linearGradient>
+    <radialGradient id="sqVignette" cx="0.5" cy="0.4" r="0.7">
+      <stop offset="0%" stop-color="rgba(0,0,0,0)"/>
+      <stop offset="100%" stop-color="rgba(0,0,0,0.55)"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="400" height="240" fill="url(#sqBg)"/>
+  <rect width="400" height="240" fill="url(#sqVignette)"/>
+
+  <!-- 10×10 grid, centered -->
+  <g transform="translate(116, 38)">
+    <!-- column header row (axis Away) -->
+    <g font-family="EB Garamond, serif" font-weight="700" font-size="11" fill="#f5c451" text-anchor="middle">
+      <text x="-12" y="-6" font-size="9" opacity="0.7">H\A</text>
+      <text x="9" y="-6">3</text>
+      <text x="26" y="-6">7</text>
+      <text x="43" y="-6">0</text>
+      <text x="60" y="-6">4</text>
+      <text x="77" y="-6">1</text>
+      <text x="94" y="-6">8</text>
+      <text x="111" y="-6">6</text>
+      <text x="128" y="-6">2</text>
+      <text x="145" y="-6">9</text>
+      <text x="162" y="-6">5</text>
+    </g>
+    <!-- row header column (axis Home) -->
+    <g font-family="EB Garamond, serif" font-weight="700" font-size="11" fill="#f5c451" text-anchor="end">
+      <text x="-4" y="13">0</text>
+      <text x="-4" y="30">7</text>
+      <text x="-4" y="47">3</text>
+      <text x="-4" y="64">4</text>
+      <text x="-4" y="81">1</text>
+      <text x="-4" y="98">9</text>
+      <text x="-4" y="115">6</text>
+      <text x="-4" y="132">2</text>
+      <text x="-4" y="149">8</text>
+      <text x="-4" y="166">5</text>
+    </g>
+
+    <!-- 10×10 cells -->
+    <g>
+      <!-- Build cells programmatically: this is hand-rolled because SVG can't loop -->
+      <!-- All cells default dark green; a few are gold (winning squares) -->
+      <!-- Cell size 17, gap 0 (hairlines via stroke) -->
+      <g fill="#16382a" stroke="#0a1f12" stroke-width="0.5">
+        <rect x="0"   y="0"   width="17" height="17"/>
+        <rect x="17"  y="0"   width="17" height="17"/>
+        <rect x="34"  y="0"   width="17" height="17"/>
+        <rect x="51"  y="0"   width="17" height="17"/>
+        <rect x="68"  y="0"   width="17" height="17"/>
+        <rect x="85"  y="0"   width="17" height="17"/>
+        <rect x="102" y="0"   width="17" height="17"/>
+        <rect x="119" y="0"   width="17" height="17"/>
+        <rect x="136" y="0"   width="17" height="17"/>
+        <rect x="153" y="0"   width="17" height="17"/>
+
+        <rect x="0"   y="17"  width="17" height="17"/>
+        <rect x="17"  y="17"  width="17" height="17"/>
+        <rect x="34"  y="17"  width="17" height="17"/>
+        <rect x="51"  y="17"  width="17" height="17"/>
+        <rect x="68"  y="17"  width="17" height="17"/>
+        <rect x="85"  y="17"  width="17" height="17"/>
+        <rect x="102" y="17"  width="17" height="17"/>
+        <rect x="119" y="17"  width="17" height="17"/>
+        <rect x="136" y="17"  width="17" height="17"/>
+        <rect x="153" y="17"  width="17" height="17"/>
+
+        <rect x="0"   y="34"  width="17" height="17"/>
+        <rect x="17"  y="34"  width="17" height="17"/>
+        <rect x="34"  y="34"  width="17" height="17"/>
+        <rect x="51"  y="34"  width="17" height="17"/>
+        <rect x="68"  y="34"  width="17" height="17"/>
+        <rect x="85"  y="34"  width="17" height="17"/>
+        <rect x="102" y="34"  width="17" height="17"/>
+        <rect x="119" y="34"  width="17" height="17"/>
+        <rect x="136" y="34"  width="17" height="17"/>
+        <rect x="153" y="34"  width="17" height="17"/>
+
+        <rect x="0"   y="51"  width="17" height="17"/>
+        <rect x="17"  y="51"  width="17" height="17"/>
+        <rect x="34"  y="51"  width="17" height="17"/>
+        <rect x="51"  y="51"  width="17" height="17"/>
+        <rect x="68"  y="51"  width="17" height="17"/>
+        <rect x="85"  y="51"  width="17" height="17"/>
+        <rect x="102" y="51"  width="17" height="17"/>
+        <rect x="119" y="51"  width="17" height="17"/>
+        <rect x="136" y="51"  width="17" height="17"/>
+        <rect x="153" y="51"  width="17" height="17"/>
+
+        <rect x="0"   y="68"  width="17" height="17"/>
+        <rect x="17"  y="68"  width="17" height="17"/>
+        <rect x="34"  y="68"  width="17" height="17"/>
+        <rect x="51"  y="68"  width="17" height="17"/>
+        <rect x="68"  y="68"  width="17" height="17"/>
+        <rect x="85"  y="68"  width="17" height="17"/>
+        <rect x="102" y="68"  width="17" height="17"/>
+        <rect x="119" y="68"  width="17" height="17"/>
+        <rect x="136" y="68"  width="17" height="17"/>
+        <rect x="153" y="68"  width="17" height="17"/>
+
+        <rect x="0"   y="85"  width="17" height="17"/>
+        <rect x="17"  y="85"  width="17" height="17"/>
+        <rect x="34"  y="85"  width="17" height="17"/>
+        <rect x="51"  y="85"  width="17" height="17"/>
+        <rect x="68"  y="85"  width="17" height="17"/>
+        <rect x="85"  y="85"  width="17" height="17"/>
+        <rect x="102" y="85"  width="17" height="17"/>
+        <rect x="119" y="85"  width="17" height="17"/>
+        <rect x="136" y="85"  width="17" height="17"/>
+        <rect x="153" y="85"  width="17" height="17"/>
+
+        <rect x="0"   y="102" width="17" height="17"/>
+        <rect x="17"  y="102" width="17" height="17"/>
+        <rect x="34"  y="102" width="17" height="17"/>
+        <rect x="51"  y="102" width="17" height="17"/>
+        <rect x="68"  y="102" width="17" height="17"/>
+        <rect x="85"  y="102" width="17" height="17"/>
+        <rect x="102" y="102" width="17" height="17"/>
+        <rect x="119" y="102" width="17" height="17"/>
+        <rect x="136" y="102" width="17" height="17"/>
+        <rect x="153" y="102" width="17" height="17"/>
+
+        <rect x="0"   y="119" width="17" height="17"/>
+        <rect x="17"  y="119" width="17" height="17"/>
+        <rect x="34"  y="119" width="17" height="17"/>
+        <rect x="51"  y="119" width="17" height="17"/>
+        <rect x="68"  y="119" width="17" height="17"/>
+        <rect x="85"  y="119" width="17" height="17"/>
+        <rect x="102" y="119" width="17" height="17"/>
+        <rect x="119" y="119" width="17" height="17"/>
+        <rect x="136" y="119" width="17" height="17"/>
+        <rect x="153" y="119" width="17" height="17"/>
+
+        <rect x="0"   y="136" width="17" height="17"/>
+        <rect x="17"  y="136" width="17" height="17"/>
+        <rect x="34"  y="136" width="17" height="17"/>
+        <rect x="51"  y="136" width="17" height="17"/>
+        <rect x="68"  y="136" width="17" height="17"/>
+        <rect x="85"  y="136" width="17" height="17"/>
+        <rect x="102" y="136" width="17" height="17"/>
+        <rect x="119" y="136" width="17" height="17"/>
+        <rect x="136" y="136" width="17" height="17"/>
+        <rect x="153" y="136" width="17" height="17"/>
+
+        <rect x="0"   y="153" width="17" height="17"/>
+        <rect x="17"  y="153" width="17" height="17"/>
+        <rect x="34"  y="153" width="17" height="17"/>
+        <rect x="51"  y="153" width="17" height="17"/>
+        <rect x="68"  y="153" width="17" height="17"/>
+        <rect x="85"  y="153" width="17" height="17"/>
+        <rect x="102" y="153" width="17" height="17"/>
+        <rect x="119" y="153" width="17" height="17"/>
+        <rect x="136" y="153" width="17" height="17"/>
+        <rect x="153" y="153" width="17" height="17"/>
+      </g>
+
+      <!-- Winning squares — gold with a champion glow -->
+      <g fill="url(#sqGold)" stroke="#0a1f12" stroke-width="0.5">
+        <rect x="51"  y="34"  width="17" height="17"/>
+        <rect x="119" y="85"  width="17" height="17"/>
+        <rect x="34"  y="119" width="17" height="17"/>
+        <rect x="136" y="153" width="17" height="17"/>
+      </g>
+      <!-- score callout chip -->
+      <g transform="translate(85, 153)" font-family="EB Garamond, serif" font-weight="700" fill="#0e1116">
+        <rect x="50" y="0" width="18" height="17" fill="#fff"/>
+        <text x="59" y="13" text-anchor="middle" font-size="11">$</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Title chip top-left -->
+  <g transform="translate(16, 16)">
+    <rect width="120" height="22" rx="4" fill="rgba(0,0,0,0.45)" stroke="rgba(245,196,81,0.5)" stroke-width="1"/>
+    <text x="60" y="15" text-anchor="middle" font-family="EB Garamond, serif" font-size="11" letter-spacing="3" font-weight="700" fill="#f5c451">SQUARES · 10×10</text>
+  </g>
+</svg>

@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="chBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a0e08"/>
+      <stop offset="100%" stop-color="#0a0604"/>
+    </linearGradient>
+    <linearGradient id="chFrame" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5a3a1f"/>
+      <stop offset="100%" stop-color="#2e1d0f"/>
+    </linearGradient>
+    <linearGradient id="chDark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7a5436"/>
+      <stop offset="100%" stop-color="#5a3a1f"/>
+    </linearGradient>
+    <linearGradient id="chLight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f3dfbb"/>
+      <stop offset="100%" stop-color="#d8bf94"/>
+    </linearGradient>
+    <radialGradient id="chWhitePiece" cx="0.4" cy="0.3" r="0.8">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#bfbab2"/>
+    </radialGradient>
+    <radialGradient id="chBlackPiece" cx="0.4" cy="0.3" r="0.8">
+      <stop offset="0%" stop-color="#3a3a3a"/>
+      <stop offset="100%" stop-color="#0a0a0a"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="400" height="240" fill="url(#chBg)"/>
+
+  <!-- Wood frame -->
+  <rect x="84" y="10" width="232" height="220" rx="4" fill="url(#chFrame)"/>
+  <!-- Inner board area -->
+  <rect x="92" y="18" width="216" height="204" fill="#3e2914"/>
+
+  <!-- 8x8 board, board squares 24x24, board area 192x192 centered at 12,18 inside frame -->
+  <!-- Board top-left at (108, 26), each cell 24x24, total 192x192 -->
+  <g transform="translate(108, 26)">
+    <!-- Generate squares: light/dark alternating -->
+    <!-- Row 0 -->
+    <rect x="0"   y="0"   width="24" height="24" fill="url(#chLight)"/>
+    <rect x="24"  y="0"   width="24" height="24" fill="url(#chDark)"/>
+    <rect x="48"  y="0"   width="24" height="24" fill="url(#chLight)"/>
+    <rect x="72"  y="0"   width="24" height="24" fill="url(#chDark)"/>
+    <rect x="96"  y="0"   width="24" height="24" fill="url(#chLight)"/>
+    <rect x="120" y="0"   width="24" height="24" fill="url(#chDark)"/>
+    <rect x="144" y="0"   width="24" height="24" fill="url(#chLight)"/>
+    <rect x="168" y="0"   width="24" height="24" fill="url(#chDark)"/>
+    <!-- Row 1 -->
+    <rect x="0"   y="24"  width="24" height="24" fill="url(#chDark)"/>
+    <rect x="24"  y="24"  width="24" height="24" fill="url(#chLight)"/>
+    <rect x="48"  y="24"  width="24" height="24" fill="url(#chDark)"/>
+    <rect x="72"  y="24"  width="24" height="24" fill="url(#chLight)"/>
+    <rect x="96"  y="24"  width="24" height="24" fill="url(#chDark)"/>
+    <rect x="120" y="24"  width="24" height="24" fill="url(#chLight)"/>
+    <rect x="144" y="24"  width="24" height="24" fill="url(#chDark)"/>
+    <rect x="168" y="24"  width="24" height="24" fill="url(#chLight)"/>
+    <!-- Row 2 -->
+    <rect x="0"   y="48"  width="24" height="24" fill="url(#chLight)"/>
+    <rect x="24"  y="48"  width="24" height="24" fill="url(#chDark)"/>
+    <rect x="48"  y="48"  width="24" height="24" fill="url(#chLight)"/>
+    <rect x="72"  y="48"  width="24" height="24" fill="url(#chDark)"/>
+    <rect x="96"  y="48"  width="24" height="24" fill="url(#chLight)"/>
+    <rect x="120" y="48"  width="24" height="24" fill="url(#chDark)"/>
+    <rect x="144" y="48"  width="24" height="24" fill="url(#chLight)"/>
+    <rect x="168" y="48"  width="24" height="24" fill="url(#chDark)"/>
+    <!-- Row 3 -->
+    <rect x="0"   y="72"  width="24" height="24" fill="url(#chDark)"/>
+    <rect x="24"  y="72"  width="24" height="24" fill="url(#chLight)"/>
+    <rect x="48"  y="72"  width="24" height="24" fill="url(#chDark)"/>
+    <rect x="72"  y="72"  width="24" height="24" fill="url(#chLight)"/>
+    <rect x="96"  y="72"  width="24" height="24" fill="url(#chDark)"/>
+    <rect x="120" y="72"  width="24" height="24" fill="url(#chLight)"/>
+    <rect x="144" y="72"  width="24" height="24" fill="url(#chDark)"/>
+    <rect x="168" y="72"  width="24" height="24" fill="url(#chLight)"/>
+    <!-- Row 4 -->
+    <rect x="0"   y="96"  width="24" height="24" fill="url(#chLight)"/>
+    <rect x="24"  y="96"  width="24" height="24" fill="url(#chDark)"/>
+    <rect x="48"  y="96"  width="24" height="24" fill="url(#chLight)"/>
+    <rect x="72"  y="96"  width="24" height="24" fill="url(#chDark)"/>
+    <rect x="96"  y="96"  width="24" height="24" fill="url(#chLight)"/>
+    <rect x="120" y="96"  width="24" height="24" fill="url(#chDark)"/>
+    <rect x="144" y="96"  width="24" height="24" fill="url(#chLight)"/>
+    <rect x="168" y="96"  width="24" height="24" fill="url(#chDark)"/>
+    <!-- Row 5 -->
+    <rect x="0"   y="120" width="24" height="24" fill="url(#chDark)"/>
+    <rect x="24"  y="120" width="24" height="24" fill="url(#chLight)"/>
+    <rect x="48"  y="120" width="24" height="24" fill="url(#chDark)"/>
+    <rect x="72"  y="120" width="24" height="24" fill="url(#chLight)"/>
+    <rect x="96"  y="120" width="24" height="24" fill="url(#chDark)"/>
+    <rect x="120" y="120" width="24" height="24" fill="url(#chLight)"/>
+    <rect x="144" y="120" width="24" height="24" fill="url(#chDark)"/>
+    <rect x="168" y="120" width="24" height="24" fill="url(#chLight)"/>
+    <!-- Row 6 -->
+    <rect x="0"   y="144" width="24" height="24" fill="url(#chLight)"/>
+    <rect x="24"  y="144" width="24" height="24" fill="url(#chDark)"/>
+    <rect x="48"  y="144" width="24" height="24" fill="url(#chLight)"/>
+    <rect x="72"  y="144" width="24" height="24" fill="url(#chDark)"/>
+    <rect x="96"  y="144" width="24" height="24" fill="url(#chLight)"/>
+    <rect x="120" y="144" width="24" height="24" fill="url(#chDark)"/>
+    <rect x="144" y="144" width="24" height="24" fill="url(#chLight)"/>
+    <rect x="168" y="144" width="24" height="24" fill="url(#chDark)"/>
+    <!-- Row 7 -->
+    <rect x="0"   y="168" width="24" height="24" fill="url(#chDark)"/>
+    <rect x="24"  y="168" width="24" height="24" fill="url(#chLight)"/>
+    <rect x="48"  y="168" width="24" height="24" fill="url(#chDark)"/>
+    <rect x="72"  y="168" width="24" height="24" fill="url(#chLight)"/>
+    <rect x="96"  y="168" width="24" height="24" fill="url(#chDark)"/>
+    <rect x="120" y="168" width="24" height="24" fill="url(#chLight)"/>
+    <rect x="144" y="168" width="24" height="24" fill="url(#chDark)"/>
+    <rect x="168" y="168" width="24" height="24" fill="url(#chLight)"/>
+
+    <!-- Move highlight: e2 → e4 (white pawn opening). e2 = col 4, row 6 ; e4 = col 4, row 4 -->
+    <rect x="96" y="144" width="24" height="24" fill="rgba(245,196,81,0.35)"/>
+    <rect x="96" y="96"  width="24" height="24" fill="rgba(245,196,81,0.5)" stroke="#f5c451" stroke-width="1.5"/>
+
+    <!-- Pieces (silhouettes using simple primitives) -->
+    <!-- White King at e1 (col 4, row 7) center (108, 180) -->
+    <g transform="translate(108, 180)">
+      <ellipse cx="0" cy="9" rx="9" ry="2" fill="rgba(0,0,0,0.35)"/>
+      <path d="M -7 5 L -7 -1 L -5 -1 L -5 -5 L -2 -5 L -2 -7 L 2 -7 L 2 -5 L 5 -5 L 5 -1 L 7 -1 L 7 5 Z" fill="url(#chWhitePiece)" stroke="#444" stroke-width="0.6"/>
+      <line x1="0" y1="-7" x2="0" y2="-10" stroke="url(#chWhitePiece)" stroke-width="1.4"/>
+      <line x1="-2" y1="-9" x2="2" y2="-9" stroke="url(#chWhitePiece)" stroke-width="1.4"/>
+    </g>
+
+    <!-- White pawn now at e4 (col 4, row 4) center (108, 108) -->
+    <g transform="translate(108, 108)">
+      <ellipse cx="0" cy="8" rx="7" ry="1.6" fill="rgba(0,0,0,0.35)"/>
+      <circle cx="0" cy="-3" r="3.2" fill="url(#chWhitePiece)" stroke="#444" stroke-width="0.5"/>
+      <path d="M -5 7 L -3 0 L 3 0 L 5 7 Z" fill="url(#chWhitePiece)" stroke="#444" stroke-width="0.5"/>
+    </g>
+
+    <!-- Black queen at d8 (col 3, row 0) center (84, 12) -->
+    <g transform="translate(84, 12)">
+      <ellipse cx="0" cy="9" rx="8" ry="1.8" fill="rgba(0,0,0,0.35)"/>
+      <path d="M -7 5 L -6 -3 L -3 -1 L -1.5 -5 L 0 -2 L 1.5 -5 L 3 -1 L 6 -3 L 7 5 Z" fill="url(#chBlackPiece)" stroke="#000" stroke-width="0.5"/>
+      <circle cx="-6" cy="-4" r="0.9" fill="url(#chBlackPiece)"/>
+      <circle cx="-3" cy="-2" r="0.9" fill="url(#chBlackPiece)"/>
+      <circle cx="0" cy="-3" r="0.9" fill="url(#chBlackPiece)"/>
+      <circle cx="3" cy="-2" r="0.9" fill="url(#chBlackPiece)"/>
+      <circle cx="6" cy="-4" r="0.9" fill="url(#chBlackPiece)"/>
+    </g>
+
+    <!-- Black knight at b8 (col 1, row 0) center (36, 12) -->
+    <g transform="translate(36, 12)">
+      <ellipse cx="0" cy="9" rx="7" ry="1.6" fill="rgba(0,0,0,0.35)"/>
+      <path d="M -5 7 L -5 -2 C -5 -7, 2 -8, 4 -4 L 6 -2 L 5 1 L 3 0 L 4 4 L 5 7 Z" fill="url(#chBlackPiece)" stroke="#000" stroke-width="0.5"/>
+      <circle cx="3" cy="-3" r="0.7" fill="#fff"/>
+    </g>
+
+    <!-- White knight at g1 (col 6, row 7) center (156, 180) -->
+    <g transform="translate(156, 180)">
+      <ellipse cx="0" cy="9" rx="7" ry="1.6" fill="rgba(0,0,0,0.35)"/>
+      <path d="M -5 7 L -5 -2 C -5 -7, 2 -8, 4 -4 L 6 -2 L 5 1 L 3 0 L 4 4 L 5 7 Z" fill="url(#chWhitePiece)" stroke="#444" stroke-width="0.5"/>
+      <circle cx="3" cy="-3" r="0.7" fill="#000"/>
+    </g>
+  </g>
+
+  <!-- File labels (a-h) along the bottom of the frame -->
+  <g font-family="EB Garamond, serif" font-size="9" fill="rgba(245,196,81,0.7)" text-anchor="middle">
+    <text x="120" y="226">a</text>
+    <text x="144" y="226">b</text>
+    <text x="168" y="226">c</text>
+    <text x="192" y="226">d</text>
+    <text x="216" y="226">e</text>
+    <text x="240" y="226">f</text>
+    <text x="264" y="226">g</text>
+    <text x="288" y="226">h</text>
+  </g>
+
+  <!-- Title chip top-left -->
+  <g transform="translate(16, 16)">
+    <rect width="68" height="22" rx="4" fill="rgba(0,0,0,0.55)" stroke="rgba(245,196,81,0.5)" stroke-width="1"/>
+    <text x="34" y="15" text-anchor="middle" font-family="EB Garamond, serif" font-size="11" letter-spacing="3" font-weight="700" fill="#f5c451">CHESS</text>
+  </g>
+</svg>

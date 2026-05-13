@@ -1,8 +1,13 @@
+# OS
 .DS_Store
-node_modules
-git_push.sh
+Thumbs.db
 
-# local env files
+# Dependencies & build output
+node_modules
+dist
+
+# Local env files
+.env
 .env.local
 .env.*.local
 
@@ -20,3 +25,29 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+# Python (smart contract scripts under src/services)
+__pycache__/
+*.py[cod]
+*$py.class
+.venv
+venv/
+
+# Local helper scripts that may contain secrets
+git_push.sh
+git_push2.sh
+
+# Tezos deploy keys — NEVER commit these
+.deploy_key
+*.edsk
+secrets/
+
+# Oracle state
+oracle_state.sqlite
+oracle_unified.sqlite
+
+# SmartPy compile output (regenerable)
+src/services/build/
+
+# SmartPy CLI install (regenerable via scripts/setup.sh)
+.smartpy-cli/

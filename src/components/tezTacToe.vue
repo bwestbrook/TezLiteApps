@@ -1,21 +1,17 @@
 <script>
-import { PollingSubscribeProvider } from '@taquito/taquito';
-import { RemoteSigner } from '@taquito/remote-signer';
-import tttGameGrid  from './tttGameGrid.vue'
-//import sha256 from 'js-sha256'
-import { RpcClient } from '@taquito/rpc';
-import { NODE_URL, TTT_CONTRACT_ADDRESS, GAME_INFO} from '../constants'
-import { reduceAddress } from "../utilities";
+import { PollingSubscribeProvider } from '@taquito/taquito'
+import { RpcClient } from '@taquito/rpc'
+import tttGameGrid from './tttGameGrid.vue'
+import { NODE_URL, TTT_CONTRACT_ADDRESS, GAME_INFO, BLOCKCHAIN_ENABLED } from '../constants'
+import { reduceAddress } from '../utilities'
 
+// Ghostnet chain ID — used to scope the RPC client.
+const GHOSTNET_CHAIN_ID = 'NetXnHfVqm9iesp'
 
 export default {
-    name: "tezTacToe",
-    emits: [
-    ],
-    components: { 
-        tttGameGrid
-    },
-    props: ["socket", "wallet", "tezos"],
+  name: 'tezTacToe',
+  components: { tttGameGrid },
+  props: ['socket', 'wallet', 'tezos'],
     data () {
         return {
             gameInfo: GAME_INFO,
@@ -47,7 +43,8 @@ export default {
         }
     },
     created() {
-        this.rpcclient = new RpcClient(NODE_URL, 'NetXnHfVqm9iesp');
+        this.rpcclient = new RpcClient(NODE_URL, GHOSTNET_CHAIN_ID);
+        this.streamSubs = []
         this.socket.on("updateGames", () => {
             this.getGamesFromContractAsync()
         })
@@ -76,57 +73,47 @@ export default {
             this.gamePlayable = gamePlayable
         })
 
-        // Listen to contracts for changes
-        this.tezos.setStreamProvider(
-            this.tezos.getFactory(PollingSubscribeProvider)({
-                shouldObservableSubscriptionRetry: true,
-                pollingIntervalMilliseconds: 1000
+        // Listen to contracts for changes — gated on BLOCKCHAIN_ENABLED so
+        // we don't spam the RPC every second while UI is in development.
+        if (BLOCKCHAIN_ENABLED) {
+            this.tezos.setStreamProvider(
+                this.tezos.getFactory(PollingSubscribeProvider)({
+                    shouldObservableSubscriptionRetry: true,
+                    pollingIntervalMilliseconds: 1000,
+                })
+            )
+            this.subscribeContractEvent('notPlayerTurnError', (data) => {
+                console.warn('notPlayerTurnError', data)
             })
-        );
-        try {
-            const sub = this.tezos.stream.subscribeEvent({
-                tag: 'notPlayerTurnError',
-                address: TTT_CONTRACT_ADDRESS,
-                //excludeFailedOperations: true
-            });
-            sub.on('data', (data) => {
-                //const transactionBlockLevel = data.level
-                console.log('notPlayerTurnError: ', data)
+            this.subscribeContractEvent('gameNotActiveError', (data) => {
+                console.warn('gameNotActiveError', data)
             })
-            } catch (e) {
-            console.log(e);
+            this.subscribeContractEvent('contractUpdated', (data) => {
+                this.delayGetGamesFromContract(data.level)
+            })
         }
-        try {
-            const sub = this.tezos.stream.subscribeEvent({
-                tag: 'gameNotActiveError',
-                address: TTT_CONTRACT_ADDRESS,
-                //excludeFailedOperations: true
-            });
-            sub.on('data', (data) => {
-                //const transactionBlockLevel = data.level
-                console.log('gameNotActiveError: ', data)
-            })
-            } catch (e) {
-            console.log(e);
-        }
-        try {
-            const sub = this.tezos.stream.subscribeEvent({
-              tag: 'contractUpdated',
-              address: TTT_CONTRACT_ADDRESS,
-              //excludeFailedOperations: true
-            });
-            sub.on('data', (data) => {
-                const transactionBlockLevel = data.level
-                this.delayGetGamesFromContract(transactionBlockLevel)                
-            })
-          } catch (e) {
-            console.log(e);
-          }
     },
-    mounted() {
+    beforeUnmount() {
+        // Unsubscribe from any contract event streams set up in created()
+        for (const sub of this.streamSubs || []) {
+            try { sub.removeAllListeners?.() } catch { /* noop */ }
+        }
+        this.streamSubs = []
     },
     methods: {
-        //Wallet Control        
+        subscribeContractEvent(tag, onData) {
+            try {
+                const sub = this.tezos.stream.subscribeEvent({
+                    tag,
+                    address: TTT_CONTRACT_ADDRESS,
+                })
+                sub.on('data', onData)
+                this.streamSubs.push(sub)
+            } catch (e) {
+                console.error(`subscribeContractEvent(${tag}) failed:`, e)
+            }
+        },
+        //Wallet Control
         async getNextBlockLevel(transactionBlockLevel){
             let currentBlock = await this.rpcclient.getBlock();
             let currentBlockLevel = await currentBlock.header.level
@@ -173,18 +160,14 @@ export default {
                 return
             }   
             const sendAmount = tezAmount + this.fee
-            this.getSigner(activeAccount)
+            this.useWalletProvider()
             this.tezos.wallet
                 .at(TTT_CONTRACT_ADDRESS)
                 .then((contract) => {
                     return contract.methodsObject.startGame().send({amount: sendAmount});
                 })
-                .then((op) => {
-                    console.log(`Waiting for ${op.opHash} to be confirmed...`);
-                    return op.confirmation().then(() => op.opHash);
-                })
-                .then((hash) => console.log(`Operation injected: https://ghost.tzstats.com/${hash}`))
-                .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));            
+                .then((op) => op.confirmation().then(() => op.opHash))
+                .catch((error) => console.error('Tezos contract call failed:', error))
         },
         async joinGameBC(gameId) { 
             if (gameId < 0) {
@@ -195,24 +178,18 @@ export default {
                 return
             }    
             this.blockchainStatus = 'Joining Game on Smart Contract'              
-            this.getSigner(activeAccount)  
+            this.useWalletProvider()  
             this.tezos.wallet
                 .at(TTT_CONTRACT_ADDRESS)
                 .then((contract) => {
                     return contract.methods.joinGame(gameId)
                         .send({amount: 1 + this.fee})
                 })
-                .then((op) => {
-                    console.log(`Waiting for ${op.opHash} to be confirmed...`);
-                    return op.confirmation().then(() => op.opHash);
-                })
-                .then((op) => {
-                    console.log(`Operation injected: https://ghost.tzstats.com/${op.hash}`)
-                 })
-                .then(() => this.blockchainStatus = `Joined Game on Smart Contract ${{gameId}}` )
-                .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
+                .then((op) => op.confirmation().then(() => op.opHash))
+                .then(() => { this.blockchainStatus = `Joined Game on Smart Contract ${gameId}` })
+                .catch((error) => console.error('joinGameBC error:', error))
         },
-        async leaveGameBC(gameId) { 
+        async leaveGameBC(gameId) {
             if (gameId < 0) {
                 return
             }    
@@ -220,23 +197,16 @@ export default {
             if (!activeAccount) {
                 return
             }    
-            console.log(gameId)
-            this.blockchainStatus = 'Leaving Game on Smart Contract'              
-            this.getSigner(activeAccount)  
+            this.blockchainStatus = 'Leaving Game on Smart Contract'
+            this.useWalletProvider()
             this.tezos.wallet
                 .at(TTT_CONTRACT_ADDRESS)
                 .then((contract) => {
                     return contract.methods.leaveGame(Number(gameId)).send()
                 })
-                .then((op) => {
-                    console.log(`Waiting for ${op.opHash} to be confirmed...`);
-                    return op.confirmation().then(() => op.opHash);
-                })
-                .then((op) => {
-                    console.log(`Operation injected: https://ghost.tzstats.com/${op.hash}`)
-                 })
-                .then(() => this.blockchainStatus = `Joined Game on Smart Contract ${{gameId}}` )
-                .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
+                .then((op) => op.confirmation().then(() => op.opHash))
+                .then(() => { this.blockchainStatus = `Left Game on Smart Contract ${gameId}` })
+                .catch((error) => console.error('leaveGameBC error:', error))
         },
         async submitMoveBC(pointToPlay, gameId) {
             this.socket.emit("updateGamePlayable", false, gameId)   
@@ -250,7 +220,7 @@ export default {
             if (!activeAccount) {
                 return
             }    
-            this.getSigner(activeAccount)
+            this.useWalletProvider()
             await this.tezos.wallet
                 .at(TTT_CONTRACT_ADDRESS)
                 .then((contract) => {
@@ -261,60 +231,62 @@ export default {
                         })
                         .send()
                 })
-                .then((op) => {
-                    console.log(`Waiting for ${op.opHash} to be confirmed...`);
-                    return op.confirmation().then(() => op.opHash)
-                })
-                .then((hash) => {
-                    console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
-                .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
+                .then((op) => op.confirmation().then(() => op.opHash))
+                .catch((error) => console.error('Tezos contract call failed:', error))
         },
-        async surrenderGameBC() {      
+        async surrenderGameBC() {
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
                 return
             }    
-            this.getSigner(activeAccount)
+            this.useWalletProvider()
             await this.tezos.wallet
                 .at(TTT_CONTRACT_ADDRESS)
                 .then((contract) => {
                     return contract.methodsObject.surrenderGame().send()
                 })
-                .then((op) => {
-                    console.log(`Waiting for ${op.opHash} to be confirmed...`);
-                    return op.confirmation().then(() => op.opHash)
-                })
-                .then((hash) => {
-                    console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)})
-                .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
+                .then((op) => op.confirmation().then(() => op.opHash))
+                .catch((error) => console.error('Tezos contract call failed:', error))
         },
-        async getSigner(activeAccount) { 
-            const signer = new RemoteSigner(activeAccount.address, NODE_URL)
-            await this.tezos.setProvider({signer:signer})
-            await this.tezos.setWalletProvider(this.wallet)  
-            return signer
+        // The connected Beacon wallet IS the signer — Beacon proxies signing
+        // requests to the user's wallet (Temple, Kukai, etc.). RemoteSigner
+        // is for remote signing servers and was the wrong primitive here.
+        useWalletProvider() {
+            this.tezos.setWalletProvider(this.wallet)
         },
         // Reading Smart Contract
         async getGamesFromContractBC() {
-            const contract = await this.tezos.wallet.at(TTT_CONTRACT_ADDRESS)
-            const storage = await contract.storage()
-            const games = await storage.games
-            return games
+            // Returns the bigmap of games, or null if the contract isn't reachable
+            // (e.g. wrong network, contract not yet redeployed, RPC down).
+            if (!BLOCKCHAIN_ENABLED) return null
+            try {
+                const contract = await this.tezos.wallet.at(TTT_CONTRACT_ADDRESS)
+                const storage = await contract.storage()
+                return await storage.games
+            } catch (err) {
+                if (!this._loggedContractMissing) {
+                    console.warn(
+                        `[tezTacToe] contract ${TTT_CONTRACT_ADDRESS} not reachable on this network — skipping game polls. (${err.message})`
+                    )
+                    this._loggedContractMissing = true
+                }
+                this.blockchainStatus = 'Contract not deployed on this network'
+                return null
+            }
         },
         async getGamesFromContractAsync() {
-            const activeAccount = await this.wallet.client.getActiveAccount()   
+            const activeAccount = await this.wallet.client.getActiveAccount()
             if (!activeAccount) {
-                console.log('adfad')
                 this.loadedGames = false
-                this.updatePlayerControl({})     
+                this.updatePlayerControl({})
                 return
-            }  
-            //this.loadedGames = true
-            const gamesObject = await this.getGamesFromContract()   
-            this.updatePlayerControl(gamesObject)        
+            }
+            const gamesObject = await this.getGamesFromContract()
+            this.updatePlayerControl(gamesObject)
         },
-        async getGamesFromContract() {          
-            const games = await this.getGamesFromContractBC() 
+        async getGamesFromContract() {
+            const games = await this.getGamesFromContractBC()
+            if (!games) return {}
             const allGames = await games.values()
             let gamesObject = {}
             let j = 0;
@@ -371,7 +343,7 @@ export default {
             const game = await this.gamesObject[gameId].grid
             let n = 0;
             for (let gridPoint of game.valueMap) {
-                loadedGridPoints[n] = gridPoint[1.].c[0]
+                loadedGridPoints[n] = gridPoint[1].c[0]
                 n ++;
             }
             let gameGrid = {}
@@ -428,7 +400,6 @@ export default {
             const activeAccount = await this.wallet.client.getActiveAccount()   
             if (!activeAccount) {
                 gamesObject = {}
-                console.log('afdeqerqewrafa')
                 this.loadedGames = false
                 return
             }  
@@ -453,7 +424,6 @@ export default {
                     this.allGamesStatus[i] = 6
                 }                    
             }    
-            console.log(Object.keys(this.allGamesStatus).length)  
             if (Object.keys(this.allGamesStatus).length > 0 ) {
                 this.loadedGames = true
             } else {
@@ -483,7 +453,6 @@ export default {
                 this.gameId = await game.gameId
                 this.walletPlayerTurn1 = await reduceAddress(game.players[0])
                 this.walletPlayerTurn2 = await reduceAddress(game.players[1])
-                console.log(game)
                 this.playersInGame = [this.walletPlayerTurn1, this.walletPlayerTurn2]
                 this.playerTurn = await game.playerTurn
                 this.socket.emit('updatePlayerTurn', this.playerTurn, this.gameId)

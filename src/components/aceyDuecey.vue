@@ -1,39 +1,51 @@
-
-
 <script>
+import { toRaw } from 'vue'
+import { AD_CONTRACT_ADDRESS, AD_GAME_INFO, BLOCKCHAIN_ENABLED } from '../constants'
+import { getContractStorage } from '../services/tzkt'
 
-import * as Three from 'three'
-import { toRaw } from 'vue';
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import { RemoteSigner } from '@taquito/remote-signer';
-import { GAME_WIDTH_FRACTION, MAX_GAME_SIZE, NODE_URL, AD_CONTRACT_ADDRESS, AD_GAME_INFO} from '../constants'
-//import { time } from 'node:console';
+// Deck index ↔ rank/suit helpers. Indices are 0..51:
+//   rank = Math.floor(i / 4) + 2   (2..14, where 11=J 12=Q 13=K 14=A)
+//   suit = i % 4                   (0=♣ 1=♦ 2=♥ 3=♠)
+const SUIT_GLYPHS = ['♣', '♦', '♥', '♠']
+const RANK_LABELS = { 11: 'J', 12: 'Q', 13: 'K', 14: 'A' }
 
-
+function rankOf(deckIndex) {
+  if (deckIndex == null || deckIndex < 0) return null
+  return Math.floor(deckIndex / 4) + 2
+}
+function suitOf(deckIndex) {
+  if (deckIndex == null || deckIndex < 0) return null
+  return deckIndex % 4
+}
+function shortLabel(deckIndex) {
+  const r = rankOf(deckIndex)
+  const s = suitOf(deckIndex)
+  if (r == null) return ''
+  return `${RANK_LABELS[r] || r}${SUIT_GLYPHS[s]}`
+}
 
 export default {
-    name: 'aceyDuecy',
-    props: ["socket", "wallet", "tezos"],
-    components: { 
-  },
-  data () {
+  name: 'aceyDuecey',
+  props: ['socket', 'wallet', 'tezos'],
+  data() {
     return {
+      // ─── Blockchain / game state (unchanged from original) ──────────────
       pollInterval: null,
       gameInfo: AD_GAME_INFO,
-      showInfo: false, 
+      showInfo: false,
       needsLastCard: false,
       highLow: 'Ace High',
       aceHigh: 1,
       blockChainStatus: '',
       tezosSymbol: 'ꜩ',
-      gameId: 'NA', 
+      gameId: 'NA',
       lastGameId: -1,
       firstCard: -1,
       secondCard: -1,
       lastCard: 0,
       potBalance: 0,
-      ante: 0.2, 
-      fee: 0.0,
+      ante: 0.2, // ꜩ — matches AD storage's `ante` (200000 mutez)
+      fee: 0.1,  // ꜩ — matches AD storage's `fee`  (100000 mutez)
       thisBet: 0.1,
       myPendingGames: {},
       myOldGames: {},
@@ -42,40 +54,32 @@ export default {
       thisBets: [0.1, 0.5, 1, 5, 10],
       loadGame: true,
       hideOldGames: true,
-      hideOldGamesStatus: 'Hide Old Games'
+      hideOldGamesStatus: 'Hide Old Games',
+      // ─── Visual state (new — drives the CSS 3D flip) ───────────────────
+      // flipped[i] === true → card i shows its face. Driven from firstCard /
+      // secondCard / lastCard via revealCards(), with small stagger so the
+      // deal feels like a deal.
+      flipped: [false, false, false],
+      verdict: null, // 'win' | 'pair' | 'loss' | null — sets table glow
+      // Cache of the deck so the template can resolve face images by index.
+      deck: [],
+      // ─── Polling indicator state ───────────────────────────────────
+      pollSecondsUntilNext: 6, // 6-second poll cadence, counts down to 0
+      pollLastAt: 0, // ms timestamp of the most recent successful poll
+      pollHeartbeat: 0, // bumped each tick so the template reacts
+      pollCountdownInterval: null,
+      // ─── Oracle role + contract metadata read from chain ──────────
+      adOracleAddress: '', // configured oracle for this AD contract
+      adAdminAddress: '',
+      myAddress: '', // active wallet, populated when wallet connects
+      // ─── In-flight oracle action state (greys buttons during call) ─
+      dealing: '', // '' | 'firstCard' | 'secondCard' | 'lastCard'
     }
   },
-  created () {
-    this.apiUrl = 'https://api.ghostnet.tzkt.io/v1/contracts/' + AD_CONTRACT_ADDRESS + '/storage'
-    //Three 
-    this.gameSize = window.innerWidth * GAME_WIDTH_FRACTION
-    this.maxGameSize = MAX_GAME_SIZE
-    this.board = new Three.Group();
-    this.scene = new Three.Scene();
-    this.camera = new Three.PerspectiveCamera(45, 1, 1, 5000);
-    this.camera.position.x = 0;
-    this.camera.position.y = -200;
-    this.camera.position.z = 175;
-    this.camera.lookAt(this.scene.position)
-    this.degrees = 0
-    this.loader = new Three.TextureLoader();
-    this.tableGeometry = new Three.BoxGeometry(300, 600, 100, 1)
-    this.tableMaterialLoader = require('../assets/table2.jpg')
-    
-    this.tableTexture = this.loader.load(this.tableMaterialLoader)
-    this.tableMaterial = new Three.MeshBasicMaterial({ map: this.tableTexture });
-    this.pokerCardLoader = require('../assets/pokerCard.png')
-    this.pokerCardTexture = this.loader.load(this.pokerCardLoader); 
-    this.card1Texture = this.loader.load(this.pokerCardLoader); 
-    this.card2Texture = this.loader.load(this.pokerCardLoader); 
-    this.card3Texture = this.loader.load(this.pokerCardLoader);
-    this.card1Material = new Three.MeshBasicMaterial({ map: this.card1Texture });
-    this.card2Material = new Three.MeshBasicMaterial({ map: this.card2Texture });
-    this.card3Material = new Three.MeshBasicMaterial({ map: this.card2Texture });
-    this.pokerCardMaterial = new Three.MeshBasicMaterial({ map: this.pokerCardTexture });
-    this.cardTextures = [this.card1Texture, this.card2Texture, this.card3Texture]
-    this.defaultGeometry = new Three.BoxGeometry(130, 130, 1, 1)
-    this.deck = [     
+  created() {
+    // Webpack picks these up at build time via require(); the array is the
+    // same one the original Three.js implementation used as a texture lookup.
+    this.deck = [
       require('../assets/02_of_clubs.png'),
       require('../assets/02_of_diamonds.png'),
       require('../assets/02_of_hearts.png'),
@@ -127,357 +131,623 @@ export default {
       require('../assets/14_of_clubs.png'),
       require('../assets/14_of_diamonds.png'),
       require('../assets/14_of_hearts.png'),
-      require('../assets/14_of_spades.png'),       
+      require('../assets/14_of_spades.png'),
     ]
-    this.cardGeometry = new Three.BoxGeometry(50, 100, 0.5, 1)
-    //Socket 
+
+    // Socket: original code listened for 'resizeGame' to resize the WebGL
+    // canvas. CSS (clamp + flex) handles all of that now, so the handler is a
+    // no-op — but we keep the subscription so the server-side fanout still
+    // resolves cleanly without errors.
     this.socket.on('resizeGame', (width) => {
       this.resizeGameRender(width)
-    }); 
+    })
   },
-  mounted () {
-    this.blockChainStatus = 'None'   
-    this.renderer = new Three.WebGLRenderer({antialias: true});
-    this.renderer.setSize(this.gameSize, this.gameSize)   
-    this.$refs.container.appendChild(this.renderer.domElement);
-    //this.socket.emit("resizeGame", window.innerWidth)
-    this.buildGame()
-    this.renderer.render(this.scene, this.camera);
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.showCards()
-    this.socket.emit("resizeGame", window.innerWidth)    
+  mounted() {
+    this.blockChainStatus = 'None'
+    this.captureMyAddress()
     this.myGameHub()
     this.monitorContract()
     const n_games = Object.keys(toRaw(this.myGames)).length + 1
     this.lastGameId = n_games
-    // Then every N seconds
-    this.pollInterval = setInterval(() => {
-      //await fetch(this.apiUrl);     
-      this.monitorContract();
-    }, 6000); // 5 seconds
+
+    // 1-second ticker that drives the "updated Xs ago · next in Ys"
+    // status line under the poker table — purely cosmetic but it
+    // reassures the user the dApp is alive during the multi-second
+    // gap between chain polls.
+    this.pollCountdownInterval = setInterval(() => {
+      if (this.pollSecondsUntilNext > 0) this.pollSecondsUntilNext -= 1
+      this.pollHeartbeat += 1
+    }, 1000)
+
+    if (BLOCKCHAIN_ENABLED) {
+      this.pollInterval = setInterval(() => {
+        this.monitorContract()
+      }, 6000)
+    }
+  },
+  beforeUnmount() {
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval)
+      this.pollInterval = null
+    }
+    if (this.pollCountdownInterval) {
+      clearInterval(this.pollCountdownInterval)
+      this.pollCountdownInterval = null
+    }
+  },
+  computed: {
+    // Active game record (from myGames map keyed by UI gameId).
+    activeGame() {
+      if (this.gameId === 'NA' || this.gameId == null) return null
+      return this.myGames[this.gameId] || null
+    },
+    // 0=bet placed (no cards), 1=both cards shown, 2=ready for 3rd card,
+    // 3=Win, 4=Loss, 5=Pair (half-back refund). Derived from cards/state.
+    currentGameStatus() {
+      if (this.firstCard < 0 && this.secondCard < 0) return 0
+      if (this.lastCard > 0) {
+        if (this.verdict === 'win') return 3
+        if (this.verdict === 'loss') return 4
+        if (this.verdict === 'pair') return 5
+        return 2
+      }
+      // First card dealt but not yet second
+      if (this.firstCard >= 0 && this.secondCard < 0) return 0
+      return 1
+    },
+    // True when the connected wallet is the oracle for this contract.
+    // Lets us show / hide the manual "Deal card" controls.
+    isOracle() {
+      return !!this.myAddress && !!this.adOracleAddress &&
+        this.myAddress.toLowerCase() === this.adOracleAddress.toLowerCase()
+    },
+    // True when we have an active game and there's still work for the
+    // oracle to do (cards left to deal).
+    oracleHasWorkToDo() {
+      if (!this.activeGame) return false
+      const status = Number(this.activeGame.gameStatus)
+      // 0 = need first + second card.  2 = need last card.
+      return status === 0 || status === 2
+    },
+    // Step-by-step prompt that updates as the game progresses.
+    statusBanner() {
+      const g = this.activeGame
+      if (!g) return 'Place a bet to start a game.'
+      const status = Number(g.gameStatus)
+      if (status === 0) {
+        if (this.firstCard < 0) return 'Waiting for the oracle to deal the first card.'
+        if (this.secondCard < 0) return 'First card revealed — waiting for the second card.'
+        return 'First two cards revealed.'
+      }
+      if (status === 1) return 'Both cards out. Place your Acey-Duecey bet to draw the third.'
+      if (status === 2) return 'Bet locked in. Waiting for the oracle to deal the final card.'
+      if (status === 3) return 'You win! Winnings sent to your wallet.'
+      if (status === 4) return 'You lost. The pot keeps your bet.'
+      if (status === 5) return 'Pair drawn — half your ante refunded.'
+      return `Game status: ${status}`
+    },
+    // Bet sizing — slider runs from 0.1 ꜩ up to 30% of the current pot.
+    // The cap mirrors the contract's "Bet Too Big" guard
+    // (sp.amount - fee <= self.data.pot) and gives the player a safe
+    // ceiling so they don't try to bet more than the contract will
+    // accept. 30% is the rule-of-thumb cap suggested by the user.
+    betMinTez() {
+      return 0.1
+    },
+    betMaxTez() {
+      // potBalance is a formatted string ("0.500"); coerce. Floor at
+      // betMinTez so a freshly-deployed contract with a tiny pot still
+      // lets you place the minimum bet.
+      const pot = Number(this.potBalance) || 0
+      const cap = pot * 0.3
+      return Math.max(this.betMinTez, Number(cap.toFixed(3)))
+    },
+    betStepTez() {
+      // 100,000 mutez (0.1 ꜩ) increments — matches the contract's
+      // mutez precision-of-interest. Slider feels smooth without being
+      // sub-millitez precise.
+      return 0.05
+    },
+    // "Updated 2s ago · next check in 4s" — refreshes via pollHeartbeat.
+    // When the recurring poll isn't running (BLOCKCHAIN_ENABLED=false or
+    // pollInterval never started for any reason), say so explicitly
+    // instead of letting the "updated Xs ago" counter run away.
+    pollHintText() {
+      void this.pollHeartbeat // reactive trigger
+      if (!this.pollLastAt) return 'waiting for first poll…'
+      const ago = Math.max(0, Math.floor((Date.now() - this.pollLastAt) / 1000))
+      if (!this.pollInterval) {
+        return `updated ${ago}s ago · auto-polling off`
+      }
+      const nx = Math.max(0, this.pollSecondsUntilNext)
+      return `updated ${ago}s ago · next check in ${nx}s`
+    },
+    // Card slot ordering left → middle → right: low (firstCard), target
+    // (lastCard), high (secondCard). Same on-screen order as the original
+    // Three.js scene (card1 at -spacing, card3 at 0, card2 at +spacing).
+    slots() {
+      return [
+        { key: 'low', deckIdx: this.firstCard, flipped: this.flipped[0] },
+        { key: 'target', deckIdx: this.lastCard, flipped: this.flipped[2] },
+        { key: 'high', deckIdx: this.secondCard, flipped: this.flipped[1] },
+      ]
+    },
+    // The window of ranks the player needs the third card to land inside.
+    // Returns null until both anchor cards are revealed.
+    rangeText() {
+      const a = rankOf(this.firstCard)
+      const b = rankOf(this.secondCard)
+      if (a == null || b == null) return null
+      // Acey-Deucey: ace can swing low when aceHigh = 0.
+      const norm = (r) => (r === 14 && !this.aceHigh ? 1 : r)
+      const lo = Math.min(norm(a), norm(b))
+      const hi = Math.max(norm(a), norm(b))
+      const fmt = (r) => RANK_LABELS[r] || r
+      if (lo === hi) return `Pair of ${fmt(lo)}s`
+      return `Need: between ${fmt(lo)} and ${fmt(hi)}`
+    },
+    rangeWidthPct() {
+      // How wide the in-between range is, as a fraction of the 1..14 span.
+      // Used to size the highlighted segment of the range bar.
+      const a = rankOf(this.firstCard)
+      const b = rankOf(this.secondCard)
+      if (a == null || b == null) return 0
+      const norm = (r) => (r === 14 && !this.aceHigh ? 1 : r)
+      const lo = Math.min(norm(a), norm(b))
+      const hi = Math.max(norm(a), norm(b))
+      const span = Math.max(0, hi - lo - 1)
+      return Math.round((span / 12) * 100)
+    },
+    rangeOffsetPct() {
+      const a = rankOf(this.firstCard)
+      const b = rankOf(this.secondCard)
+      if (a == null || b == null) return 0
+      const norm = (r) => (r === 14 && !this.aceHigh ? 1 : r)
+      const lo = Math.min(norm(a), norm(b))
+      return Math.round(((lo - 1) / 13) * 100)
+    },
   },
   methods: {
-    // Game Rendering
-    async showCards() {
-      this.controls.update();
-      requestAnimationFrame(this.showCards);  
-      this.renderer.render(this.scene, this.camera);
+    // ─── Visual rendering ───────────────────────────────────────────────
+    // Lookup the asset URL for a given deck index (or null when face-down).
+    // Snap the slider to a fraction of the current max (the 25/50/75/100
+    // quick-pick buttons under the slider).
+    setBetPercent(pct) {
+      const max = this.betMaxTez
+      const next = Math.max(this.betMinTez, Number((max * pct / 100).toFixed(3)))
+      this.thisBet = next
     },
-    async teaseCards() { 
-      requestAnimationFrame(this.teaseCards);  
-      let time = Date.now() * 0.001;
-      this.card1.rotation.y = -time;
-      this.card2.rotation.y = -time;
-      this.renderer.render(this.scene, this.camera);
+    cardFaceFor(deckIdx) {
+      if (deckIdx == null || deckIdx < 0) return null
+      return this.deck[deckIdx] || null
     },
+    cardLabel(deckIdx) {
+      return shortLabel(deckIdx)
+    },
+    suitColor(deckIdx) {
+      const s = suitOf(deckIdx)
+      return s === 1 || s === 2 ? 'red' : 'black'
+    },
+    // Reveal whichever cards are now known on-chain.
+    //
+    // CRITICAL: only animate cards that *just became* revealed since the
+    // last call. The earlier version reset all three flips to false on
+    // every call and then re-flipped them — so every 6-second poll
+    // triggered the deal animation again, even if nothing had changed.
+    //
+    // Now we compute the desired state from chain data and only touch
+    // the slots that need to change. Newly-revealed slots get a small
+    // stagger so the deal still feels like a deal; slots that should
+    // stay face-up just stay face-up (no animation).
     async flipCards() {
-      //this.blockChainStatus = 'Flipping'
-      if (this.firstCard < 0 || this.secondCard < 0) {
-        const card1asset = this.pokerCardLoader
-        const card2asset = this.pokerCardLoader
-        const card3asset = this.pokerCardLoader
-        this.loadCardAsset(1, card1asset)
-        this.loadCardAsset(2, card2asset)
-        this.loadCardAsset(3, card3asset)
-      } else if (this.lastCard <= 0) {
-        const card1asset = this.deck[this.firstCard]
-        const card2asset = this.deck[this.secondCard]
-        const card3asset = this.pokerCardLoader
-        this.loadCardAsset(1, card1asset)
-        this.loadCardAsset(2, card2asset)
-        this.loadCardAsset(3, card3asset)
-      } else {
-        const card1asset = this.deck[this.firstCard]
-        const card2asset = this.deck[this.secondCard]
-        const card3asset = this.deck[this.lastCard] 
-        this.loadCardAsset(1, card1asset)
-        this.loadCardAsset(2, card2asset)
-        this.loadCardAsset(3, card3asset)
-      }
-    },
-    flipCard(frontCard, backCard) {
-      const duration = 1200 // ms
-      const start = performance.now()
-      const startRotation = 0
-      const targetRotation = Math.PI 
-      const liftAmount = 64
-      //const maxOffset = 5 
-      //const startZFront = frontCard.position.z
-      //const startZBack = backCard.position.z
-      //const startX = frontCard.position.x
-      //const startY = frontCard.position.y
-      //const offsetX = (Math.random() - 0.5) * maxOffset
-      //const offsetY = (Math.random() - 0.5) * maxOffset
-      const offsetRot = (Math.random() - 0.5) * 0.15 // subtle twist
+      const desired = [
+        this.firstCard >= 0,  // slot 0 — low/left
+        this.secondCard >= 0, // slot 1 — high/right
+        this.lastCard > 0,    // slot 2 — target/middle
+      ]
 
-      const animate = (time) => {
-        const elapsed = time - start
-        const t = Math.min(elapsed / duration, 1)
-        // ease-in-out
-        const eased = t < 0.5
-          ? 2 * t * t
-          : 1 - Math.pow(-2 * t + 2, 2) / 2    
-        const rot = startRotation + (targetRotation - startRotation) * eased
-        const rot2 = startRotation + (offsetRot - startRotation) * eased
-        const lift = Math.sin(Math.PI * t) * liftAmount
-        frontCard.rotation.y = rot
-        backCard.rotation.y = rot
-        frontCard.rotation.z = rot2
-        backCard.rotation.z = rot2
-        frontCard.rotation.y = rot
-        backCard.rotation.y = rot
-        frontCard.position.z = lift
-        backCard.position.z = lift - 0.2
-         if (frontCard.rotation.y % (2 * Math.PI) > Math.PI / 2) {
-          backCard.visible = false;
-          frontCard.visible = true;
-        } else {
-          backCard.visible = true;
-          frontCard.visible = false;
+      // Apply face-down transitions immediately (e.g. when starting a new
+      // game and the previous game's cards need to flip away).
+      const next = [...this.flipped]
+      let changed = false
+      for (let i = 0; i < 3; i++) {
+        if (this.flipped[i] && !desired[i]) {
+          next[i] = false
+          changed = true
         }
-        if (t < 1) {
-          requestAnimationFrame(animate)
-        } 
-        
+      }
+      if (changed) this.flipped = next
+
+      // Stagger any face-up reveals (cards that became known since the
+      // last poll). If everything's already up, this loop is a no-op.
+      const reveals = []
+      for (let i = 0; i < 3; i++) {
+        if (desired[i] && !this.flipped[i]) reveals.push(i)
+      }
+      reveals.forEach((slotIdx, order) => {
+        // 250 / 600 / 950 ms — separated enough for the eye to follow,
+        // tight enough that the whole deal lands in <1 second.
+        const delay = 250 + 350 * order
+        setTimeout(() => {
+          this.flipped = this.flipped.map((v, j) => (j === slotIdx ? true : v))
+        }, delay)
+      })
+    },
+    // Wipe any existing reveal — used when a new game starts.
+    async resetGame() {
+      this.flipped = [false, false, false]
+      this.verdict = null
+    },
+    // Kept for the socket handler. CSS handles real sizing, so this just
+    // exists so the listener resolves without throwing.
+    resizeGameRender(_width) {
+      // intentionally empty — CSS clamp/flex handles layout
+    },
+    // ─── Contract interaction ────────────────────────────────────────
+    async startGameBC() {
+      // Defensive: every bail path updates blockChainStatus so the user
+      // never sees a button click produce zero feedback.
+      if (!this.wallet) {
+        this.blockChainStatus = 'Wallet not initialised yet — refresh the page.'
+        console.warn('startGameBC: no wallet on this component')
+        return
+      }
+      let activeAccount
+      try {
+        activeAccount = await this.wallet.client.getActiveAccount()
+      } catch (e) {
+        this.blockChainStatus = 'Could not read wallet — try Reset wallet up top.'
+        console.error('startGameBC: getActiveAccount failed:', e)
+        return
+      }
+      if (!activeAccount) {
+        this.blockChainStatus = 'Connect your wallet first (top of page).'
+        console.warn('startGameBC: no active account — wallet not connected')
+        return
       }
 
-      requestAnimationFrame(animate)
-    },
-    async loadCardAsset(card, cardasset) {
-      this.loader.load(cardasset, (texture) => {
-        this.cardTextures[card - 1].dispose(); // Dispose old texture
-        this.cardTextures[card - 1] = texture;
-        this.cards[card - 1].material.map = texture;
-        this.cards[card - 1].material.needsUpdate = true;
-        console.log('CHEEECCKING')
-        console.log(this.myGames[this.gameId].gameStatus)
-        this.flipCard(this.cards[0], this.backCards[0]);
-        this.flipCard(this.cards[1], this.backCards[1]);
-        this.flipCard(this.cards[2], this.backCards[2]); 
-      });
-    },
-    async buildGame() {      
-      this.table = new Three.Mesh(this.tableGeometry, this.tableMaterial); 
-      this.table.position.set(0, 0, -50);     
-      this.card1 = new Three.Mesh(this.cardGeometry, this.card1Material);      
-      this.card1.position.set(-60, -30, 0);
-      this.backCard1 =  new Three.Mesh(this.cardGeometry, this.pokerCardMaterial); 
-      this.backCard1.position.set(-60, -30, -0.2)
-      this.card2 = new Three.Mesh(this.cardGeometry, this.card2Material); 
-      this.card2.position.set(60, -30, 0);
-      this.backCard2 =  new Three.Mesh(this.cardGeometry, this.pokerCardMaterial); 
-      this.backCard2.position.set(60, -30, -0.2)     
-      this.card3 = new Three.Mesh(this.cardGeometry, this.card3Material); 
-      this.card3.position.set(0, 50, 0);
-      this.backCard3 =  new Three.Mesh(this.cardGeometry, this.pokerCardMaterial); 
-      this.backCard3.position.set(0, 50, -0.2)      
-      this.card3.visible = true
-      this.backCard3.visible = true
-      await this.board.add(this.table)
-      await this.board.add(this.card1)    
-      await this.board.add(this.backCard1)
-      await this.board.add(this.card2)    
-      await this.board.add(this.backCard2)  
-      await this.board.add(this.card3)   
-      await this.board.add(this.backCard3) 
-      await this.scene.add(this.board)   
-      this.cards = [this.card1, this.card2, this.card3]       
-      this.backCards = [this.backCard1, this.backCard2, this.backCard3]      
-    },
-    async resetGame() {    
-      this.loadCardAsset(1, this.pokerCardLoader)  
-      this.loadCardAsset(2, this.pokerCardLoader)  
-      this.loadCardAsset(3, this.pokerCardLoader)  
-    },
-    async resizeGameRender(width) {
-      this.gameSize = width * GAME_WIDTH_FRACTION
-      if (this.gameSize > this.maxGameSize) {
-        this.gameSize = this.maxGameSize
-      }
-      await this.renderer.setSize(this.gameSize, this.gameSize)
-    },  
-    // Interact with the contract    
-    async startGameBC() {        
-      const activeAccount = await this.wallet.client.getActiveAccount()   
-      if (!activeAccount) {
-          return
-      }     
-      let totalBet = Number(this.ante) + this.fee
-      totalBet = Number(totalBet).toFixed(1)
-      let ts = this.timestamp()
-      let gameBcId = activeAccount['address'] + '-' + ts + '-R1'
+      // The contract expects `ante + fee` ꜩ. Both come from data() and
+      // mirror the on-chain storage values. We log the exact amount to
+      // console so it's easy to verify what Taquito is signing.
+      const totalBetTez = Number(this.ante) + Number(this.fee)
+      const totalBetStr = totalBetTez.toFixed(6)
+      const aceHighInt = Number(this.aceHigh)
+      console.log(
+        `[AD] startGameBC: bet(${aceHighInt}) with amount ${totalBetStr} ꜩ to`,
+        AD_CONTRACT_ADDRESS,
+      )
+
       this.loadGame = false
-      this.blockChainStatus = 'Submitting Bet'
+      this.blockChainStatus = `Submitting bet (${totalBetStr} ꜩ)…`
       this.resetGame()
       const n_games = Object.keys(toRaw(this.myGames)).length + 1
       this.gameId = n_games
-      await this.getSigner(activeAccount)
-      await this.tezos.wallet
-          .at(AD_CONTRACT_ADDRESS)
-          .then((contract) => {
-            return contract.methods.startGame(gameBcId).send({amount: totalBet})
-          })
-          .then((op) => {
-            console.log(`Waiting for ${op.opHash} to be confirmed...`);
-            return op.confirmation().then(() => op.opHash)
-          })
-          .then((hash) => {
-            console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)
-            this.blockChainStatus = 'Getting cards for game ' + this.gameId 
-          })
-          .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-    }, 
-    async continueBetBC() {      
-      const activeAccount = await this.wallet.client.getActiveAccount()   
-      if (!activeAccount) {
-          return
-      }    
-      let gameBcId = this.myGames[this.gameId].gameId
-      this.blockChainStatus = 'Submitting Bet'
-      this.needsLastCard = true
-      let totalBet = Number(this.thisBet) 
-      totalBet = Number(totalBet).toFixed(1)
-      await this.getSigner(activeAccount)
-      await this.tezos.wallet
-          .at(AD_CONTRACT_ADDRESS)
-          .then((contract) => {
-            return contract.methodsObject.makeBet(gameBcId).send({amount: totalBet})
-          })
-          .then((op) => {
-            console.log(`Waiting for ${op.opHash} to be confirmed...`);
-            return op.confirmation().then(() => op.opHash)
-          })
-          .then((hash) => {
-            console.log(`Operation injected: https://ghost.tzstats.com/${hash}`)
-            this.gameId = Number(this.gameId)
-            this.blockChainStatus = 'Getting Final Card for Game ' + this.gameId 
-          })
-          .catch((error) => console.log(`Error3: ${JSON.stringify(error, null, 2)}`));
-    }, 
-    async getSigner(activeAccount) { 
-      const signer = new RemoteSigner(activeAccount.address, NODE_URL )
-      await this.tezos.setProvider({signer:signer})
-      await this.tezos.setWalletProvider(this.wallet)  
-      return signer
+      this.useWalletProvider()
+
+      try {
+        const contract = await this.tezos.wallet.at(AD_CONTRACT_ADDRESS)
+        // Deployed AD's `bet` entrypoint takes a single `int` (aceHigh).
+        // SmartPy collapses single-field record params to bare arguments
+        // at the Michelson level, so we use .methods (positional) rather
+        // than .methodsObject. The earlier secure-AD variant took
+        // {aceHigh, playerNonce} as a record — restore that call shape
+        // if you redeploy the secure version.
+        const op = await contract.methods
+          .bet(aceHighInt)
+          .send({ amount: totalBetStr })
+        this.blockChainStatus = `Bet broadcast — waiting for confirmation (${op.opHash.slice(0, 12)}…)`
+        console.log('[AD] startGameBC: op injected', op.opHash)
+        await op.confirmation()
+        this.blockChainStatus = `Bet confirmed — game ${this.gameId} now waiting for the oracle to deal the first card.`
+        await this.monitorContract()
+      } catch (err) {
+        const msg = err?.message || String(err)
+        console.error('Tezos contract call failed:', err)
+        if (/aborted|cancel|rejected/i.test(msg)) {
+          this.blockChainStatus = 'Bet cancelled in wallet.'
+        } else if (/insufficient|balance/i.test(msg)) {
+          this.blockChainStatus = 'Insufficient balance — fund the wallet at the shadownet faucet.'
+        } else {
+          this.blockChainStatus = `Bet failed: ${msg.slice(0, 140)}`
+        }
+      }
     },
-    // Read the contract
+    async continueBetBC() {
+      if (!this.wallet) {
+        this.blockChainStatus = 'Wallet not initialised — refresh the page.'
+        return
+      }
+      let activeAccount
+      try {
+        activeAccount = await this.wallet.client.getActiveAccount()
+      } catch (e) {
+        this.blockChainStatus = 'Could not read wallet — Reset wallet at top.'
+        console.error('continueBetBC: getActiveAccount failed:', e)
+        return
+      }
+      if (!activeAccount) {
+        this.blockChainStatus = 'Connect your wallet first.'
+        return
+      }
+      if (!this.myGames[this.gameId]) {
+        this.blockChainStatus = 'Pick an active game first.'
+        return
+      }
+
+      // Entrypoint is continueBet(nat %gameId). Amount is your bet up to
+      // the pot; the holder fee (0.1ꜩ) is added on top because the
+      // contract subtracts it from sp.amount before crediting the pot.
+      const gameBcId = Number(this.myGames[this.gameId].gameId)
+      const totalBetTez = Number(this.thisBet) + Number(this.fee)
+      const totalBetStr = totalBetTez.toFixed(6)
+      console.log(
+        `[AD] continueBetBC: continueBet(${gameBcId}) with amount ${totalBetStr} ꜩ`,
+      )
+
+      this.blockChainStatus = `Submitting Acey-Duecey bet (${totalBetStr} ꜩ)…`
+      this.needsLastCard = true
+      this.useWalletProvider()
+
+      try {
+        const contract = await this.tezos.wallet.at(AD_CONTRACT_ADDRESS)
+        const op = await contract.methods.continueBet(gameBcId).send({ amount: totalBetStr })
+        this.blockChainStatus = `Bet broadcast — waiting for confirmation (${op.opHash.slice(0, 12)}…)`
+        await op.confirmation()
+        this.gameId = Number(this.gameId)
+        this.blockChainStatus = `Bet confirmed — game ${this.gameId} waiting for the oracle to deal the final card.`
+        await this.monitorContract()
+      } catch (err) {
+        const msg = err?.message || String(err)
+        console.error('Tezos contract call failed:', err)
+        if (/aborted|cancel|rejected/i.test(msg)) {
+          this.blockChainStatus = 'Bet cancelled in wallet.'
+        } else if (/Bet Too Big|betTooBigError/i.test(msg)) {
+          this.blockChainStatus = `Bet too big — must be ≤ pot (${this.potBalance} ꜩ).`
+        } else if (/bad game/i.test(msg)) {
+          this.blockChainStatus = `Game not ready for Acey-Duecey bet (status must be 1).`
+        } else {
+          this.blockChainStatus = `Bet failed: ${msg.slice(0, 140)}`
+        }
+      }
+    },
+    useWalletProvider() {
+      this.tezos.setWalletProvider(this.wallet)
+    },
+    // ─── Oracle entrypoints ──────────────────────────────────────────
+    // Called by the AD oracle address (which we set to the test wallet
+    // for shadownet). Each call advances the game by one card.
+    //
+    // The contract expects (card: nat 0..51, gameId: nat, hash: string).
+    // `card` is a deck-index; `hash` is whatever string the oracle wants
+    // to bind to that card (the secure variant uses a hash of an RNG
+    // seed; here we just stamp a random hex for traceability).
+    randomCardIndex() {
+      // 0..51 — guarantees `params.card` fits the contract's range checks.
+      return Math.floor(Math.random() * 52)
+    },
+    randomHash(prefix) {
+      const bytes = new Uint8Array(8)
+      crypto.getRandomValues(bytes)
+      const hex = Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')
+      return `${prefix}-${hex}`
+    },
+    async dealFirstCard() {
+      return this.dealCard('firstCard')
+    },
+    async dealSecondCard() {
+      return this.dealCard('secondCard')
+    },
+    async dealLastCard() {
+      return this.dealCard('lastCard')
+    },
+    // Auto-deal: fire firstCard, wait for it, then secondCard. Useful
+    // right after a bet so the user doesn't have to click twice.
+    async dealOpeningCards() {
+      await this.dealCard('firstCard')
+      // monitorContract picks up the first card on its next tick; we
+      // can immediately fire secondCard because the contract only
+      // gates on gameStatus, not on whether card1 is set.
+      await this.dealCard('secondCard')
+    },
+    // Shared body for the three deal-card entrypoints.
+    async dealCard(entrypoint) {
+      const activeAccount = await this.wallet?.client?.getActiveAccount?.()
+      if (!activeAccount) {
+        this.blockChainStatus = 'Connect your wallet first.'
+        return
+      }
+      if (!this.activeGame) {
+        this.blockChainStatus = 'Pick an active game first.'
+        return
+      }
+      if (!this.isOracle) {
+        this.blockChainStatus = 'Only the oracle can deal cards for this contract.'
+        return
+      }
+      const gameBcId = Number(this.activeGame.gameId)
+      const card = this.randomCardIndex()
+      const hash = this.randomHash(entrypoint)
+      this.dealing = entrypoint
+      this.blockChainStatus = `Oracle: dealing ${entrypoint} (card #${card}) for game ${gameBcId}…`
+      this.useWalletProvider()
+      try {
+        const contract = await this.tezos.wallet.at(AD_CONTRACT_ADDRESS)
+        // All three entrypoints take the same record shape:
+        //   { card: nat, gameId: nat, hash: string }
+        const op = await contract.methodsObject[entrypoint]({
+          card,
+          gameId: gameBcId,
+          hash,
+        }).send()
+        await op.confirmation()
+        this.blockChainStatus = `Oracle: ${entrypoint} confirmed (card #${card}).`
+        this.needsLastCard = entrypoint === 'lastCard' ? false : this.needsLastCard
+        await this.monitorContract()
+      } catch (err) {
+        console.error(`${entrypoint} failed:`, err)
+        this.blockChainStatus = `${entrypoint} failed — ${err?.message || 'see console'}.`
+      } finally {
+        this.dealing = ''
+      }
+    },
+    async claimWinnings() {
+      const activeAccount = await this.wallet.client.getActiveAccount()
+      if (!activeAccount) return
+      this.useWalletProvider()
+      this.blockChainStatus = 'Claiming winnings...'
+      try {
+        const contract = await this.tezos.wallet.at(AD_CONTRACT_ADDRESS)
+        const op = await contract.methodsObject.claim().send()
+        await op.confirmation()
+        this.blockChainStatus = 'Claimed.'
+      } catch (e) {
+        console.error('claim failed:', e)
+        this.blockChainStatus = 'Nothing to claim.'
+      }
+    },
+    fetchContractStorage() {
+      return getContractStorage(AD_CONTRACT_ADDRESS)
+    },
     async getPotBalance() {
-      //console.log('getting pot balance')
-      const response = await fetch(this.apiUrl);
-      //console.log('api response')
-      const data = await response.json();
-      //console.log(data)
-      this.potBalance = data['pot'] * 1e-6
+      const data = await this.fetchContractStorage()
+      if (!data) return
       this.potBalance = Number(data['pot'] * 1e-6).toFixed(3)
+      // Keep the slider value in range. If the user picked 0.4 ꜩ but
+      // the pot shrunk so max is now 0.2 ꜩ, snap them down.
+      if (Number(this.thisBet) > this.betMaxTez) {
+        this.thisBet = this.betMaxTez
+      }
+    },
+    // Capture our own active wallet address — used to decide whether
+    // we're allowed to act as the oracle for this contract.
+    async captureMyAddress() {
+      try {
+        const account = await this.wallet?.client?.getActiveAccount?.()
+        this.myAddress = account?.address || ''
+      } catch (_e) {
+        this.myAddress = ''
+      }
     },
     async getGamesFromContractBC() {
-      const activeAccount = await this.wallet.client.getActiveAccount()   
-      if (!activeAccount) {
-          return
-      } 
-      const response = await fetch(this.apiUrl);     
-      const data = await response.json();
-       // minimal diffing
+      const activeAccount = await this.wallet.client.getActiveAccount()
+      if (!activeAccount) return
+      const data = await this.fetchContractStorage()
+      if (!data) return
+      // Pick up admin / oracle from the contract storage so the UI knows
+      // whether to expose the manual deal-card controls.
+      this.adAdminAddress = data['admin'] || ''
+      this.adOracleAddress = data['oracle'] || ''
+      // Stamp the successful poll so the "updated Ns ago" indicator
+      // can show fresh time even when no game state changed.
+      this.pollLastAt = Date.now()
+      this.pollSecondsUntilNext = 6
       this.myGames = {}
       this.myOldGames = {}
       this.myPendingGames = {}
       let i = 0
-      for (let game in data['games']) {
-        if (data['games'][game]['player'] == activeAccount.address) {
-          if (data['games'][game]['player'] == activeAccount.address) {
-            i ++
-            this.gameCount = i
-            this.myGames[this.gameCount] = {
-                gameId: game,
-                gameStatus: data['games'][game]['status'],
-                flipped: false
-            }
-            if (Number(data['games'][game]['status']) == 1){
-              this.myPendingGames[this.gameCount] = {
-                gameId: game,
-                gameStatus: data['games'][game]['status'],
-                flipped: false
-              }
-            } else if (Number(data['games'][game]['status']) >= 2) {
-              this.myOldGames[this.gameCount] = {
-                gameId: game,
-                gameStatus: data['games'][game]['status'],
-                flipped: false
-              }
-            }           
-          }
-        }         
+      // Iterate every on-chain game; keep the ones owned by the active
+      // wallet, plus split into pending vs old by gameStatus.
+      // (Field name is `gameStatus`, NOT `status` — that was the legacy
+      // schema and read as undefined here for months.)
+      for (const game in data['games']) {
+        const g = data['games'][game]
+        if (g.player !== activeAccount.address) continue
+        i++
+        this.gameCount = i
+        const statusN = Number(g.gameStatus)
+        const record = {
+          gameId: game,
+          gameStatus: statusN,
+          flipped: false,
+        }
+        this.myGames[this.gameCount] = record
+        if (statusN === 0 || statusN === 1 || statusN === 2) {
+          // 0 = bet placed; 1 = cards out, awaiting AD bet; 2 = awaiting final card.
+          this.myPendingGames[this.gameCount] = record
+        } else if (statusN >= 3) {
+          this.myOldGames[this.gameCount] = record
+        }
       }
     },
     async loadGameInfo() {
-      const response = await fetch(this.apiUrl);
-      const data = await response.json();
-      console.log(this.myGames[this.gameId]['gameId'])
-      let gameBcId = this.myGames[this.gameId]['gameId']
-      console.log('loading loading', data['games'][gameBcId] )
-      this.firstCard = Number(data['games'][gameBcId]['card1'])
-      this.secondCard = Number(data['games'][gameBcId]['card2'])
-      this.lastCard = Number(data['games'][gameBcId]['card3'])
-      console.log(this.firstCard, this.secondCard, this.lastCard)
-      if (this.lastCard >= 0) {
-        this.card3.visible = true
-        this.backCard3.visible = true
-      } 
+      const data = await this.fetchContractStorage()
+      if (!data) return
+      const gameBcId = this.myGames[this.gameId]?.gameId
+      if (gameBcId == null) return
+      const game = data['games'][gameBcId]
+      if (!game) return
+
+      // The deployed contract stores cards in a `hand` map keyed by
+      // 1/2/3 (NOT card1/card2/card3 — that was the legacy schema).
+      // tzkt returns map keys as strings, so index with both shapes
+      // to be defensive. `-1` is the contract's "not yet dealt" sentinel.
+      const hand = game.hand || {}
+      const readSlot = (idx) => {
+        const raw = hand[idx] ?? hand[String(idx)]
+        const n = Number(raw)
+        return Number.isFinite(n) ? n : -1
+      }
+      this.firstCard = readSlot(1)
+      this.secondCard = readSlot(2)
+      // Third card: contract uses -1 for "not dealt", but the rest of
+      // this component uses `lastCard <= 0` as the gating condition,
+      // so flatten -1 → 0 to keep that logic intact.
+      const third = readSlot(3)
+      this.lastCard = third < 0 ? 0 : third
+
+      // gameStatus (NOT `status` — that field doesn't exist on this contract).
+      // Encoded as a number on chain; tzkt returns as a string.
+      const status = String(game.gameStatus)
       let gameStatus = ''
-      if (data['games'][gameBcId]['status'] == '0') {
-        gameStatus = 'Waiting for first card32232342342s ' + this.gameId 
-      } else if (data['games'][gameBcId]['status'] == '1') {
-        gameStatus = 'Play for Acey Duecey in Game ' + this.gameId 
-      } else if (data['games'][gameBcId]['status'] == '2') {
-        gameStatus = 'Waiting for final card ' + this.gameId 
-      } else if (data['games'][gameBcId]['status'] == '3') {
-        gameStatus = 'Game Over: ' + this.gameId + ' Win!'            
-      } else if (data['games'][gameBcId]['status'] == '4') {
-        gameStatus = 'Game Over: ' + this.gameId + ' Pair Loss'
-      } else if (data['games'][gameBcId]['status'] == '5') {
-        gameStatus = 'Game Over: ' + this.gameId + ' Loss'
+      if (status === '0') {
+        gameStatus = `Waiting for the oracle to deal cards · game ${this.gameId}`
+        this.verdict = null
+      } else if (status === '1') {
+        gameStatus = `Both cards out · place your Acey-Duecey bet · game ${this.gameId}`
+        this.verdict = null
+      } else if (status === '2') {
+        gameStatus = `Waiting for the oracle to deal the final card · game ${this.gameId}`
+        this.verdict = null
+      } else if (status === '3') {
+        gameStatus = `Game ${this.gameId} — YOU WIN`
+        this.verdict = 'win'
+      } else if (status === '4') {
+        // Contract sets 4 when cardValue is outside (lowCard, highCard).
+        gameStatus = `Game ${this.gameId} — LOSS (third card hit the rail)`
+        this.verdict = 'loss'
+      } else if (status === '5') {
+        // Contract sets 5 when cards 1+2 match — half ante is refunded.
+        gameStatus = `Game ${this.gameId} — PAIR DRAW (half ante refunded)`
+        this.verdict = 'pair'
       } else {
-        gameStatus = 'None'
+        gameStatus = `Game ${this.gameId} — status ${status}`
+        this.verdict = null
       }
       this.blockChainStatus = gameStatus
-      this.resetGame()
       await this.flipCards()
     },
     async monitorContract() {
       await this.getGamesFromContractBC()
-      await this.getPotBalance() 
+      await this.getPotBalance()
       const n_games = Object.keys(toRaw(this.myGames)).length
-      //console.log('GAME COUNT', n_games)
-      if (Number.isNaN(this.gameId)) {
-        return
-      }
-      if (! this.gameId) {
-        return
-      }
-
+      if (Number.isNaN(this.gameId)) return
+      if (!this.gameId) return
       if (this.gameId == 'NA') {
         return
       } else if (Number(this.gameId) > n_games) {
         return
       }
-
-      
-      
-      if (! this.lastGameId == this.gameId || this.needsLastCard) {
-        console.log('FLIPP ', this.gameId, this.lastGameId)
-        console.log(! this.lastGameId == this.gameId)
+      if (this.lastGameId !== this.gameId || this.needsLastCard) {
         this.loadGameInfo()
       }
-      this.lastGameId = this.gameId 
-  
+      this.lastGameId = this.gameId
       if (this.gameCount < 0) {
-        this.blockChainStatus = 'User has no games' 
-      } 
+        this.blockChainStatus = 'User has no games'
+      }
     },
-    // Render Interface
-    async setGameId(gameId) {      
+    // ─── Render Interface ────────────────────────────────────────────────
+    async setGameId(gameId) {
       this.gameId = gameId
-      console.log('changing to', this.gameId)
       this.loadGameInfo()
     },
     async toggleAceHigh() {
@@ -492,89 +762,761 @@ export default {
       await this.getGamesFromContractBC()
     },
     async showLearnMore() {
-        if (this.showInfo)  {
-            this.showInfo = false
-        } else {
-            this.showInfo = true
-        }
+      this.showInfo = !this.showInfo
     },
     async toggleOldGames() {
-        if (this.hideOldGames)  {
-            this.hideOldGames = false
-            this.hideOldGamesStatus = 'Show Old Games'
-        } else {
-            this.hideOldGames = true
-            this.hideOldGamesStatus = 'Hide Old Games'
-        }
+      if (this.hideOldGames) {
+        this.hideOldGames = false
+        this.hideOldGamesStatus = 'Show Old Games'
+      } else {
+        this.hideOldGames = true
+        this.hideOldGamesStatus = 'Hide Old Games'
+      }
     },
     timestamp() {
-    const d = new Date();
-    const p = n => n.toString().padStart(2, '0');
-    return `${d.getFullYear()}_${p(d.getMonth()+1)}_${p(d.getDate())}_${p(d.getHours())}_${p(d.getMinutes())}`;
-    }
+      const d = new Date()
+      const p = (n) => n.toString().padStart(2, '0')
+      return `${d.getFullYear()}_${p(d.getMonth() + 1)}_${p(d.getDate())}_${p(d.getHours())}_${p(
+        d.getMinutes()
+      )}`
+    },
   },
 }
 </script>
 
 <template>
-  <div class="canvasContainer" >        
+  <div class="canvasContainer">
     <div class="rowFlex">
       <div class="actionButtonHelp" @click="showLearnMore"> HOW TO PLAY </div>
-        <div class="infoPopup" v-if="showInfo" @click="showLearnMore"> 
+      <div class="infoPopup" v-if="showInfo" @click="showLearnMore">
         <div>
           <ul>
-            <li class="listItem" v-for="(key, value) in gameInfo" :key="key" :value="value">{{ key }}  </li>
+            <li
+              class="listItem"
+              v-for="(key, value) in gameInfo"
+              :key="key"
+              :value="value"
+            >{{ key }}</li>
           </ul>
         </div>
       </div>
-    </div>  
-     
-    <div class="rowFlex"> 
-      <div class="gameInfo">Game Id: {{ gameId }}  </div>
-      <div class="gameInfo">Pot Balance: {{ potBalance }} {{this.tezosSymbol}} </div>
-      <div> 
-        <div class="gameInfo"> Bet up to pot </div>
-        <select class="selectBox" v-model="thisBet"> 
-          <option v-for="key in thisBets" :key="key" > {{ key }}  </option> 
-        </select>
-      </div>
-      <div class="gameInfo">Your Bet: {{ thisBet }} {{this.tezosSymbol}} </div>
-      
-    </div> 
-    <div class="gameInfo">{{ blockChainStatus }}  </div>
-    <div 
-      ref="container"
-    >
+    </div>
+
     <div class="rowFlex">
-      <div class="actionButton" @click="startGameBC">Ante up and play!</div>     
-      <select @change="toggleAceHigh()" class="selectBox" v-model="highLow"> PICK: 
-        <option   v-for="key in ['Ace Low', 'Ace High']" :key="key" > {{ key }} </option>
+      <div class="gameInfo">Game Id: {{ gameId }}</div>
+      <div class="gameInfo">Pot Balance: {{ potBalance }} {{ tezosSymbol }}</div>
+    </div>
+    <div class="adBetSliderRow">
+      <div class="adBetSliderHeader">
+        <span class="adBetSliderLabel">Your bet</span>
+        <span class="adBetSliderValue">
+          {{ Number(thisBet).toFixed(3) }} {{ tezosSymbol }}
+        </span>
+        <span class="adBetSliderMax">
+          max {{ betMaxTez }} {{ tezosSymbol }}
+          <span class="adBetSliderMaxHint">(30% of pot)</span>
+        </span>
+      </div>
+      <input
+        type="range"
+        class="adBetSlider"
+        :min="betMinTez"
+        :max="betMaxTez"
+        :step="betStepTez"
+        v-model.number="thisBet"
+      />
+      <div class="adBetSliderTicks">
+        <button
+          v-for="pct in [25, 50, 75, 100]"
+          :key="pct"
+          type="button"
+          class="adBetTick"
+          @click="setBetPercent(pct)"
+          :title="pct + '% of max'"
+        >{{ pct }}%</button>
+      </div>
+    </div>
+    <div class="adStatusPanel">
+      <div class="adStatusRow adStatusRow--banner">
+        <span class="adPulse" aria-hidden="true"></span>
+        <span class="adStatusBanner">{{ statusBanner }}</span>
+      </div>
+      <div class="adStatusRow adStatusRow--detail">
+        <span class="adStatusLabel">CHAIN</span>
+        <span class="adStatusDetail">{{ blockChainStatus || '—' }}</span>
+        <span class="adStatusSpacer"></span>
+        <span class="adPollHint">{{ pollHintText }}</span>
+      </div>
+      <div v-if="activeGame" class="adStatusRow adStatusRow--detail">
+        <span class="adStatusLabel">GAME</span>
+        <span class="adStatusDetail">
+          #{{ gameId }} · status {{ activeGame.gameStatus }}
+          · pot {{ potBalance }} ꜩ
+        </span>
+      </div>
+    </div>
+
+    <!-- Oracle controls — visible only when the wallet matches the
+         contract's configured oracle address AND a game is in flight. -->
+    <div v-if="isOracle && activeGame" class="adOraclePanel">
+      <div class="adOracleHeader">
+        <span class="adOracleDot"></span>
+        <span class="adOracleLabel">ORACLE CONTROLS</span>
+        <span class="adOracleHint">
+          you are the oracle — advance the game by dealing cards
+        </span>
+      </div>
+      <div class="rowFlex">
+        <button
+          class="actionButton"
+          :disabled="dealing !== '' || Number(activeGame.gameStatus) !== 0 || firstCard >= 0"
+          @click="dealFirstCard"
+        >
+          {{ dealing === 'firstCard' ? 'Dealing first…' : 'Deal first card' }}
+        </button>
+        <button
+          class="actionButton"
+          :disabled="dealing !== '' || Number(activeGame.gameStatus) !== 0 || firstCard < 0 || secondCard >= 0"
+          @click="dealSecondCard"
+        >
+          {{ dealing === 'secondCard' ? 'Dealing second…' : 'Deal second card' }}
+        </button>
+        <button
+          class="actionButton"
+          :disabled="dealing !== '' || Number(activeGame.gameStatus) !== 2"
+          @click="dealLastCard"
+        >
+          {{ dealing === 'lastCard' ? 'Dealing last…' : 'Deal last card' }}
+        </button>
+        <button
+          class="actionButtonHelp"
+          :disabled="dealing !== '' || Number(activeGame.gameStatus) !== 0"
+          @click="dealOpeningCards"
+          title="Fires firstCard + secondCard back-to-back"
+        >
+          Auto-deal openers
+        </button>
+      </div>
+    </div>
+
+    <!-- ─── New visual: felt table with three flippable cards ─────────── -->
+    <div class="adTableWrap">
+      <div :class="['adTable', verdict ? `adTable--${verdict}` : '']">
+        <div class="adRail" aria-hidden="true"></div>
+        <div class="adFelt">
+          <div class="adBrand">ACEY · DUECEY</div>
+
+          <div class="adCardRow">
+            <div
+              v-for="(slot, i) in slots"
+              :key="slot.key + '-' + i"
+              :class="['adCardSlot', `adCardSlot--${slot.key}`]"
+            >
+              <div :class="['adCard', { 'adCard--flipped': slot.flipped }]">
+                <!-- Back face: pure-CSS card back -->
+                <div class="adCardFace adCardFace--back">
+                  <div class="adBack">
+                    <div class="adBackInner">
+                      <div class="adBackMark">A<span>·</span>D</div>
+                    </div>
+                  </div>
+                </div>
+                <!-- Front face: actual card image when known.
+                     The card PNG already shows the rank+suit in its own
+                     upper-left corner, so we don't overlay a separate
+                     label (avoids the duplicated "K♥" badge issue). -->
+                <div class="adCardFace adCardFace--front">
+                  <img
+                    v-if="cardFaceFor(slot.deckIdx)"
+                    :src="cardFaceFor(slot.deckIdx)"
+                    :alt="cardLabel(slot.deckIdx)"
+                    class="adCardImg"
+                    draggable="false"
+                  />
+                </div>
+              </div>
+              <div class="adSlotLabel">
+                <template v-if="slot.key === 'low'">LOW</template>
+                <template v-else-if="slot.key === 'high'">HIGH</template>
+                <template v-else>?</template>
+              </div>
+            </div>
+          </div>
+
+          <!-- Range bar: only meaningful once both anchors are flipped. -->
+          <div class="adRangeWrap" v-if="rangeText">
+            <div class="adRangeText">{{ rangeText }}</div>
+            <div class="adRangeBar">
+              <div
+                class="adRangeFill"
+                :style="{ left: rangeOffsetPct + '%', width: rangeWidthPct + '%' }"
+              ></div>
+              <div class="adRangeTicks">
+                <span v-for="t in 14" :key="t"></span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="verdict === 'win'" class="adVerdict adVerdict--win">YOU WIN</div>
+          <div v-else-if="verdict === 'pair'" class="adVerdict adVerdict--pair">PAIR · HALF BACK</div>
+          <div v-else-if="verdict === 'loss'" class="adVerdict adVerdict--loss">RAILED</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rowFlex">
+      <div class="actionButton" @click="startGameBC">Ante up and play!</div>
+      <select @change="toggleAceHigh()" class="selectBox" v-model="highLow"> PICK:
+        <option v-for="key in ['Ace Low', 'Ace High']" :key="key">{{ key }}</option>
       </select>
       <div class="actionButton" @click="continueBetBC">Bet On Acey Deucey</div>
-    </div> 
+      <div class="actionButton" @click="claimWinnings">Claim winnings</div>
     </div>
-    <div class="gameInfo" @click="myGameHub()">MY GAME HUB </div>
-    <div class="rowFlex">
-        <div class="gameInfo" v-if="gameCount < 0">No Active Games</div>
-        <div class="gameInfo">
-          <div class="actionButton" > Active Games </div>
-          <div class="rowFlex">
-            <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myPendingGames" :key="key" :value="value"> Game ID: {{ value }} </div>  
-          </div>
-        </div>
-        <div class="gameInfo">
-          <div class="actionButton" v-if="gameCount >= 0" @click="toggleOldGames()"> {{hideOldGamesStatus}} </div>
-          <div v-if="hideOldGames" class="rowFlex">
-            <div class="actionButton" @click="setGameId(value)" v-for="(key, value) in myOldGames" :key="key" :value="value"> Game ID: {{ value }} </div>  
-          </div>
-        </div>
-    </div>  
 
+    <div class="gameInfo" @click="myGameHub()">MY GAME HUB</div>
+    <div class="rowFlex">
+      <div class="gameInfo" v-if="gameCount < 0">No Active Games</div>
+      <div class="gameInfo">
+        <div class="actionButton"> Active Games </div>
+        <div class="rowFlex">
+          <div
+            class="actionButton"
+            @click="setGameId(value)"
+            v-for="(key, value) in myPendingGames"
+            :key="key"
+            :value="value"
+          > Game ID: {{ value }} </div>
+        </div>
+      </div>
+      <div class="gameInfo">
+        <div class="actionButton" v-if="gameCount >= 0" @click="toggleOldGames()"> {{ hideOldGamesStatus }} </div>
+        <div v-if="hideOldGames" class="rowFlex">
+          <div
+            class="actionButton"
+            @click="setGameId(value)"
+            v-for="(key, value) in myOldGames"
+            :key="key"
+            :value="value"
+          > Game ID: {{ value }} </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
+<style scoped>
+/* ─── Table + felt ────────────────────────────────────────────────────── */
+.adTableWrap {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0 14px;
+}
+.adTable {
+  position: relative;
+  width: clamp(280px, 92vw, 600px);
+  aspect-ratio: 16 / 9;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  transition: box-shadow 0.4s ease;
+}
+.adTable--win {
+  box-shadow:
+    0 0 0 2px #f5c451,
+    0 0 28px 6px rgba(245, 196, 81, 0.45),
+    0 12px 30px rgba(0, 0, 0, 0.55);
+}
+.adTable--pair {
+  box-shadow:
+    0 0 0 2px #d4a24e,
+    0 0 22px 4px rgba(212, 162, 78, 0.35),
+    0 12px 30px rgba(0, 0, 0, 0.55);
+}
+.adTable--loss {
+  box-shadow:
+    0 0 0 2px #c4524f,
+    0 0 22px 4px rgba(196, 82, 79, 0.35),
+    0 12px 30px rgba(0, 0, 0, 0.55);
+}
+/* The rail is the dark wood-tone outer ring of a poker table */
+.adRail {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.35) 100%),
+    linear-gradient(135deg, #2a1a10 0%, #4a2c1a 40%, #2a1a10 100%);
+  border-radius: 18px;
+}
+.adFelt {
+  position: absolute;
+  inset: 14px;
+  border-radius: 12px;
+  background:
+    radial-gradient(ellipse at 50% 35%, #1f5c3a 0%, #0e3b22 65%, #07291a 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.4),
+    inset 0 6px 18px rgba(0, 0, 0, 0.35);
+  /* subtle felt texture: stippled noise via repeating tiny radial gradients */
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    radial-gradient(ellipse at 50% 35%, #1f5c3a 0%, #0e3b22 65%, #07291a 100%);
+  background-size: 4px 4px, auto;
+  background-position: 0 0, 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 12px;
+}
+.adBrand {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  letter-spacing: 4px;
+  font-size: 10px;
+  color: rgba(245, 196, 81, 0.55);
+  font-weight: 600;
+}
 
-<!-- Add "scoped" attribute to limit CSS to this component only -->
-<style >
+/* ─── Card row ────────────────────────────────────────────────────────── */
+.adCardRow {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(8px, 2.5vw, 22px);
+  width: 100%;
+  perspective: 1200px; /* shared 3D space — flips share a vanishing point */
+}
+.adCardSlot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: clamp(64px, 18vw, 120px);
+  aspect-ratio: 2.5 / 3.5; /* real playing-card proportions */
+  position: relative;
+}
+.adCardSlot--target {
+  /* The middle card — slightly raised + spotlit so the moment of reveal
+     reads as the moment of reveal. */
+  transform: translateY(-4px);
+}
+.adCardSlot--target::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(245, 196, 81, 0.18) 0%,
+    transparent 70%
+  );
+  border-radius: 50%;
+  z-index: -1;
+}
+.adSlotLabel {
+  position: absolute;
+  bottom: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 600;
+}
 
+/* ─── The card itself: 3D flip ────────────────────────────────────────── */
+.adCard {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 0.7s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.adCard--flipped {
+  transform: rotateY(180deg);
+}
+.adCardFace {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  overflow: hidden;
+  box-shadow:
+    0 6px 14px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.adCardFace--back {
+  background: #fff;
+  /* Re-state border-radius and overflow on the back face so the
+     repeating-linear-gradient stripes inside .adBack are clipped to
+     the rounded card corners. (transform-style: preserve-3d on the
+     parent can otherwise let children paint outside the parent's
+     border-radius during the flip animation.) */
+  border-radius: 8px;
+  overflow: hidden;
+}
+.adCardFace--front {
+  border-radius: 8px;
+  overflow: hidden;
+}
+.adCardFace--front {
+  transform: rotateY(180deg);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.adCardImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.adCardCorner {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 3px;
+  padding: 1px 4px;
+  line-height: 1;
+}
+.adCardCorner--red { color: #c4524f; }
+.adCardCorner--black { color: #1a1a1a; }
+.adCardEmpty {
+  font-size: 36px;
+  color: #999;
+  font-weight: 700;
+}
+
+/* ─── Custom CSS card back ────────────────────────────────────────────── */
+.adBack {
+  width: 100%;
+  height: 100%;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      #190857 0 8px,
+      #2a1577 8px 16px
+    );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+}
+.adBackInner {
+  width: 100%;
+  height: 100%;
+  border: 2px solid rgba(245, 196, 81, 0.85);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(25, 8, 87, 0.6) 0%,
+    rgba(0, 0, 0, 0.5) 100%
+  );
+}
+.adBackMark {
+  font-family: 'EB Garamond', serif;
+  font-weight: 700;
+  letter-spacing: 2px;
+  font-size: clamp(16px, 4.5vw, 28px);
+  color: #f5c451;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+.adBackMark span {
+  margin: 0 2px;
+  opacity: 0.7;
+}
+
+/* ─── Range bar ───────────────────────────────────────────────────────── */
+.adRangeWrap {
+  margin-top: 28px;
+  width: 88%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.adRangeText {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.85);
+  text-transform: uppercase;
+}
+.adRangeBar {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+.adRangeFill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, #f5c451, #d4a24e);
+  border-radius: 4px;
+  transition: left 0.4s ease, width 0.4s ease;
+}
+.adRangeTicks {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.adRangeTicks span {
+  width: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ─── Verdict ribbon ──────────────────────────────────────────────────── */
+.adVerdict {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  letter-spacing: 4px;
+  font-weight: 700;
+  padding: 4px 14px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  animation: adVerdictIn 0.5s ease-out both;
+}
+.adVerdict--win {
+  color: #f5c451;
+  background: rgba(245, 196, 81, 0.12);
+}
+.adVerdict--pair {
+  color: #d4a24e;
+  background: rgba(212, 162, 78, 0.12);
+}
+.adVerdict--loss {
+  color: #c4524f;
+  background: rgba(196, 82, 79, 0.12);
+}
+@keyframes adVerdictIn {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* Mobile: tighten the row a little so all three cards fit on a 320px screen */
+@media (max-width: 380px) {
+  .adCardRow { gap: 6px; }
+  .adBrand { font-size: 8px; letter-spacing: 2px; }
+}
+
+/* ─── Bet slider ───────────────────────────────────────────────────── */
+.adBetSliderRow {
+  margin: 8px 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.adBetSliderHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.adBetSliderLabel {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+.adBetSliderValue {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f5c451;
+  text-shadow: 0 0 12px rgba(245, 196, 81, 0.35);
+}
+.adBetSliderMax {
+  margin-left: auto;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+}
+.adBetSliderMaxHint {
+  margin-left: 4px;
+  font-size: 9px;
+  letter-spacing: 1px;
+  opacity: 0.65;
+}
+.adBetSlider {
+  width: 100%;
+  height: 22px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+  margin: 0;
+}
+.adBetSlider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f5c451, #c4524f);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.adBetSlider::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f5c451, #c4524f);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.adBetSlider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #fff4cc, #f5c451 60%, #a06c12);
+  border: 1px solid #7a4f08;
+  margin-top: -6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  cursor: grab;
+}
+.adBetSlider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #fff4cc, #f5c451 60%, #a06c12);
+  border: 1px solid #7a4f08;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  cursor: grab;
+}
+.adBetSliderTicks {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.adBetTick {
+  flex: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.75);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.adBetTick:hover {
+  background: rgba(245, 196, 81, 0.10);
+  border-color: rgba(245, 196, 81, 0.55);
+  color: #f5c451;
+}
+
+/* ─── Status + oracle panels ───────────────────────────────────────── */
+.adStatusPanel {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12.5px;
+}
+.adStatusRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.adStatusRow + .adStatusRow {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.adStatusRow--banner .adStatusBanner {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f3f1ee;
+  flex: 1;
+}
+.adStatusRow--detail {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11.5px;
+}
+.adStatusLabel {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 2px;
+  font-weight: 700;
+  color: rgba(245, 196, 81, 0.7);
+  padding: 1px 6px;
+  border: 1px solid rgba(245, 196, 81, 0.3);
+  border-radius: 4px;
+}
+.adStatusDetail { flex: 0 1 auto; }
+.adStatusSpacer { flex: 1; }
+.adPollHint {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+}
+.adPulse {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #f5c451;
+  box-shadow: 0 0 8px rgba(245, 196, 81, 0.8);
+  animation: adPulse 1.2s ease-in-out infinite;
+}
+@keyframes adPulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
+  50%      { opacity: 1;   transform: scale(1.1); }
+}
+
+.adOraclePanel {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.12), rgba(124, 58, 237, 0.04));
+  border: 1px dashed rgba(167, 139, 250, 0.55);
+}
+.adOracleHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+.adOracleDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #a78bfa;
+  box-shadow: 0 0 6px rgba(167, 139, 250, 0.7);
+}
+.adOracleLabel {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 2px;
+  font-weight: 700;
+  color: #a78bfa;
+}
+.adOracleHint {
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+  font-size: 10.5px;
+}
+.adOraclePanel button[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 </style>

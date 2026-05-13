@@ -1,344 +1,524 @@
 <script>
-
-import aceyDuecey from "./aceyDuecey.vue"
-import tezTacToe from "./tezTacToe.vue"
-import browseNFTs from "./browseNFTs.vue"
-import welcomeIn from './welcomeIn.vue'
-import oracleInfo from './oracleInfo.vue'
+// Registry-driven nav. Adding a new app = one entry in src/apps/registry.js.
+import { APPS, HOME_APP, NAV_APPS, APP_BY_ID } from '../apps/registry'
+import { NETWORK, setNetwork, getBeaconNetwork } from '../constants'
 
 export default {
+  name: 'mainBody',
+  // We register every app's component up-front so <component :is> can resolve.
+  components: Object.fromEntries(APPS.map((a) => [a.id, a.component])),
   props: ['wallet', 'socket', 'tezos'],
-  components: { 
-        aceyDuecey,
-        browseNFTs,
-        oracleInfo,
-        tezTacToe,
-        welcomeIn,
-        
-  },
-  data () {
+  data() {
     return {
-      showWelcome: true,     
-      showAceyDuecy: false,
-      showBrowseNFTs: false,
-      showTezTactoe: false,
-      showOracle: false,
-      walletAddress: 'SYNC WALLET'
+      APPS,
+      NAV_APPS,
+      HOME_APP,
+      NETWORK,
+      activeView: HOME_APP.id,
+      walletAddress: 'SYNC WALLET',
     }
   },
-  created () {
-    this.socket.on("newWallet", (newWallet) => {
+  computed: {
+    activeComponent() {
+      return APP_BY_ID[this.activeView]?.component || HOME_APP.component
+    },
+  },
+  created() {
+    this.socket.on('newWallet', (newWallet) => {
       this.walletAddress = newWallet
     })
-    this.socket.on("selectGame", (game) => {
+    this.socket.on('selectGame', (game) => {
       this.selectGame(game)
     })
   },
   methods: {
-    async selectGame(game) {
-      if (game == 'aceyDuecey') {
-        this.showTezTactoe = false
-        this.showAceyDuecy = true
-        this.showBrowseNFTs = false
-        this.showWelcome = false
-        this.showOracle = false
-      } else if (game == 'tezTacToe') {
-        this.showTezTactoe = true
-        this.showAceyDuecy = false
-        this.showBrowseNFTs = false
-        this.showWelcome = false
-        this.showOracle = false
+    selectGame(id) {
+      // Accept legacy 'welcome' alias.
+      const target = id === 'welcome' ? HOME_APP.id : id
+      if (!APP_BY_ID[target]) return
+      this.activeView = target
+      // Special hook: TezTacToe wants this every time it becomes active.
+      if (target === 'tezTacToe') {
         this.socket.emit('updatePlayerControl')
-      } else if (game == 'browseNFTs') {
-        this.showTezTactoe = false
-        this.showAceyDuecy = false
-        this.showBrowseNFTs = true
-        this.showWelcome = false
-        this.showOracle = false
-      } else if (game == 'oracleInfo') {
-        this.showTezTactoe = false
-        this.showAceyDuecy = false
-        this.showBrowseNFTs = false
-        this.showWelcome = false
-        this.showOracle = true
-      } else if (game == 'welcome') {
-        this.showTezTactoe = false
-        this.showAceyDuecy = false
-        this.showBrowseNFTs = false
-        this.showWelcome = true
-        this.showOracle = false
       }
     },
-    async toggleWallet(){
-        const activeAccount = await this.wallet.client.getActiveAccount()              
-        if (activeAccount) {                  
-            await this.wallet.clearActiveAccount()           
-        } else {
-            await this.wallet.client.requestPermissions()
-            this.tezos.setWalletProvider(this.wallet)
+    async toggleWallet() {
+      // Currently connected? Disconnect.
+      try {
+        const activeAccount = await this.wallet.client.getActiveAccount()
+        if (activeAccount) {
+          await this.wallet.clearActiveAccount()
+          this.walletAddress = 'SYNC WALLET'
+          return
         }
+      } catch (err) {
+        console.warn('getActiveAccount failed (continuing to connect):', err?.message)
+      }
+
+      // Not connected — request permissions on the *current* network.
+      // Passing `network` explicitly matters: without it Beacon falls back
+      // to its built-in default (mainnet) which mismatches our CUSTOM
+      // shadownet config and causes a slow re-handshake.
+      const network = getBeaconNetwork()
+      this.walletAddress = 'CONNECTING…'
+      try {
+        await this.wallet.client.requestPermissions({ network })
+        this.tezos.setWalletProvider(this.wallet)
+        // ACTIVE_ACCOUNT_SET event handler in App.vue will update the badge
+      } catch (err) {
+        // User-visible message. Most common failure modes: relay DNS issue
+        // (we now mitigate via custom matrixNodes), user closed the popup,
+        // wallet extension locked.
+        const msg = err?.message || String(err)
+        const isAborted = /aborted|cancel|denied/i.test(msg)
+        const isNetwork = /timeout|network|relay|resolve|ENOTFOUND|ERR_NAME/i.test(msg)
+        if (isAborted) {
+          this.walletAddress = 'SYNC WALLET (cancelled)'
+        } else if (isNetwork) {
+          this.walletAddress = 'SYNC WALLET (relay error)'
+          console.warn(
+            'Beacon relay failed. If this persists, the Matrix relay list in ' +
+            'constants.js may need refresh. See https://docs.walletbeacon.io',
+            err,
+          )
+        } else {
+          this.walletAddress = 'SYNC WALLET (failed)'
+          console.warn('Wallet connect failed:', err)
+        }
+      }
     },
-  }
+    /**
+     * Nuke ALL Beacon storage and reload. Use this when Beacon's relay
+     * connection is wedged — it forces a completely fresh handshake.
+     * More aggressive than clearStaleBeaconStorage() (which only removes
+     * known-bad-host entries).
+     */
+    resetWallet() {
+      try {
+        const ls = window.localStorage
+        const toRemove = []
+        for (let i = 0; i < ls.length; i++) {
+          const k = ls.key(i)
+          if (k && k.startsWith('beacon')) toRemove.push(k)
+        }
+        for (const k of toRemove) ls.removeItem(k)
+        // Also clear the beacon IndexedDB if present
+        if (window.indexedDB && window.indexedDB.deleteDatabase) {
+          try { window.indexedDB.deleteDatabase('beacon') } catch (_e) { /* noop */ }
+          try { window.indexedDB.deleteDatabase('beacon-sdk') } catch (_e) { /* noop */ }
+        }
+      } catch (e) {
+        console.warn('resetWallet cleanup failed:', e)
+      }
+      window.location.reload()
+    },
+    toggleNetwork() {
+      const next = this.NETWORK === 'mainnet' ? 'shadownet' : 'mainnet'
+      // Confirm because reload will drop any in-flight wallet permissions.
+      const ok = typeof window !== 'undefined'
+        ? window.confirm(
+            `Switch to ${next}?\n\n` +
+            `The page will reload and your wallet will need to be reconnected. ` +
+            `Contract addresses and RPC endpoints will swap to ${next}'s.`
+          )
+        : true
+      if (ok) setNetwork(next)
+    },
+  },
 }
 </script>
 
 <template>
-  <div class="mainBody">     
+  <div class="mainBody">
     <div class="centerBody">
       <div class="gameManagement">
-        <div class="rowFlex" >     
-          <div class="actionButton" @click="toggleWallet">
-              {{walletAddress}} 
-          </div>  
-        </div>  
-        <div @click="selectGame('welcome')" :class="{ 'actionButtonSelected': showWelcome, 'actionButton': !showWelcome }" >
-          TXL Home
-        </div>     
-        <div class="rowFlex" >   
-          <div @click="selectGame('oracleInfo')" :class="{ 'actionButtonSelected': showOracle, 'actionButton': !showOracle }">
-              Oracle
-          </div>         
-          <div @click="selectGame('browseNFTs')" :class="{ 'actionButtonSelected': showBrowseNFTs, 'actionButton': !showBrowseNFTs }" >
-              Browse 2.725K
-          </div>     
-          <div @click="selectGame('tezTacToe')" :class="{ 'actionButtonSelected': showTezTactoe, 'actionButton': !showTezTactoe }">
-              Play TezTacToe!
-          </div>   
-          <div @click="selectGame('aceyDuecey')" :class="{ 'actionButtonSelected': showAceyDuecy, 'actionButton': !showAceyDuecy }">
-              Play Acey Duecey!
-          </div>    
-        </div>    
-        <welcomeIn v-if="showWelcome"
-          :socket="socket"
-          :wallet="wallet"
-          :tezos="tezos"
-        />
-        <tezTacToe v-if="showTezTactoe"
-          :socket="socket"
-          :wallet="wallet"
-          :tezos="tezos"
-        />
-        <aceyDuecey v-if="showAceyDuecy" 
-          :socket="socket"
-          :wallet="wallet"
-          :tezos="tezos"
-        />
-        <browseNFTs v-if="showBrowseNFTs" 
-          :socket="socket"
-          :wallet="wallet"
-          :tezos="tezos"
-        />   
-        <oracleInfo v-if="showOracle" 
-          :socket="socket"
-          :wallet="wallet"
-          :tezos="tezos"
-        />     
+        <div class="rowFlex">
+          <div class="actionButton" @click="toggleWallet">{{ walletAddress }}</div>
+          <div
+            v-if="walletAddress.includes('error') || walletAddress.includes('failed')"
+            class="actionButtonHelp walletReset"
+            @click="resetWallet"
+            title="Wipe Beacon's cached state and start fresh — fixes stuck connect handshakes"
+          >Reset wallet</div>
+          <div
+            :class="[
+              'networkBadge',
+              'networkBadge--toggle',
+              NETWORK === 'mainnet' ? 'badgeProd' : 'badgeTest',
+            ]"
+            @click="toggleNetwork"
+            :title="'Click to switch to ' + (NETWORK === 'mainnet' ? 'shadownet' : 'mainnet')"
+            role="button"
+            tabindex="0"
+            @keydown.enter="toggleNetwork"
+          >
+            <span class="networkBadge__dot" aria-hidden="true"></span>
+            {{ NETWORK }}
+            <span class="networkBadge__arrow" aria-hidden="true">⇄</span>
+          </div>
+        </div>
+
+        <div
+          :class="activeView === HOME_APP.id ? 'actionButtonSelected' : 'actionButton'"
+          @click="selectGame(HOME_APP.id)"
+        >
+          {{ HOME_APP.name }}
+        </div>
+
+        <div class="rowFlex">
+          <div
+            v-for="app in NAV_APPS"
+            :key="app.id"
+            :class="activeView === app.id ? 'actionButtonSelected' : 'actionButton'"
+            @click="selectGame(app.id)"
+          >
+            {{ app.name }}
+          </div>
+        </div>
+
+        <transition name="view" mode="out-in">
+          <component
+            :is="activeComponent"
+            :key="activeView"
+            :socket="socket"
+            :wallet="wallet"
+            :tezos="tezos"
+          />
+        </transition>
       </div>
     </div>
-    <div class="label"> Made with love by @jamin_b on telegram/discord and @jaminb12 on X... shhh all games on ghostnet</div>
+    <div class="label">
+      Made with love by @jamin_b on telegram/discord and @jaminb12 on X... shhh all games on
+      ghostnet
+    </div>
   </div>
 </template>
 
 <style>
-.mainBody{
-  margin:5px;
-  padding:1px;
-  max-width: 610px;
-  font-family: 'EB Garamond';
+/* ─── Global shared classes ──────────────────────────────────────────
+   Crypto/web3 dark aesthetic. Tokens live in App.vue's :root. Every
+   game component inherits these classes via mainBody — keep the names
+   stable so we don't have to touch the children. */
+
+.mainBody {
+  margin: auto;
+  padding: 14px 14px 20px;
+  max-width: 720px;
   display: flex;
   flex-direction: column;
-  margin: auto;
-  border-style: ridge;
-  border-radius: 5px;
-  border-width: 2px;
-  border-color: #fff;
-  color: rgb(255, 255, 255);
+  border-radius: var(--ad-r-lg);
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(124, 58, 237, 0.10) 0%, transparent 60%),
+    var(--ad-bg-base);
+  border: 1px solid var(--ad-border-faint);
+  box-shadow: var(--ad-shadow-card);
+  color: var(--ad-text-1);
+  font-family: var(--ad-font-body);
 }
-.centerBody{
-  margin:5px;
-  padding:1px;
-  max-width: 610px;
-  font-family: 'EB Garamond';
+.centerBody {
+  margin: auto;
+  padding: 4px;
+  max-width: 700px;
   display: flex;
   flex-direction: column;
-  margin: auto;
-  border-style: ridge;
-  border-radius: 5px;
-  border-width: 0px;
-  border-color: #fff;
-  color: rgb(255, 255, 255);
+  color: var(--ad-text-1);
+  font-family: var(--ad-font-body);
 }
 .gameManagement {
   justify-content: center;
-  vertical-align: center;
   width: 100%;
-  padding: auto;
   flex: 1;
   cursor: default;
 }
-.infoBox {
-  justify-content: center;
-  vertical-align: center;
-  text-align: center;
-  width: 95%;
-  flex: 1;
-  cursor: default;
-  border-style: ridge;
-  border-radius: 5px;
-  border-width: 2px;
-  border-color: #fff;
-}
+
 .rowFlex {
   display: flex;
   flex-wrap: wrap;
   width: 100%;
+  gap: 6px;
 }
 .gameCenter {
   align-content: center;
-  vertical-align: center;
-  margin: auto;
-  padding: auto;
   margin: auto;
   flex: 1;
 }
+
+/* ─── Surface chips (info / status / score) ──────────────────────── */
 .gameInfo {
   display: flex;
-  align-content: center;
+  align-items: center;
   justify-content: center;
-  margin: 2px;
-  padding: 2px;
-  border-style: ridge;
-  border-radius: 3px;
-  border-width: 1px;
-  border-color: #ffffff;
+  padding: 8px 12px;
+  margin: 2px 0;
+  border-radius: var(--ad-r-md);
+  background: var(--ad-bg-elev-1);
+  border: 1px solid var(--ad-border-soft);
   cursor: default;
-  font-family: 'EB Garamond';
+  font-family: var(--ad-font-body);
+  font-size: 13px;
+  color: var(--ad-text-1);
   flex: 1;
+  letter-spacing: 0.01em;
 }
 .gameSelect {
-  margin: 2px;
-  padding: 2px;
-  border-style: ridge;
-  border-radius: 3px;
-  border-width: 2px;
-  border-color: #ffffff;
+  margin: 2px 0;
+  padding: 8px 12px;
+  border-radius: var(--ad-r-md);
+  background: var(--ad-bg-elev-1);
+  border: 1px solid var(--ad-border-soft);
+  color: var(--ad-text-1);
+  font-family: var(--ad-font-body);
+  font-size: 13px;
   flex: 1;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.gameSelect:hover {
+  background: var(--ad-bg-elev-2);
+  border-color: var(--ad-border-mid);
 }
 .txlRank {
   align-content: center;
-  vertical-align: center;
-  padding: 5px;
-  margin: 2px;
-  width: fit-content;
-  height: 90px;
-  border-style: ridge;
-  border-radius: 2px;
-  border-width: 1px;
-  border-color: #a7a5a5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 12px;
+  margin: 2px 0;
+  border-radius: var(--ad-r-md);
+  background: var(--ad-bg-elev-1);
+  border: 1px solid var(--ad-border-faint);
+  color: var(--ad-text-1);
+  font-size: 12.5px;
   flex: 1;
   cursor: default;
+  min-height: 38px;
 }
-.canvasContainer {
-  border-style: ridge;
-  border-radius: 2px;
-  border-width: 0px;
-  border-color: #080606;
+.infoBox {
+  justify-content: center;
+  text-align: center;
+  width: 95%;
+  flex: 1;
+  cursor: default;
+  border-radius: var(--ad-r-md);
+  border: 1px solid var(--ad-border-soft);
+  background: var(--ad-bg-elev-1);
 }
-.imageViewer {
-  width: 47%;
-  vertical-align: center;
-  border-style: ridge;
-  border-radius: 2px;
-  border-width: 1px;
-  padding: 3px;
-  margin: 1px;
-  border-color: #5f5f5f;
+
+/* ─── Network badge (mainnet / testnet pill) ─────────────────────── */
+.networkBadge {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px;
+  padding: 4px 10px 4px 8px;
+  border-radius: var(--ad-r-pill);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-family: var(--ad-font-mono);
+  user-select: none;
+}
+.networkBadge--toggle {
   cursor: pointer;
+  transition: filter 0.15s ease, transform 0.12s ease;
+}
+.networkBadge--toggle:hover {
+  filter: brightness(1.1);
+}
+.networkBadge--toggle:active {
+  transform: scale(0.97);
+}
+.networkBadge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+.networkBadge__arrow {
+  opacity: 0.6;
+  font-size: 9px;
+  letter-spacing: 0;
+}
+.badgeProd {
+  background: rgba(196, 82, 79, 0.18);
+  color: var(--ad-red-1);
+  border: 1px solid rgba(196, 82, 79, 0.45);
+}
+.badgeTest {
+  background: rgba(245, 196, 81, 0.16);
+  color: var(--ad-gold-2);
+  border: 1px solid rgba(245, 196, 81, 0.45);
+}
+
+/* ─── Game canvas container ─────────────────────────────────────── */
+.canvasContainer {
+  border-radius: var(--ad-r-md);
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.canvasContainer canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* ─── Tile/imageviewer used on welcome page (legacy fallback) ───── */
+.imageViewer {
+  flex: 1 1 200px;
+  border: 1px solid var(--ad-border-soft);
+  background: var(--ad-bg-elev-1);
+  border-radius: var(--ad-r-md);
+  padding: 8px;
+  margin: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.imageViewer:hover {
+  background: var(--ad-bg-elev-2);
+  border-color: rgba(167, 139, 250, 0.45);
+  transform: translateY(-1px);
 }
 .imageViewerBox {
-  vertical-align: center;
   width: 100%;
+  border-radius: var(--ad-r-sm);
   cursor: pointer;
 }
+
+/* ─── Info popup (rules drawer) ─────────────────────────────────── */
 .infoPopup {
   position: relative;
-  top: 0;
-  left: 0;
   width: 100%;
-  height: 100%;
-  background-color: rgba(31, 49, 66, 0.9);
-  justify-content: left;
-  align-items: left;
+  margin: 8px 0;
+  padding: 14px 18px;
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.10), rgba(124, 58, 237, 0.02));
+  border: 1px solid var(--ad-border-soft);
+  border-radius: var(--ad-r-md);
+  text-align: left;
   cursor: not-allowed;
+  color: var(--ad-text-2);
+  font-size: 13px;
+  line-height: 1.55;
 }
 .listItem {
-  position: relative;
-  justify-content: left;
-  text-align: left;
   list-style-type: none;
-  width: 100%;
+  margin: 4px 0;
 }
-.actionButton {
-  align-content: center;
-  vertical-align: center;
-  padding: 1px;
-  margin: 3px;
-  border-style: ridge;
-  border-radius: 5px;
-  border-width: 3px;
-  cursor: pointer;
-  color: #fff;
-  border-color: #ffffff;
+
+/* ─── Buttons: the workhorse ─────────────────────────────────────
+   .actionButton           — default secondary button
+   .actionButtonSelected   — currently-active state in nav
+   .actionButtonHelp       — tertiary / muted help button
+   All three share the same shape; the variants differ only in fill. */
+.actionButton,
+.actionButtonSelected,
+.actionButtonHelp {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  margin: 3px 0;
+  min-height: 40px;
+  border-radius: var(--ad-r-pill);
+  border: 1px solid var(--ad-border-soft);
+  background: var(--ad-bg-elev-1);
+  color: var(--ad-text-1);
   flex: 1;
-  font-size: small;
-  font-family: 'EB Garamond';
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-family: var(--ad-font-body);
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.18s ease, border-color 0.18s ease,
+              transform 0.12s ease, box-shadow 0.2s ease;
+  /* Subtle inner highlight so the button feels lit from above. */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
-.actionButtonSelected {
-  align-content: center;
-  vertical-align: center;
-  padding: 1px;
-  margin: 3px;
-  border-style: ridge;
-  border-radius: 5px;
-  border-width: 8px;
-  color: #fff;
-  border-color: #190857;
-  flex: 1;
-  font-size: small;
-  cursor: pointer;
+.actionButton:hover,
+.actionButtonHelp:hover {
+  background: var(--ad-bg-elev-2);
+  border-color: rgba(167, 139, 250, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    var(--ad-glow-violet);
+}
+.actionButton:active,
+.actionButtonHelp:active,
+.actionButtonSelected:active {
+  transform: translateY(1px) scale(0.99);
 }
 .actionButtonHelp {
-  align-content: center;
-  vertical-align: center;
-  padding: 1px;
-  margin: 3px;
-  border-style: ridge;
-  border-radius: 5px;
-  border-width: 3px;
-  color: #fff;
-  border-color: #ffffff;
-  flex: 1;
-  font-size: small;
+  color: var(--ad-text-2);
   cursor: help;
 }
+
+/* The "selected" state in the top nav — gold gradient + glow. */
+.actionButtonSelected {
+  background: var(--ad-grad-gold);
+  color: #1a1004;
+  border-color: rgba(245, 196, 81, 0.7);
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    var(--ad-glow-gold);
+}
+.actionButtonSelected:hover {
+  filter: brightness(1.05);
+}
+
+/* ─── Native select — styled to match the buttons ─────────────── */
 .selectBox {
-  align-content: center;
-  vertical-align: center;
-  padding: 5px;
-  margin: 2px;
-  width: fit-content;
-  height: auto;
-  border-style: inset;
-  border-radius: 2px;
-  border-width: 0px;
-  border-color: #080606;
-  background-color: black;
-  color:white;
-  border-radius: 4px;
-  border-width: 2px;
-  border-color: #ffffff;
+  padding: 8px 32px 8px 12px;
+  margin: 2px 0;
+  border-radius: var(--ad-r-md);
+  border: 1px solid var(--ad-border-soft);
+  background-color: var(--ad-bg-elev-1);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ad-text-2) 50%),
+    linear-gradient(135deg, var(--ad-text-2) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) 50%,
+    calc(100% - 10px) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  color: var(--ad-text-1);
+  font-family: var(--ad-font-body);
+  font-size: 13px;
   flex: 1;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  min-height: 38px;
+}
+.selectBox:hover {
+  background-color: var(--ad-bg-elev-2);
+  border-color: var(--ad-border-mid);
+}
+.selectBox:focus {
+  outline: none;
+  border-color: rgba(167, 139, 250, 0.65);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
+}
+.selectBox option {
+  background-color: var(--ad-bg-base);
+  color: var(--ad-text-1);
+}
+
+/* The "Made with love" footer-style label scattered in components. */
+.label {
+  text-align: center;
+  color: var(--ad-text-3);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  margin: 12px auto 0;
+  font-family: var(--ad-font-body);
 }
 </style>
