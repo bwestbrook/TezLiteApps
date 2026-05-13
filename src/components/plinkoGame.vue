@@ -82,9 +82,21 @@ export default {
       return (
         !this.dropping &&
         BLOCKCHAIN_ENABLED &&
+        !!this.wallet &&
         this.bet >= this.minBet &&
         this.bet <= this.maxBet
       )
+    },
+    // Human-readable reason the drop button is disabled. Surfaced in the
+    // status panel so a greyed-out button never looks broken — the user
+    // sees *why* it's off.
+    cantDropReason() {
+      if (this.dropping) return 'Drop already in flight…'
+      if (!BLOCKCHAIN_ENABLED) return 'Blockchain calls disabled in constants.js.'
+      if (!this.wallet) return 'Connect your wallet to drop.'
+      if (this.bet < this.minBet) return `Bet too small — min ${this.minBet} ꜩ.`
+      if (this.bet > this.maxBet) return `Bet too big — max ${this.maxBet} ꜩ.`
+      return ''
     },
     betSliderMax() {
       const dyn = Number((this.potBalance * 0.3).toFixed(3))
@@ -286,18 +298,45 @@ export default {
     },
     useWalletProvider() { this.tezos.setWalletProvider(this.wallet) },
     async drop() {
-      if (!this.canDrop) return
-      if (!this.wallet) { this.blockchainStatus = 'Wallet not initialised — refresh.'; return }
+      // Why so much status churn: a silent bail looks identical to "the
+      // click did nothing." Every branch updates blockchainStatus so the
+      // user always knows where we got to, and console.debug traces the
+      // same checkpoints for devs.
+      console.debug('[plinko] drop clicked', {
+        canDrop: this.canDrop,
+        wallet: !!this.wallet,
+        tezos: !!this.tezos,
+        bet: this.bet, fee: this.fee, rows: this.rows, risk: this.risk,
+      })
+
+      if (!this.canDrop) {
+        this.blockchainStatus = this.cantDropReason || 'Drop unavailable right now.'
+        return
+      }
+      this.blockchainStatus = 'Reading wallet…'
+
       let acct
-      try { acct = await this.wallet.client.getActiveAccount() }
-      catch (e) { this.blockchainStatus = 'Wallet read failed — try Reset wallet.'; return }
-      if (!acct) { this.blockchainStatus = 'Connect your wallet first.'; return }
+      try {
+        acct = await this.wallet.client.getActiveAccount()
+      } catch (e) {
+        console.error('[plinko] getActiveAccount failed:', e)
+        this.blockchainStatus = 'Wallet read failed — try Reset wallet.'
+        return
+      }
+      if (!acct) {
+        this.blockchainStatus = 'Connect your wallet first (click the SYNC WALLET button).'
+        return
+      }
+
       const totalTez = Number(this.bet) + Number(this.fee)
       const totalStr = totalTez.toFixed(6)
-      this.useWalletProvider()
       this.dropping = true
-      this.blockchainStatus = `Submitting drop (${totalStr} ꜩ)…`
+      this.blockchainStatus = `Submitting drop (${totalStr} ꜩ)… check your wallet to approve.`
+
       try {
+        // Inside the try so a broken TezosToolkit can't fall through
+        // as an unhandled rejection that leaves the button "stuck."
+        this.useWalletProvider()
         const contract = await this.tezos.wallet.at(PLINKO_CONTRACT_ADDRESS)
         const op = await contract.methodsObject.play({
           rows: this.rows,
@@ -313,13 +352,15 @@ export default {
         }
       } catch (err) {
         const msg = err?.message || String(err)
-        console.error('plinko drop failed:', err)
+        console.error('[plinko] drop failed:', err)
         if (/aborted|cancel|denied/i.test(msg)) {
           this.blockchainStatus = 'Drop cancelled in wallet.'
         } else if (/bet too big/i.test(msg)) {
           this.blockchainStatus = 'Bet too big — try lower.'
         } else if (/bet too small/i.test(msg)) {
           this.blockchainStatus = `Bet too small — min ${this.minBet} ꜩ.`
+        } else if (/setWalletProvider|not a function/i.test(msg)) {
+          this.blockchainStatus = 'Wallet provider missing — refresh the page.'
         } else {
           this.blockchainStatus = `Drop failed: ${msg.slice(0, 140)}`
         }

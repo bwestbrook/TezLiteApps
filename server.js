@@ -13,6 +13,20 @@ const PORT = process.env.PORT || 3000
 
 const app = express()
 app.use(cors())
+
+// Heroku terminates TLS at the router and forwards the original scheme in
+// X-Forwarded-Proto. Force https in production so http://thextz.life
+// transparently upgrades. Only runs on Heroku (DYNO env is set there).
+app.set('trust proxy', true)
+if (process.env.NODE_ENV === 'production' || process.env.DYNO) {
+  app.use((req, res, next) => {
+    if (req.header('x-forwarded-proto') !== 'https') {
+      return res.redirect(301, `https://${req.header('host')}${req.url}`)
+    }
+    next()
+  })
+}
+
 app.use(express.static(path.join(__dirname, 'dist')))
 
 const server = http.createServer(app)
