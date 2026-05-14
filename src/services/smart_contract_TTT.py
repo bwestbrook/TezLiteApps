@@ -61,6 +61,10 @@ def main():
             self.data.minWager = sp.mutez(0)            # 0 ꜩ allowed (free games)
             self.data.maxWager = sp.mutez(50000000)     # 50 ꜩ
             self.data.houseCutBps = sp.nat(250)         # 2.5% of pot
+            # Blocks of opponent idleness after which claimByTimeout can
+            # settle a stalled game (TTT-6, mirror of Chess). ~1 hour at
+            # 30s blocks. Admin-tunable via updateStaleBlocks.
+            self.data.staleBlocks = sp.nat(120)
             # ── Bookkeeping ────────────────────────────────────────────
             # §3.3 — type-cast the empty map explicitly (TTT-1). The
             # current SmartPy infers this from startGame's downstream
@@ -193,6 +197,16 @@ def main():
             self.data.minWager = params.minWager
             self.data.maxWager = params.maxWager
 
+        @sp.entrypoint()
+        def updateStaleBlocks(self, params):
+            """Tune the claimByTimeout idle window (TTT-6). Floored at 30
+            blocks so it can't be set low enough to snipe an opponent
+            who is merely between moves."""
+            sp.cast(params.staleBlocks, sp.nat)
+            assert sp.sender == self.data.admin, "not admin"
+            assert params.staleBlocks >= 30, "staleBlocks too small"
+            self.data.staleBlocks = params.staleBlocks
+
         # ── Lifecycle ──────────────────────────────────────────────────
         @sp.entrypoint()
         def startGame(self):
@@ -240,6 +254,10 @@ def main():
                 # both players. Starts at 76 (all of game_winners);
                 # makeMove decrements it as lines die. 0 → cat's game.
                 "remainingWinsets": 76,
+                # TTT-6 — block height at which the game last advanced
+                # (created / joined / flipped / moved). claimByTimeout
+                # measures opponent idleness against this.
+                "lastMoveBlock": sp.to_int(sp.level),
             }
             new_game = sp.record(
                 grid=new_game_grid,
@@ -265,6 +283,7 @@ def main():
             self.data.games[params.gameId].players[2] = sp.sender
             self.data.games[params.gameId].metaData["player2Paid"] = 1
             self.data.games[params.gameId].metaData["gameStatus"] = 2  # active
+            self.data.games[params.gameId].metaData["lastMoveBlock"] = sp.to_int(sp.level)
             sp.emit(params.gameId, tag="gameJoined")
 
         @sp.entrypoint()
@@ -289,6 +308,9 @@ def main():
                 firstPlayer = 2
             self.data.games[params.gameId].metaData["playerTurn"] = firstPlayer
             self.data.games[params.gameId].metaData["firstMoveDecided"] = 1
+            # TTT-6 — reset the idle clock: the first mover's turn starts
+            # now, not back at joinGame (the oracle's flip may lag).
+            self.data.games[params.gameId].metaData["lastMoveBlock"] = sp.to_int(sp.level)
             sp.emit(
                 sp.record(
                     gameId=params.gameId,
@@ -405,6 +427,10 @@ def main():
                 sp.send(g.players[2], perSide)
                 sp.emit(params.gameId, tag="catsGame")
 
+            # TTT-6 — record this block as the game's last advance, so
+            # the opponent's idle clock for claimByTimeout starts now.
+            self.data.games[params.gameId].metaData["lastMoveBlock"] = sp.to_int(sp.level)
+
         # ── Surrender ──────────────────────────────────────────────────
         @sp.entrypoint()
         def surrenderGame(self, params):
@@ -432,6 +458,40 @@ def main():
                 self.data.games[params.gameId].metaData["winningPlayer"] = 1
             self.data.games[params.gameId].metaData["gameStatus"] = 5
             sp.emit(params.gameId, tag="surrendered")
+
+        # ── Claim a stalled game ───────────────────────────────────────
+        @sp.entrypoint()
+        def claimByTimeout(self, params):
+            """If the player who owes the next move has been idle for
+            >= staleBlocks, the waiting player claims the win — pot minus
+            the house cut, same settlement as a makeMove win (TTT-6,
+            mirror of Chess). §7.2 — gated on gameStatus 2 + a decided
+            first move, so it can't fire on a game that isn't playable.
+            """
+            sp.cast(params.gameId, sp.int)
+            g = self.data.games[params.gameId]
+            assert g.metaData["gameStatus"] == 2, "game not active"
+            assert g.metaData["firstMoveDecided"] == 1, "awaiting first-move flip"
+            elapsed = sp.to_int(sp.level) - g.metaData["lastMoveBlock"]
+            assert elapsed >= sp.to_int(self.data.staleBlocks), "not stale yet"
+            playerTurn = g.metaData["playerTurn"]
+            # The claimant must be the player NOT on the clock.
+            assert sp.sender != g.players[playerTurn], "you owe the move"
+            assert sp.sender == g.players[1] or sp.sender == g.players[2], "not a player"
+
+            # Settle exactly like a makeMove win: §4.1 — record terminal
+            # state before paying out.
+            self.data.games[params.gameId].metaData["gameStatus"] = 3
+            if sp.sender == g.players[1]:
+                self.data.games[params.gameId].metaData["winningPlayer"] = 1
+            else:
+                self.data.games[params.gameId].metaData["winningPlayer"] = 2
+            pot = sp.mul(g.tzGameBet, sp.nat(2))
+            houseAmt = sp.split_tokens(pot, g.houseCutBps, 10000)
+            payout = pot - houseAmt
+            sp.send(self.data.houseAddress, houseAmt)
+            sp.send(sp.sender, payout)
+            sp.emit(params.gameId, tag="claimedByTimeout")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -469,3 +529,17 @@ def test():
     s.verify(c.data.games[0].metaData["winningPlayer"] == 1)
     # No move can be played on a settled game.
     c.makeMove(gameId=0, move=311, _sender=p2, _valid=False)
+
+    # ── TTT-6: claim a stalled game by timeout ────────────────────────
+    c.startGame(_sender=p1, _amount=wager + fee, _level=1000)
+    c.joinGame(gameId=1, _sender=p2, _amount=wager + fee, _level=1000)
+    # bit=1 → player 2 moves first, so p2 is on the clock.
+    c.flipForFirst(gameId=1, bit=1, seed="s2", _sender=oracle, _level=1000)
+    # Before staleBlocks (120) elapse, nobody can claim.
+    c.claimByTimeout(gameId=1, _sender=p1, _level=1100, _valid=False)
+    # The player who owes the move can't claim their own timeout.
+    c.claimByTimeout(gameId=1, _sender=p2, _level=1200, _valid=False)
+    # 200 blocks idle (>= 120) → the waiting player (p1) claims the win.
+    c.claimByTimeout(gameId=1, _sender=p1, _level=1200)
+    s.verify(c.data.games[1].metaData["gameStatus"] == 3)
+    s.verify(c.data.games[1].metaData["winningPlayer"] == 1)
