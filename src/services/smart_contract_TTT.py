@@ -15,9 +15,9 @@ import smartpy as sp
 #   • Fixed cat's game payout — used to send 30%-of-one-wager to each side
 #     (1.4 wagers stranded on the contract). Now: each side gets back
 #     wager − houseCut/2 (full pot pays out cleanly).
-#   • Fixed surrender payout — used to total only 1 wager out of a 2-wager
-#     pot (1 wager stranded). Now: surrender-er gets 30% of (pot − houseCut),
-#     opponent gets 70% of (pot − houseCut), house gets the cut.
+#   • Surrender payout — used to total only 1 wager out of a 2-wager
+#     pot (1 wager stranded). Now a pure forfeit (TTT-5): the opponent
+#     takes the full pot − houseCut, the surrenderer gets nothing.
 #   • Fixed surrenderGame — used to take no params; now takes gameId.
 #   • Fixed joinGame — used to trust whatever sp.amount the joiner sent.
 #     Now asserts sp.amount == tzGameBet + fee.
@@ -408,8 +408,11 @@ def main():
         # ── Surrender ──────────────────────────────────────────────────
         @sp.entrypoint()
         def surrenderGame(self, params):
-            """Surrender. Surrender-er gets back 30% of (pot − houseCut);
-            opponent gets 70% of (pot − houseCut); house gets the cut.
+            """Surrender — pure forfeit (TTT-5). The surrenderer gets
+            nothing; the opponent takes the whole pot minus the house
+            cut. The old 30/70 split was unusually generous to the side
+            that quit; pure forfeit is the strongest disincentive to
+            rage-quit and pays the full pot out cleanly.
             """
             sp.cast(params.gameId, sp.int)
             g = self.data.games[params.gameId]
@@ -419,17 +422,13 @@ def main():
             pot = sp.mul(g.tzGameBet, sp.nat(2))
             houseAmt = sp.split_tokens(pot, g.houseCutBps, 10000)
             netPot = pot - houseAmt
-            surrenderAmt = sp.split_tokens(netPot, sp.nat(3), sp.nat(10))
-            otherAmt = sp.split_tokens(netPot, sp.nat(7), sp.nat(10))
 
             sp.send(self.data.houseAddress, houseAmt)
             if sp.sender == g.players[1]:
-                sp.send(g.players[1], surrenderAmt)
-                sp.send(g.players[2], otherAmt)
+                sp.send(g.players[2], netPot)
                 self.data.games[params.gameId].metaData["winningPlayer"] = 2
             else:
-                sp.send(g.players[2], surrenderAmt)
-                sp.send(g.players[1], otherAmt)
+                sp.send(g.players[1], netPot)
                 self.data.games[params.gameId].metaData["winningPlayer"] = 1
             self.data.games[params.gameId].metaData["gameStatus"] = 5
             sp.emit(params.gameId, tag="surrendered")

@@ -330,7 +330,7 @@ export const GAME_INFO = [
   "Once you're matched it's turn-based: when it's your turn, select a move and submit it to the blockchain, then wait for your opponent.",
   'WIN: connect four and the contract pays you the full pot minus the house cut (default 2.5%).',
   "CAT'S GAME: each side gets back their wager minus half the house cut.",
-  'SURRENDER: you keep 30% of the net pot, your opponent gets 70%; the house keeps its cut.',
+  'SURRENDER: you forfeit your stake — your opponent takes the full pot minus the house cut.',
   'The house cut and per-tx fee both flow to TXL holders — every game funds the holder pool.',
   "It's always a good time to be a 2.725K holder.",
 ]
