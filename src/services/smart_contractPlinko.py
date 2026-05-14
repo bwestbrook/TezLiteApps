@@ -101,6 +101,15 @@ def main():
 
         # ─── Admin: pot/fee/bet-bounds knobs ────────────────────────
         @sp.entrypoint()
+        def updateAdmin(self, params):
+            '''Admin-only: rotate the admin key. Single-step; the only
+            recovery path if the deployer key is lost or compromised, so
+            call it deliberately. Checklist §1.2.'''
+            sp.cast(params.newAdmin, sp.address)
+            assert sp.sender == self.data.admin, "not admin"
+            self.data.admin = params.newAdmin
+
+        @sp.entrypoint()
         def updateOracle(self, params):
             assert sp.sender == self.data.admin, "not admin"
             self.data.oracle = params.newOracle
