@@ -118,14 +118,11 @@ def main():
                 72: [111, 222, 333, 444], 73: [414, 323, 232, 141],
                 74: [441, 332, 223, 114], 75: [144, 233, 322, 411],
             }
-            # Move-evaluation scratch space (reset each move)
-            self.data.setSum = 0
-            self.data.gameWon = 0
-            self.data.lastCoord = 0
-            self.data.hasRemainingWinners = 0
-            self.data.winnerHasZero = 0
-            self.data.winnerHasOne = 0
-            self.data.winnerHasTwo = 0
+            # §7.4 (TTT-3) — move-evaluation scratch (setSum / gameWon /
+            # hasRemainingWinners / winnerHas*) used to live here on
+            # self.data, costing storage forever for values only
+            # meaningful within a single makeMove call. They're now
+            # locals inside makeMove. `lastCoord` was dead and is dropped.
 
         # ── Default ────────────────────────────────────────────────────
         @sp.entrypoint
@@ -298,7 +295,6 @@ def main():
             """
             sp.cast(params.gameId, sp.int)
             sp.cast(params.move, sp.int)
-            self.data.gameWon = 0
             g = self.data.games[params.gameId]
             assert g.metaData["gameStatus"] == 2, "game not active"
             assert g.metaData["firstMoveDecided"] == 1, "awaiting first-move flip"
@@ -312,49 +308,51 @@ def main():
 
             # Place mark + flip turn
             self.data.games[params.gameId].grid[params.move] = playerTurn
-            if playerTurn == 1:
-                self.data.games[params.gameId].metaData["playerTurn"] = 2
-            else:
-                self.data.games[params.gameId].metaData["playerTurn"] = 1
+            nextTurn = 2
+            if playerTurn == 2:
+                nextTurn = 1
+            self.data.games[params.gameId].metaData["playerTurn"] = nextTurn
 
-            # Re-evaluate the board
-            self.data.hasRemainingWinners = 0
+            # Re-evaluate the board. §7.4 (TTT-3) — gameWon / setSum /
+            # hasRemainingWinners / winnerHas* are per-call scratch and
+            # now live as locals, not self.data fields.
+            gameWon = sp.int(0)
+            hasRemainingWinners = sp.int(0)
             for gameWinningSet in self.data.game_winners.values():
-                self.data.setSum = 0
-                self.data.winnerHasZero = 0
-                self.data.winnerHasOne = 0
-                self.data.winnerHasTwo = 0
+                setSum = sp.int(0)
+                winnerHasZero = sp.int(0)
+                winnerHasOne = sp.int(0)
+                winnerHasTwo = sp.int(0)
                 for coord in gameWinningSet:
                     owner = self.data.games[params.gameId].grid[coord]
                     if owner == 0:
-                        self.data.winnerHasZero = 1
+                        winnerHasZero = 1
                     if owner == 1:
-                        self.data.setSum += owner
-                        self.data.winnerHasOne = 1
+                        setSum += owner
+                        winnerHasOne = 1
                     if owner == 2:
-                        self.data.setSum += owner
-                        self.data.winnerHasTwo = 1
-                    self.data.lastCoord = owner
-                if self.data.setSum <= 2:
-                    self.data.hasRemainingWinners += 1
-                if self.data.setSum == 3:
-                    if self.data.winnerHasTwo == 0:
-                        self.data.hasRemainingWinners += 1
-                if self.data.setSum == 4:
-                    if self.data.winnerHasZero != 1 and self.data.winnerHasTwo != 1:
-                        self.data.gameWon = 1
+                        setSum += owner
+                        winnerHasTwo = 1
+                if setSum <= 2:
+                    hasRemainingWinners += 1
+                if setSum == 3:
+                    if winnerHasTwo == 0:
+                        hasRemainingWinners += 1
+                if setSum == 4:
+                    if winnerHasZero != 1 and winnerHasTwo != 1:
+                        gameWon = 1
                         self.data.games[params.gameId].metaData["winningPlayer"] = 1
                     else:
-                        self.data.hasRemainingWinners += 1
-                if self.data.setSum == 6:
-                    if self.data.winnerHasOne == 0:
-                        self.data.hasRemainingWinners += 1
-                if self.data.setSum == 8:
-                    self.data.gameWon = 2
+                        hasRemainingWinners += 1
+                if setSum == 6:
+                    if winnerHasOne == 0:
+                        hasRemainingWinners += 1
+                if setSum == 8:
+                    gameWon = 2
                     self.data.games[params.gameId].metaData["winningPlayer"] = 2
 
             # ── Settlement: WIN ────────────────────────────────────────
-            if self.data.gameWon > 0:
+            if gameWon > 0:
                 self.data.games[params.gameId].metaData["gameStatus"] = 3
                 pot = sp.mul(g.tzGameBet, sp.nat(2))
                 houseAmt = sp.split_tokens(pot, g.houseCutBps, 10000)
@@ -366,11 +364,11 @@ def main():
                     ],
                     payout,
                 )
-                sp.emit(self.data.gameWon, tag="gameWonBy")
+                sp.emit(gameWon, tag="gameWonBy")
 
             # ── Settlement: CAT'S GAME ────────────────────────────────
             # Only check if no win was just recorded.
-            if self.data.gameWon == 0 and self.data.hasRemainingWinners == 0:
+            if gameWon == 0 and hasRemainingWinners == 0:
                 self.data.games[params.gameId].metaData["gameStatus"] = 4
                 pot = sp.mul(g.tzGameBet, sp.nat(2))
                 houseAmt = sp.split_tokens(pot, g.houseCutBps, 10000)
