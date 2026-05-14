@@ -268,18 +268,35 @@ def main():
                 zPath=params.zBits,
             )
 
-            # Settle: pull payout from pot. If short, auto-pull from
-            # reserve in one shot so we always pay the full multiplier.
-            # (SmartPy treats sp.tez and sp.mutez as the same mutez
-            # under the hood, so straight arithmetic works.)
+            # Settle: pull payout from pot. SECURITY: §2.2 — a hard assert
+            # here (PLINKO-2) meant any pot+reserve shortfall reverted the
+            # whole resolve op, so the oracle worker burned fees retrying
+            # it forever. Instead, cap the payout at what's actually
+            # available: the round still settles (roundStatus flips off 0),
+            # the worker moves on, and a payoutShortfall event lets
+            # off-chain alerting prompt an admin top-up.
             if payout > sp.mutez(0):
-                if payout > self.data.pot:
-                    deficit = payout - self.data.pot
-                    assert self.data.potReserve >= deficit, "pot + reserve too low"
+                available = self.data.pot + self.data.potReserve
+                actualPayout = payout
+                if payout > available:
+                    actualPayout = available
+                if actualPayout > self.data.pot:
+                    deficit = actualPayout - self.data.pot
                     self.data.potReserve -= deficit
                     self.data.pot += deficit
-                self.data.pot -= payout
-                sp.send(r.player, payout)
+                self.data.pot -= actualPayout
+                sp.send(r.player, actualPayout)
+                # Bookkeep what we actually paid vs. what was owed.
+                self.data.rounds[params.roundId].payout = actualPayout
+                if actualPayout < payout:
+                    sp.emit(
+                        sp.record(
+                            roundId=params.roundId,
+                            owed=payout,
+                            paid=actualPayout,
+                        ),
+                        tag='payoutShortfall',
+                    )
 
             sp.emit(
                 [params.roundId, finalX, finalZ, ring, multBp],
