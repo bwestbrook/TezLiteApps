@@ -116,14 +116,43 @@ contract storage update via the oracle callback in ~30 seconds.
 
 Every fulfillment includes a `seed` string that the worker generates
 from a cryptographically-secure random source (Python `secrets`). The
-seed is recorded on chain so anyone can verify the worker isn't
-biasing results — if you suspect manipulation, request the same seed
-from the operator and reproduce the draw.
+seed is recorded on chain alongside the result.
 
-For high-stakes use cases requiring stronger guarantees, the planned
-v3 design uses a commit-reveal scheme (operator commits to a hash
-before the request, reveals the preimage on fulfillment). That's not
-shipped yet.
+**Be precise about what this does and does not give you.** The seed
+records *what* the operator chose. It does **not** prove the choice
+was *fair*.
+
+> ⚠️ **Trust model — read this before integrating for value.**
+>
+> The current v2 oracle gives clients **no cryptographic defense
+> against a malicious operator**. The operator sees the pending
+> request and is free to pick any result it wants — then publish a
+> `seed` that "reproduces" it. Reproducing the draw from the seed
+> proves the operator is internally consistent; it proves nothing
+> about whether the operator selected the seed to favour a particular
+> player or outcome.
+>
+> In other words: the security model of any contract that settles a
+> payout on an oracle value is **"this single key is honest."** If
+> that key is compromised or the operator is adversarial, the operator
+> can bias every dependent game.
+>
+> This applies directly to the game contracts in this repo —
+> Acey-Duecey's dealt cards (`firstCard` / `secondCard` / `lastCard`),
+> Plinko's deflection bits (`resolve`), and TezTacToe's first-move
+> flip (`flipForFirst`) are all operator-chosen. The on-chain `seed`
+> is for *post-hoc audit and dispute*, not for fairness-by-construction.
+> See checklist §6.1 and `SECURITY_FIXES.md` PLINKO-1 / AD-5.
+
+For high-stakes use cases requiring real guarantees, the planned v3
+design uses a **commit-reveal** scheme: the operator commits to a hash
+*before* it can see the request (or far enough ahead that the client
+can independently witness the commit), and the reveal must match the
+hash or the operator's key burns its credibility permanently. A
+mismatched reveal is rejected on chain. That removes the operator's
+ability to choose the result after seeing the bet — but it is **not
+shipped yet**. Until it is, treat the oracle as a trusted operator,
+not a trustless primitive.
 
 ## Running your own worker
 
