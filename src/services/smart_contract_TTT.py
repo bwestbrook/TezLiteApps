@@ -118,6 +118,30 @@ def main():
                 72: [111, 222, 333, 444], 73: [414, 323, 232, 141],
                 74: [441, 332, 223, 114], 75: [144, 233, 322, 411],
             }
+            # §8.1 (TTT-4) — reverse index: grid cell → the win-set
+            # indices that include it. makeMove scans only the sets
+            # touching the just-placed cell (4–7 of them) instead of all
+            # 76. Derived mechanically from game_winners above (see
+            # scripts/exercise_contracts.py / the TTT-4 generator) — if
+            # you edit game_winners, regenerate this.
+            self.data.cell_to_winsets = {
+                111: [0, 16, 32, 48, 56, 64, 72], 112: [0, 20, 33, 66], 113: [0, 24, 34, 68], 114: [0, 28, 35, 49, 57, 70, 74],
+                121: [1, 16, 36, 58], 122: [1, 20, 37, 48], 123: [1, 24, 38, 49], 124: [1, 28, 39, 59],
+                131: [2, 16, 40, 60], 132: [2, 20, 41, 49], 133: [2, 24, 42, 48], 134: [2, 28, 43, 61],
+                141: [3, 16, 44, 49, 62, 65, 73], 142: [3, 20, 45, 67], 143: [3, 24, 46, 69], 144: [3, 28, 47, 48, 63, 71, 75],
+                211: [4, 17, 32, 50], 212: [4, 21, 33, 56], 213: [4, 25, 34, 57], 214: [4, 29, 35, 51],
+                221: [5, 17, 36, 64], 222: [5, 21, 37, 50, 58, 66, 72], 223: [5, 25, 38, 51, 59, 68, 74], 224: [5, 29, 39, 70],
+                231: [6, 17, 40, 65], 232: [6, 21, 41, 51, 60, 67, 73], 233: [6, 25, 42, 50, 61, 69, 75], 234: [6, 29, 43, 71],
+                241: [7, 17, 44, 51], 242: [7, 21, 45, 62], 243: [7, 25, 46, 63], 244: [7, 29, 47, 50],
+                311: [8, 18, 32, 52], 312: [8, 22, 33, 57], 313: [8, 26, 34, 56], 314: [8, 30, 35, 53],
+                321: [9, 18, 36, 65], 322: [9, 22, 37, 52, 59, 67, 75], 323: [9, 26, 38, 53, 58, 69, 73], 324: [9, 30, 39, 71],
+                331: [10, 18, 40, 64], 332: [10, 22, 41, 53, 61, 66, 74], 333: [10, 26, 42, 52, 60, 68, 72], 334: [10, 30, 43, 70],
+                341: [11, 18, 44, 53], 342: [11, 22, 45, 63], 343: [11, 26, 46, 62], 344: [11, 30, 47, 52],
+                411: [12, 19, 32, 54, 57, 65, 75], 412: [12, 23, 33, 67], 413: [12, 27, 34, 69], 414: [12, 31, 35, 55, 56, 71, 73],
+                421: [13, 19, 36, 59], 422: [13, 23, 37, 54], 423: [13, 27, 38, 55], 424: [13, 31, 39, 58],
+                431: [14, 19, 40, 61], 432: [14, 23, 41, 55], 433: [14, 27, 42, 54], 434: [14, 31, 43, 60],
+                441: [15, 19, 44, 55, 63, 64, 74], 442: [15, 23, 45, 66], 443: [15, 27, 46, 68], 444: [15, 31, 47, 54, 62, 70, 72],
+            }
             # §7.4 (TTT-3) — move-evaluation scratch (setSum / gameWon /
             # hasRemainingWinners / winnerHas*) used to live here on
             # self.data, costing storage forever for values only
@@ -212,6 +236,10 @@ def main():
                 # have paired. makeMove is gated on this so neither side can
                 # move before the coin flip sets playerTurn.
                 "firstMoveDecided": 0,
+                # §8.1 (TTT-4) — count of win-sets not yet contested by
+                # both players. Starts at 76 (all of game_winners);
+                # makeMove decrements it as lines die. 0 → cat's game.
+                "remainingWinsets": 76,
             }
             new_game = sp.record(
                 grid=new_game_grid,
@@ -303,7 +331,7 @@ def main():
             # §7.1 — reject coords outside the 64-cell domain before the
             # map lookup, so a bad params.move fails with a clear message
             # instead of a Michelson-level panic (TTT-2).
-            assert g.grid.contains(params.move), "invalid move coord"
+            assert params.move in g.grid, "invalid move coord"
             assert g.grid[params.move] == 0, "cell occupied"
 
             # Place mark + flip turn
@@ -313,43 +341,42 @@ def main():
                 nextTurn = 1
             self.data.games[params.gameId].metaData["playerTurn"] = nextTurn
 
-            # Re-evaluate the board. §7.4 (TTT-3) — gameWon / setSum /
-            # hasRemainingWinners / winnerHas* are per-call scratch and
-            # now live as locals, not self.data fields.
+            # §8.1 (TTT-4) — placing a mark can only complete a line
+            # through params.move, and can only newly-kill win-sets
+            # through params.move. Scan just that index (4–7 sets)
+            # instead of all 76. remainingWinsets is kept on the game
+            # record and decremented as lines die, so cat's-game
+            # detection stays correct without a full re-scan.
+            #
+            # This also corrects an over-count in the old setSum logic,
+            # which treated some already-contested sets (e.g. a line
+            # holding P2,P1,P1,_) as still winnable. A set is dead the
+            # moment it holds marks from BOTH players. §7.4 — gameWon /
+            # newlyDead / count* are per-call scratch locals.
             gameWon = sp.int(0)
-            hasRemainingWinners = sp.int(0)
-            for gameWinningSet in self.data.game_winners.values():
-                setSum = sp.int(0)
-                winnerHasZero = sp.int(0)
-                winnerHasOne = sp.int(0)
-                winnerHasTwo = sp.int(0)
+            newlyDead = sp.int(0)
+            for setIdx in self.data.cell_to_winsets[params.move]:
+                gameWinningSet = self.data.game_winners[setIdx]
+                countMine = sp.int(0)
+                countOpp = sp.int(0)
                 for coord in gameWinningSet:
                     owner = self.data.games[params.gameId].grid[coord]
-                    if owner == 0:
-                        winnerHasZero = 1
-                    if owner == 1:
-                        setSum += owner
-                        winnerHasOne = 1
-                    if owner == 2:
-                        setSum += owner
-                        winnerHasTwo = 1
-                if setSum <= 2:
-                    hasRemainingWinners += 1
-                if setSum == 3:
-                    if winnerHasTwo == 0:
-                        hasRemainingWinners += 1
-                if setSum == 4:
-                    if winnerHasZero != 1 and winnerHasTwo != 1:
-                        gameWon = 1
-                        self.data.games[params.gameId].metaData["winningPlayer"] = 1
-                    else:
-                        hasRemainingWinners += 1
-                if setSum == 6:
-                    if winnerHasOne == 0:
-                        hasRemainingWinners += 1
-                if setSum == 8:
-                    gameWon = 2
-                    self.data.games[params.gameId].metaData["winningPlayer"] = 2
+                    if owner == playerTurn:
+                        countMine += 1
+                    if owner == nextTurn:
+                        countOpp += 1
+                # Win: this move completed all four cells for playerTurn.
+                # Only playerTurn can win a line through their own move.
+                if countMine == 4:
+                    gameWon = playerTurn
+                    self.data.games[params.gameId].metaData["winningPlayer"] = playerTurn
+                # Newly dead: this move placed playerTurn's ONLY mark in a
+                # set the opponent was already in — nobody can win it now.
+                if countMine == 1:
+                    if countOpp >= 1:
+                        newlyDead += 1
+            remainingWinsets = g.metaData["remainingWinsets"] - newlyDead
+            self.data.games[params.gameId].metaData["remainingWinsets"] = remainingWinsets
 
             # ── Settlement: WIN ────────────────────────────────────────
             if gameWon > 0:
@@ -368,7 +395,7 @@ def main():
 
             # ── Settlement: CAT'S GAME ────────────────────────────────
             # Only check if no win was just recorded.
-            if gameWon == 0 and hasRemainingWinners == 0:
+            if gameWon == 0 and remainingWinsets == 0:
                 self.data.games[params.gameId].metaData["gameStatus"] = 4
                 pot = sp.mul(g.tzGameBet, sp.nat(2))
                 houseAmt = sp.split_tokens(pot, g.houseCutBps, 10000)
@@ -416,3 +443,30 @@ def test():
     s = sp.test_scenario("TTT gambling + house cut", main)
     c = main.TezTacToe()
     s += c
+
+    # ── Play a full game through to a P1 win ──────────────────────────
+    # Regression cover for TTT-2 (coord validation), TTT-3 (scratch as
+    # locals) and TTT-4 (cell_to_winsets scan + win detection). A full
+    # cat's-game fill is left to the on-chain exercise harness.
+    p1 = sp.test_account("p1")
+    p2 = sp.test_account("p2")
+    oracle = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
+    fee = sp.mutez(100000)
+    wager = sp.mutez(1000000)
+    c.startGame(_sender=p1, _amount=wager + fee)
+    c.joinGame(gameId=0, _sender=p2, _amount=wager + fee)
+    c.flipForFirst(gameId=0, bit=0, seed="seed", _sender=oracle)
+    # P1 takes win-set 0 = [111,112,113,114]; P2 plays harmlessly.
+    c.makeMove(gameId=0, move=111, _sender=p1)
+    c.makeMove(gameId=0, move=211, _sender=p2)
+    c.makeMove(gameId=0, move=112, _sender=p1)
+    c.makeMove(gameId=0, move=212, _sender=p2)
+    c.makeMove(gameId=0, move=113, _sender=p1)
+    c.makeMove(gameId=0, move=212, _sender=p2, _valid=False)   # cell occupied
+    c.makeMove(gameId=0, move=999, _sender=p2, _valid=False)   # TTT-2: bad coord
+    c.makeMove(gameId=0, move=213, _sender=p2)
+    c.makeMove(gameId=0, move=114, _sender=p1)                 # P1 completes line 0
+    s.verify(c.data.games[0].metaData["gameStatus"] == 3)
+    s.verify(c.data.games[0].metaData["winningPlayer"] == 1)
+    # No move can be played on a settled game.
+    c.makeMove(gameId=0, move=311, _sender=p2, _valid=False)
