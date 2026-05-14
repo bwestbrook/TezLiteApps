@@ -323,15 +323,37 @@ def main():
                 tag='playResolved',
             )
 
-        # Admin can shuffle balance between the working pot and the
-        # cold reserve. Pass a positive `amount` to move reserve→pot,
-        # negative to move pot→reserve.
+        # Admin can shuffle balance between the working pot and the cold
+        # reserve. PLINKO-5: two directional entrypoints instead of one
+        # signed amount — the name now constrains the direction, and each
+        # asserts its source can cover the move (§2.2, no SUB_MUTEZ).
         @sp.entrypoint()
         def topUpPot(self, params):
-            assert sp.sender == self.data.admin, "not admin"
+            '''Move `amount` from reserve into the playable pot.'''
             sp.cast(params.amount, sp.mutez)
+            assert sp.sender == self.data.admin, "not admin"
+            assert params.amount > sp.mutez(0), "amount must be positive"
+            assert self.data.potReserve >= params.amount, "reserve too low"
             self.data.potReserve -= params.amount
             self.data.pot += params.amount
+            sp.emit(
+                [params.amount, self.data.pot, self.data.potReserve],
+                tag='potToppedUp',
+            )
+
+        @sp.entrypoint()
+        def withdrawToReserve(self, params):
+            '''Move `amount` from the playable pot back to the reserve.'''
+            sp.cast(params.amount, sp.mutez)
+            assert sp.sender == self.data.admin, "not admin"
+            assert params.amount > sp.mutez(0), "amount must be positive"
+            assert self.data.pot >= params.amount, "pot too low"
+            self.data.pot -= params.amount
+            self.data.potReserve += params.amount
+            sp.emit(
+                [params.amount, self.data.pot, self.data.potReserve],
+                tag='potDrained',
+            )
 
 
 # ─── Compile-only test ───────────────────────────────────────────────────
