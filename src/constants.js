@@ -101,10 +101,18 @@ export const TZKT_API_URL =
  *
  * Plain string `type` (rather than `NetworkType.X` from beacon-types) so
  * this file doesn't pull in a runtime dependency on the Beacon enum.
+ *
+ * IMPORTANT: use `'shadownet'`, NOT `'custom'`. `shadownet` is a
+ * first-class NetworkType in beacon-sdk ≥4.x, so hosted wallets like
+ * Kukai recognize it. Passing `'custom'` makes Kukai throw
+ * NetworkNotSupportedBeaconError and silently fall back to mainnet —
+ * Kukai's web wallet won't accept an arbitrary custom RPC. We still
+ * pass `rpcUrl` so Taquito/extension wallets hit the right node.
  */
 export function getBeaconNetwork() {
   if (NETWORK === 'mainnet') return { type: 'mainnet' }
-  return { type: 'custom', name: NETWORK, rpcUrl: NODE_URL }
+  // NETWORK is one of VALID_NETWORKS; the non-mainnet case is shadownet.
+  return { type: NETWORK, name: NETWORK, rpcUrl: NODE_URL }
 }
 
 /**
@@ -192,12 +200,12 @@ export function clearStaleBeaconStorage() {
 export const ORACLE_CONTRACT_SHADOWNET             = 'KT19V1YiyPtyCbxouhyeM96SekRTVC7Gw6qq'
 export const TXL_CONTRACT_ADDRESS_SHADOWNET        = 'KT1Ro63rVDUx2x8pMChCLSySso8t6JH47oRQ'
 export const AD_CONTRACT_ADDRESS_SHADOWNET         = 'KT1KsPsFDaTbFCF2DeDnZ4CJXy7zmw3BaRiz'
-export const TTT_CONTRACT_ADDRESS_SHADOWNET        = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+export const TTT_CONTRACT_ADDRESS_SHADOWNET        = 'KT1GkvjJhHtEZfsiSJnQWCS3zZVdgfnBdqWc'
 export const OBJECT_CONTRACT_SHADOWNET             = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
 export const SQUARES_CONTRACT_ADDRESS_SHADOWNET    = 'KT1SNsuFFQ4dDuU9FNNvxUan1hqyy279WZqa'
 export const RNG_ORACLE_CONTRACT_ADDRESS_SHADOWNET = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
 export const REVERSI_CONTRACT_ADDRESS_SHADOWNET    = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
-export const PLINKO_CONTRACT_ADDRESS_SHADOWNET     = 'KT1FxbWXhetbNC7d9xWNi17cwk2rtQUW1rJw'
+export const PLINKO_CONTRACT_ADDRESS_SHADOWNET     = 'KT18z3DNXbp1cZpXJe2SkaPnCTdDJAbb7Pph'
 export const CHESS_CONTRACT_ADDRESS_SHADOWNET      = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
 export const WAR_CONTRACT_ADDRESS_SHADOWNET        = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
 
@@ -281,55 +289,48 @@ export const WAR_GAME_INFO = [
 ]
 
 export const PLINKO_GAME_INFO = [
-  'Drop a ball over 8, 12, or 16 rows of pegs.',
-  'Each peg, the ball goes left or right at 50/50.',
-  'Risk dials the variance: Low keeps middle slots near 1×, High pushes the edges to 29× / 76× / 1000×.',
-  'Bet 0.1–1.0 ꜩ. Plus a 0.1 ꜩ holder fee per drop.',
-  'Payout settles inline — no claim step needed.',
+  'Drop a ball through a 3D peg pyramid — 8, 12, or 16 layers deep.',
+  'Each layer the ball deflects on TWO axes at once: ±X and ±Z, 50/50 on each.',
+  'It lands on a grid of bins. Payout is RADIAL — the ring distance from dead centre is all that matters: centre pays sub-1×, the outer corners pay huge.',
+  'Risk dials the variance: Low keeps the inner rings near 1×, High pushes the corner ring to ~17× (8 rows) up to ~575× (16 rows).',
+  'Bet 0.1–10.0 ꜩ plus a flat 0.1 ꜩ holder fee per drop. Payout settles inline — no claim step.',
 ]
 
-// Plinko multiplier preview tables (must mirror plinko_seed_multipliers.py).
-// Used by the UI to render the bucket strip; on-chain is still the source of
-// truth at payout time.
+// 3D Plinko multipliers — RING-indexed (radially symmetric), not per-slot.
+// Index = Chebyshev ring distance from centre: 0 = dead-centre bin (worst
+// payout), rows/2 = outer corner ring (best). The ball lands on a
+// (rows+1)×(rows+1) grid; ring = max(|finalX-rows/2|, |finalZ-rows/2|).
+// Values scaled so each (rows,risk) profile pays ~97% RTP against the
+// TRUE 3D ring-probability distribution (two independent Binomials).
+// Must mirror scripts/plinko_seed_multipliers.py (the on-chain source
+// of truth at payout time).
 export const PLINKO_MULTIPLIERS = {
   8: {
-    0: [5.6, 2.1, 1.1, 1.0, 0.5, 1.0, 1.1, 2.1, 5.6],
-    1: [13, 3, 1.3, 0.7, 0.4, 0.7, 1.3, 3, 13],
-    2: [29, 4, 1.5, 0.3, 0.2, 0.3, 1.5, 4, 29],
+    0: [0.4, 0.81, 0.89, 1.69, 4.52],
+    1: [0.29, 0.5, 0.93, 2.14, 9.27],
+    2: [0.12, 0.18, 0.9, 2.4, 17.43],
   },
   12: {
-    0: [10, 3, 1.6, 1.4, 1.1, 1.0, 0.5, 1.0, 1.1, 1.4, 1.6, 3, 10],
-    1: [33, 11, 4, 2, 1.1, 0.6, 0.3, 0.6, 1.1, 2, 4, 11, 33],
-    2: [76, 18, 5, 1.9, 0.4, 0.2, 0.2, 0.2, 0.4, 1.9, 5, 18, 76],
+    0: [0.42, 0.84, 0.92, 1.17, 1.34, 2.51, 8.38],
+    1: [0.21, 0.42, 0.76, 1.38, 2.77, 7.61, 22.83],
+    2: [0.16, 0.16, 0.33, 1.55, 4.09, 14.71, 62.12],
   },
   16: {
-    0: [16, 9, 2, 1.4, 1.4, 1.2, 1.1, 1.0, 0.5, 1.0, 1.1, 1.2, 1.4, 1.4, 2, 9, 16],
-    1: [110, 41, 10, 5, 3, 1.5, 1.0, 0.5, 0.3, 0.5, 1.0, 1.5, 3, 5, 10, 41, 110],
-    2: [1000, 130, 26, 9, 4, 2, 0.2, 0.2, 0.2, 0.2, 0.2, 2, 4, 9, 26, 130, 1000],
+    0: [0.43, 0.86, 0.94, 1.03, 1.2, 1.2, 1.72, 7.72, 13.72],
+    1: [0.21, 0.34, 0.69, 1.03, 2.06, 3.43, 6.85, 28.1, 75.39],
+    2: [0.12, 0.12, 0.12, 1.15, 2.3, 5.18, 14.96, 74.81, 575.44],
   },
 }
 
-export const SQUARES_GAME_INFO = [
-  '10×10 board. Rows = home team digit, columns = away team digit.',
-  'Buy any open square at the ticket price.',
-  'Once all 100 sell (or admin closes sales), the axis labels are randomized.',
-  'After each quarter, the square at (homeScore mod 10, awayScore mod 10) wins that quarter\'s share of the pot.',
-  'Default split: 15% / 15% / 15% / 55%. Holders absorb any unowned-square pots.',
-  'Winnings are pull-pattern — click "Claim winnings" to withdraw.',
-]
-
 export const GAME_INFO = [
-  'The goal of the game is to connect four in a row before your opponent does!',
-  'Sync your wallet and check out the game center.',
-  'Create a game or select a game to play, join, leave, or view.',
-  'Drag the wager slider to set your stake. Both players lock the same wager (plus a flat 0.1 ꜩ holder fee per transaction).',
-  'Leave an unmatched game to retrieve your wager at any time (the per-tx fee is non-refundable — it has already paid out to TXL holders).',
-  "Once matched with an opponent you have to play to win the pot.",
-  "If it's your turn, select a move and submit it to the blockchain.",
-  'Wait for your opponent to play.',
+  'TezTacToe is 3D four-in-a-row — line up four of your marks on the board before your opponent does.',
+  'Sync your wallet to play. The board is up top; the wager controls and your Game Hub sit just below it.',
+  'Drag the wager slider to set your stake, then hit New Game. Both players lock the same wager, plus a flat 0.1 ꜩ holder fee per transaction.',
+  'Use the Game Hub to play, join, leave, or view games. Leaving an unmatched game refunds your wager any time — the per-tx fee is non-refundable, it has already paid out to TXL holders.',
+  "Once you're matched it's turn-based: when it's your turn, select a move and submit it to the blockchain, then wait for your opponent.",
   'WIN: connect four and the contract pays you the full pot minus the house cut (default 2.5%).',
   "CAT'S GAME: each side gets back their wager minus half the house cut.",
-  'SURRENDER: you get back 30% of the net pot, your opponent gets 70%; house keeps the cut.',
-  'The house cut and per-tx fee both flow to TXL holders — every game pays the holder fund three ways.',
+  'SURRENDER: you keep 30% of the net pot, your opponent gets 70%; the house keeps its cut.',
+  'The house cut and per-tx fee both flow to TXL holders — every game funds the holder pool.',
   "It's always a good time to be a 2.725K holder.",
 ]
