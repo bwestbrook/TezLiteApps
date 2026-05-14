@@ -62,8 +62,18 @@ def main():
             self.data.maxWager = sp.mutez(50000000)     # 50 ꜩ
             self.data.houseCutBps = sp.nat(250)         # 2.5% of pot
             # ── Bookkeeping ────────────────────────────────────────────
-            self.data.games = {}
-            self.data.currentGameIndex = 0
+            # §3.3 — type-cast the empty map explicitly (TTT-1). The
+            # current SmartPy infers this from startGame's downstream
+            # record assignment, but inference is fragile; the explicit
+            # cast matches the AD/Plinko pattern and survives refactors.
+            self.data.games = sp.cast({}, sp.map[sp.int, sp.record(
+                grid=sp.map[sp.int, sp.int],
+                players=sp.map[sp.int, sp.address],
+                metaData=sp.map[sp.string, sp.int],
+                tzGameBet=sp.mutez,
+                houseCutBps=sp.nat,
+            )])
+            self.data.currentGameIndex = sp.int(0)
             # Logic Control for game winners (4×4×4 win lines, 76 of them:
             # 48 axis-aligned + 24 face diagonals + 4 space diagonals)
             self.data.game_winners = {
