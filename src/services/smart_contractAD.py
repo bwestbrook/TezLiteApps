@@ -63,12 +63,15 @@ def main():
         @sp.entrypoint()
         def bet(self, params):
             '''
+            Player creates a game by paying ante + fee.
             '''
-            amount = self.data.ante + self.data.fee
-            assert sp.amount == sp.amount
+            # SECURITY: §2.1 — the old `assert sp.amount == sp.amount` was a
+            # tautology (AD-1). Enforce the exact price so a caller can't
+            # underpay the ante and still open a game.
+            sp.cast(params.aceHigh, sp.int_or_nat)
             sp.cast(sp.sender, sp.address)
             sp.cast(sp.amount, sp.mutez)
-            sp.cast(params.aceHigh, sp.int_or_nat)
+            assert sp.amount == self.data.ante + self.data.fee, "must send ante + fee"
             hand = {1: -1, 2: -1, 3: -1} 
             handValue = {1: -1, 2: -1, 3: -1}
             handHashes = {1: '', 2: '', 3: ''}
@@ -255,7 +258,8 @@ def test():
     player1 = sp.test_account("player1")
     player2 = sp.test_account("player2")
     oracle = a.data.oracle    
-    tzMutezBet = sp.mutez(250000)
+    # ante 0.2 + fee 0.1 — AD-1 now enforces the exact bet() price.
+    tzMutezBet = sp.mutez(300000)
     a.data
     #a.set_initial_balance(sp.tez(2))
     s.show(a.balance)
