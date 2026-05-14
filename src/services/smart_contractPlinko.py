@@ -1,23 +1,42 @@
 import smartpy as sp
 
-# ─── Plinko ───────────────────────────────────────────────────────────────
+# ─── Plinko 3D ────────────────────────────────────────────────────────────
 #
-# Two-phase play:
-#   play(rows, risk)  : player sends bet; contract records a pending round
-#   resolve(roundId, slot, seed)  : oracle picks landing slot, contract pays
+# Two-phase play, now in three dimensions:
+#   play(rows, risk)                       : player sends bet; pending round
+#   resolve(roundId, xBits, zBits, seed)   : oracle commits the 3D walk, pays
 #
-# Multipliers live in a flat map keyed by  rows*1000 + risk*100 + slot,
+# 3D model
+# --------
+# The ball drops through `rows` layers of a peg pyramid. At every layer it
+# makes TWO independent 50/50 deflections — one on the X axis, one on the Z
+# axis (a diagonal step in the horizontal plane). After `rows` layers:
+#
+#   finalX = sum(xBits)   ∈ [0, rows]   (Binomial(rows, 1/2))
+#   finalZ = sum(zBits)   ∈ [0, rows]   (Binomial(rows, 1/2))
+#
+# so the ball lands on a (rows+1) × (rows+1) grid of bins, with the centre
+# bin overwhelmingly likely and the corners exponentially rare — the 2D
+# analogue of classic Plinko's bell curve.
+#
+# Payout is RADIAL: it depends only on how far the landing bin sits from
+# the centre, measured as the Chebyshev "ring":
+#
+#   ring = max(|finalX - rows/2|, |finalZ - rows/2|)   ∈ [0, rows/2]
+#
+# ring 0 is the dead-centre bin (lowest multiplier); ring rows/2 is the
+# outer square of corner bins (highest multiplier). Concentric square
+# rings all pay the same — a 3D Galton board is radially symmetric, so
+# the table stays tiny (rows/2 + 1 entries per (rows,risk)).
+#
+# Multipliers live in a flat map keyed by  rows*1000 + risk*100 + ring,
 # values in basis-of-100 (1.0x = 100, 5.6x = 560). Admin pre-loads with
-# setMultiplier / setMultipliers after deploy — keeps the contract tiny
-# and lets you tune payouts without redeploying.
-#
-# Slot count = rows + 1  (Pascal's-triangle Plinko: an N-row board has
-# N+1 buckets at the bottom).
+# setMultiplier / setMultiplierRow after deploy.
 #
 # Risk levels:  0 = low, 1 = medium, 2 = high
-# Rows allowed: 8, 12, 16
+# Rows allowed: 8, 12, 16        (rows/2 is always an integer)
 #
-# Round.status:
+# Round.roundStatus:
 #   0 = pending (oracle owes a resolve)
 #   1 = resolved win  (payout > bet)
 #   2 = resolved push (payout == bet)
@@ -49,22 +68,27 @@ def main():
             # Monotonic round counter
             self.data.currentRoundId = sp.nat(0)
 
-            # Per-round state. `path` holds the per-row 0/1 bits the oracle
-            # supplied — each bit is one peg-collision decision (0=left,
-            # 1=right). slot = sum of bits.
+            # Per-round state. `xPath` / `zPath` hold the per-layer 0/1
+            # deflection bits the oracle supplied (0 = -axis, 1 = +axis);
+            # finalX = sum(xPath), finalZ = sum(zPath). The UI replays the
+            # exact 3D walk from these. `ring` is the cached Chebyshev
+            # distance from centre that drove the multiplier lookup.
             self.data.rounds = sp.cast({}, sp.map[sp.nat, sp.record(
                 player=sp.address,
                 bet=sp.mutez,
                 rows=sp.nat,
                 risk=sp.nat,
                 roundStatus=sp.nat,
-                finalSlot=sp.nat,
+                finalX=sp.nat,
+                finalZ=sp.nat,
+                ring=sp.nat,
                 payout=sp.mutez,
                 seed=sp.string,
-                path=sp.map[sp.nat, sp.nat],
+                xPath=sp.map[sp.nat, sp.nat],
+                zPath=sp.map[sp.nat, sp.nat],
             )])
 
-            # Multiplier table  key = rows*1000 + risk*100 + slot
+            # Multiplier table  key = rows*1000 + risk*100 + ring
             # values are basis-of-100 (1.0x = 100, 0.5x = 50, 29x = 2900).
             # Empty by default; admin loads via setMultiplier(s).
             self.data.multipliers = sp.cast({}, sp.map[sp.nat, sp.nat])
@@ -97,7 +121,7 @@ def main():
             assert sp.sender == self.data.admin, "not admin"
             self.data.fee = params.fee
 
-        # Single-cell update — useful for hot-patching one slot.
+        # Single-cell update — useful for hot-patching one ring.
         @sp.entrypoint()
         def setMultiplier(self, params):
             assert sp.sender == self.data.admin, "not admin"
@@ -105,8 +129,8 @@ def main():
             sp.cast(params.value, sp.nat)
             self.data.multipliers[params.key] = params.value
 
-        # Bulk loader for a single (rows, risk) row of the table.
-        # Pass the values left-to-right, one per slot 0..rows.
+        # Bulk loader for a single (rows, risk) ring profile.
+        # `values` is keyed by ring index 0..rows/2.
         @sp.entrypoint()
         def setMultiplierRow(self, params):
             assert sp.sender == self.data.admin, "not admin"
@@ -114,8 +138,8 @@ def main():
             sp.cast(params.risk, sp.nat)
             sp.cast(params.values, sp.map[sp.nat, sp.nat])
             base = params.rows * 1000 + params.risk * 100
-            for slot in params.values.keys():
-                self.data.multipliers[base + slot] = params.values[slot]
+            for ring in params.values.keys():
+                self.data.multipliers[base + ring] = params.values[ring]
 
         # ─── Player: request a drop ─────────────────────────────────
         @sp.entrypoint()
@@ -125,7 +149,8 @@ def main():
             sp.cast(sp.sender, sp.address)
             sp.cast(sp.amount, sp.mutez)
 
-            # Only the three standard board sizes.
+            # Only the three standard board sizes (all have an even
+            # rows/2 so the ring centre is exact).
             assert (
                 params.rows == 8
                 or params.rows == 12
@@ -147,10 +172,13 @@ def main():
                 rows=params.rows,
                 risk=params.risk,
                 roundStatus=0,
-                finalSlot=0,
+                finalX=0,
+                finalZ=0,
+                ring=0,
                 payout=sp.mutez(0),
                 seed='',
-                path=empty_path,
+                xPath=empty_path,
+                zPath=empty_path,
             )
             sp.emit(
                 [self.data.currentRoundId, params.rows, params.risk],
@@ -159,33 +187,59 @@ def main():
             self.data.currentRoundId += 1
 
         # ─── Oracle: settle a drop ──────────────────────────────────
-        # `bits` is a map keyed by row index (0..rows-1) with values 0
-        # (left) or 1 (right). The contract derives slot = sum(bits),
-        # which means every drop's path is verifiable on chain — the UI
-        # can replay the exact left/right decisions the oracle made.
-        # `seed` is whatever auditable tag the oracle wants to commit.
+        # `xBits` / `zBits` are maps keyed by layer index (0..rows-1)
+        # with values 0 or 1. The contract derives finalX = sum(xBits),
+        # finalZ = sum(zBits), then the Chebyshev `ring`, so every drop's
+        # 3D path is verifiable on chain — the UI replays the exact
+        # deflections. `seed` is whatever auditable tag the oracle wants
+        # to commit.
         @sp.entrypoint()
         def resolve(self, params):
             sp.cast(params.roundId, sp.nat)
-            sp.cast(params.bits, sp.map[sp.nat, sp.nat])
+            sp.cast(params.xBits, sp.map[sp.nat, sp.nat])
+            sp.cast(params.zBits, sp.map[sp.nat, sp.nat])
             sp.cast(params.seed, sp.string)
             assert sp.sender == self.data.oracle, "not oracle"
 
             r = self.data.rounds[params.roundId]
             assert r.roundStatus == 0, "already resolved"
 
-            # Sum bits → slot. Also enforces 0/1 range and length == rows.
-            slot = sp.nat(0)
-            bitCount = sp.nat(0)
-            for i in params.bits.keys():
-                bit = params.bits[i]
-                assert bit < 2, "bit must be 0 or 1"
-                slot += bit
-                bitCount += 1
-            assert bitCount == r.rows, "bits length must equal rows"
+            # Sum xBits → finalX. Enforces 0/1 range and length == rows.
+            finalX = sp.nat(0)
+            xCount = sp.nat(0)
+            for i in params.xBits.keys():
+                xbit = params.xBits[i]
+                assert xbit < 2, "xBit must be 0 or 1"
+                finalX += xbit
+                xCount += 1
+            assert xCount == r.rows, "xBits length must equal rows"
+
+            # Sum zBits → finalZ. Same checks.
+            finalZ = sp.nat(0)
+            zCount = sp.nat(0)
+            for j in params.zBits.keys():
+                zbit = params.zBits[j]
+                assert zbit < 2, "zBit must be 0 or 1"
+                finalZ += zbit
+                zCount += 1
+            assert zCount == r.rows, "zBits length must equal rows"
+
+            # ring = max(|finalX - rows/2|, |finalZ - rows/2|).
+            # rows ∈ {8,12,16} so rows/2 ∈ {4,6,8} — set it explicitly
+            # to dodge any nat-division ambiguity.
+            half = sp.nat(4)
+            if r.rows == 12:
+                half = sp.nat(6)
+            if r.rows == 16:
+                half = sp.nat(8)
+            dx = abs(sp.to_int(finalX) - sp.to_int(half))
+            dz = abs(sp.to_int(finalZ) - sp.to_int(half))
+            ring = dx
+            if dz > dx:
+                ring = dz
 
             # Look up the multiplier (default 100 = 1.0x return-the-bet).
-            key = r.rows * 1000 + r.risk * 100 + slot
+            key = r.rows * 1000 + r.risk * 100 + ring
             multBp = self.data.multipliers.get(key, default=sp.nat(100))
             payout = sp.split_tokens(r.bet, multBp, 100)
 
@@ -205,10 +259,13 @@ def main():
                 rows=r.rows,
                 risk=r.risk,
                 roundStatus=newStatus,
-                finalSlot=slot,
+                finalX=finalX,
+                finalZ=finalZ,
+                ring=ring,
                 payout=payout,
                 seed=params.seed,
-                path=params.bits,
+                xPath=params.xBits,
+                zPath=params.zBits,
             )
 
             # Settle: pull payout from pot. If short, auto-pull from
@@ -225,7 +282,7 @@ def main():
                 sp.send(r.player, payout)
 
             sp.emit(
-                [params.roundId, slot, multBp],
+                [params.roundId, finalX, finalZ, ring, multBp],
                 tag='playResolved',
             )
 
@@ -243,7 +300,7 @@ def main():
 # ─── Compile-only test ───────────────────────────────────────────────────
 @sp.add_test()
 def test():
-    s = sp.test_scenario("plinko basic", main)
+    s = sp.test_scenario("plinko 3d basic", main)
     c = main.Plinko()
     c.set_initial_balance(sp.tez(0))
     s += c
