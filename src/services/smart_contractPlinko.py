@@ -149,6 +149,14 @@ def main():
             sp.cast(params.rows, sp.nat)
             sp.cast(params.risk, sp.nat)
             sp.cast(params.values, sp.map[sp.nat, sp.nat])
+            # SECURITY: §3.2 — cap entry count to defeat gas-balloon
+            # griefing if the admin key is ever compromised (PLINKO-4).
+            # Largest legitimate profile is a 16-row board's rings 0..8;
+            # 17 leaves headroom for the full 0..16 slot domain.
+            count = sp.nat(0)
+            for _k in params.values.keys():
+                count += 1
+            assert count <= 17, "too many entries (max 17)"
             base = params.rows * 1000 + params.risk * 100
             for ring in params.values.keys():
                 self.data.multipliers[base + ring] = params.values[ring]
