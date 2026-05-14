@@ -304,6 +304,10 @@ def main():
             assert g.metaData["firstMoveDecided"] == 1, "awaiting first-move flip"
             playerTurn = g.metaData["playerTurn"]
             assert sp.sender == g.players[playerTurn], "not your turn"
+            # §7.1 — reject coords outside the 64-cell domain before the
+            # map lookup, so a bad params.move fails with a clear message
+            # instead of a Michelson-level panic (TTT-2).
+            assert g.grid.contains(params.move), "invalid move coord"
             assert g.grid[params.move] == 0, "cell occupied"
 
             # Place mark + flip turn
