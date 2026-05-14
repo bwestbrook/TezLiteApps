@@ -237,8 +237,13 @@ def main():
                         self.data.games[params.gameId].gameStatus = 4
                     if cardValue > highCard:   
                         self.data.games[params.gameId].gameStatus = 4
-                    sp.emit(self.data.pot)
-                    if self.data.pot < sp.mutez(124999):
+                    # SECURITY: §2.2 — sp.mutez is unsigned; subtracting
+                    # 125000 from a lighter potReserve raises SUB_MUTEZ and
+                    # reverts the whole lastCard op, freezing the game at
+                    # status 2 forever (AD-2). Only refill when the reserve
+                    # can actually cover it.
+                    sp.emit(self.data.pot, tag='postSettlePot')
+                    if self.data.pot < sp.mutez(124999) and self.data.potReserve >= sp.mutez(125000):
                         self.data.pot += sp.mutez(125000)
                         self.data.potReserve -= sp.mutez(125000)
                         
