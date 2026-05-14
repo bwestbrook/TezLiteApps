@@ -26,6 +26,30 @@ it's a v2-shape change, not a hotfix.
 
 ---
 
+## Status
+
+The hotfix batch — AD-1, AD-1.5, AD-2, AD-3, AD-4, PLINKO-2..6,
+TTT-1..6, XC-1/2/3 — has been implemented and compile-verified locally
+(`./scripts/compile.sh <contract> --no-deploy`), one commit per fix in
+`fix(<contract>): …` form. The TTT contract additionally has an in-file
+play-through test covering the win path, invalid-move rejection, and
+claim-by-timeout.
+
+**Still required before this is live** (see the Verification matrix at
+the bottom):
+
+- Redeploy each changed contract to shadownet, copy artifacts into
+  `contracts/<id>/`, restart the oracle worker.
+- Run `scripts/exercise_contracts.py --game {ad,plinko,ttt}` against
+  the redeployed addresses.
+- The human-only sanity checks (AD pair handling, Plinko payout math,
+  TTT timeout window).
+
+AD-5 and PLINKO-1 are intentionally **not** in this batch — they are
+v2 commit-reveal work (see the redesign section at the bottom).
+
+---
+
 ## AD (`src/services/smart_contractAD.py`)
 
 ### AD-1 [HIGH] — `bet()` tautology lets caller underpay the ante
@@ -68,7 +92,60 @@ line above the assert.
 **Acceptance**: after redeploy, calling `bet(1)` with `0.15 ꜩ` must fail
 with `"must send ante + fee"`. Only `0.3 ꜩ` (ante 0.2 + fee 0.1) succeeds.
 The `--game ad` scenario in `scripts/exercise_contracts.py` already sends
-exactly `0.3 ꜩ` and should still pass.
+exactly `0.3 ꜩ` and should still pass. (Note: the in-file `test()`
+scenario's `tzMutezBet` was bumped from `250000` to `300000` for the
+same reason — `bet()` now rejects anything but the exact price.)
+
+---
+
+### AD-1.5 [HIGH] — `updateOracle` / `updateTxlContract` wired to the wrong field + gate
+
+**File**: `src/services/smart_contractAD.py`, the admin section.
+
+Surfaced while implementing AD-1, not in the original audit list.
+`updateOracle` wrote to `self.data.txlContract` (not
+`self.data.oracle`), so the AD oracle key could **never** actually be
+rotated — which silently undermines AD-4 and checklist §9.1.
+`updateTxlContract` was gated on `self.data.oracle` instead of
+`self.data.admin`. Both used `if sp.sender == …:` rather than `assert`,
+so an unauthorized call was a silent no-op instead of a hard failure.
+
+**Find**:
+
+```python
+@sp.entrypoint()
+def updateTxlContract(self, params):
+    if sp.sender == self.data.oracle:
+        self.data.txlContract = params.newContract
+
+@sp.entrypoint()
+def updateOracle(self, params):
+    if sp.sender == self.data.admin:
+        self.data.txlContract = params.newContract
+```
+
+**Replace with**:
+
+```python
+@sp.entrypoint()
+def updateTxlContract(self, params):
+    assert sp.sender == self.data.admin, "not admin"
+    self.data.txlContract = params.newContract
+
+@sp.entrypoint()
+def updateOracle(self, params):
+    assert sp.sender == self.data.admin, "not admin"
+    self.data.oracle = params.newOracle
+```
+
+This is the same bug class the TTT rewrite already called out in its
+header changelog ("Fixed updateOracle — used to write to txlContract
+under an oracle gate"). Checklist §1.1, §1.3, §9.1.
+
+**Acceptance**: redeploy. `updateOracle(newOracle=tz1other…)` from the
+admin key must actually change `storage.oracle` (poll it); a
+subsequent oracle-gated call from the OLD oracle key must fail.
+`updateTxlContract` must fail for any sender other than the admin.
 
 ---
 
