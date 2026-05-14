@@ -1,59 +1,71 @@
 import smartpy as sp
 
-# ─── Reversi (Othello) ───────────────────────────────────────────────────
+# ─── Chess (escrow + move-record stub) ───────────────────────────────────
 #
-# Modern SmartPy stub for the H2H reversi escrow. Game logic (which discs
-# flip on which move) is computed off-chain and submitted via submitMove
-# with a board-after diff. The contract enforces turn order, who plays,
-# and game-end accounting. Full on-chain move validation lives in the
-# legacy file smart_contract_reversi.py — keep referencing that until
-# this stub gets ported up to feature-parity.
+# Modern SmartPy stub. We trust the client (or the legacy chess contract,
+# which has full move validation) to compute legal moves; this contract
+# just records the wagering escrow, turn order, and resignation/timeout
+# settlement. Production-grade rule enforcement lives in the legacy file
+# smart_contract_chess.py — port that here when you're ready.
 #
-# Board encoding:
-#   64 cells, idx = row*8 + col. 0=empty, 1=black, 2=white.
-#   By convention player1 = black, player2 = white. Black plays first.
+# Board encoding (FEN-ish):
+#   64 cells, idx = rank * 8 + file. Piece codes:
+#     0  empty
+#     1  white pawn      7   black pawn
+#     2  white knight    8   black knight
+#     3  white bishop    9   black bishop
+#     4  white rook      10  black rook
+#     5  white queen     11  black queen
+#     6  white king      12  black king
 
 @sp.module
 def main():
-    class Reversi(sp.Contract):
+    class Chess(sp.Contract):
         def __init__(self):
             self.data.admin = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
+            self.data.oracle = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
             self.data.txlContract = sp.address("KT1Ro63rVDUx2x8pMChCLSySso8t6JH47oRQ")
             self.data.fee = sp.mutez(100000)
             self.data.minWager = sp.mutez(100000)
             self.data.maxWager = sp.mutez(5000000)
+            self.data.staleBlocks = sp.nat(120)   # ~1 hour at 30s blocks
             self.data.currentGameId = sp.nat(0)
 
-            # Initial board, flat-ints, with the 4 starting discs.
-            # idx layout: (3,3)=2  (3,4)=1  (4,3)=1  (4,4)=2
-            startBoard = sp.cast({}, sp.map[sp.nat, sp.nat])
+            # Initial chess board.
+            initBoard = sp.cast({}, sp.map[sp.nat, sp.nat])
             for i in range(64):
-                startBoard[i] = 0
-            startBoard[27] = 2   # (3,3)
-            startBoard[28] = 1   # (3,4)
-            startBoard[35] = 1   # (4,3)
-            startBoard[36] = 2   # (4,4)
-            self.data.initialBoard = startBoard
+                initBoard[i] = 0
+            # White back rank
+            backRankW = {0: 4, 1: 2, 2: 3, 3: 5, 4: 6, 5: 3, 6: 2, 7: 4}
+            for i, p in backRankW.items():
+                initBoard[i] = p
+            for i in range(8, 16):
+                initBoard[i] = 1
+            # Black back rank
+            backRankB = {56: 10, 57: 8, 58: 9, 59: 11, 60: 12, 61: 9, 62: 8, 63: 10}
+            for i, p in backRankB.items():
+                initBoard[i] = p
+            for i in range(48, 56):
+                initBoard[i] = 7
+            self.data.initialBoard = initBoard
 
-            # toMove: 0=awaiting flip, 1=player1(black), 2=player2(white)
             # gameStatus:
             #   0 = open (created, awaiting join)
             #   1 = joined, awaiting oracle flipForFirst
             #   2 = in-progress
             #   3 = settled
             #   4 = cancelled
-            self.data.oracle = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
+            # toMove: 0=awaiting flip, 1=white, 2=black
             self.data.games = sp.cast({}, sp.map[sp.nat, sp.record(
-                player1=sp.address,
-                player2=sp.address,
+                white=sp.address,
+                black=sp.address,
                 wager=sp.mutez,
                 board=sp.map[sp.nat, sp.nat],
                 toMove=sp.nat,
                 moveCount=sp.nat,
+                lastMoveBlock=sp.nat,
                 gameStatus=sp.nat,
                 winner=sp.address,
-                blackCount=sp.nat,
-                whiteCount=sp.nat,
                 flipSeed=sp.string,
             )])
 
@@ -69,16 +81,15 @@ def main():
             assert params.wager <= self.data.maxWager, "wager too big"
             sp.send(self.data.txlContract, self.data.fee)
             self.data.games[self.data.currentGameId] = sp.record(
-                player1=sp.sender,
-                player2=sp.address("tz1burnburnburnburnburnburnburjAYjjX"),
+                white=sp.sender,
+                black=sp.address("tz1burnburnburnburnburnburnburjAYjjX"),
                 wager=params.wager,
                 board=self.data.initialBoard,
-                toMove=0,                  # awaiting oracle flip
+                toMove=0,                       # awaiting oracle flip
                 moveCount=0,
+                lastMoveBlock=sp.level,
                 gameStatus=0,
                 winner=sp.address("tz1burnburnburnburnburnburnburjAYjjX"),
-                blackCount=2,
-                whiteCount=2,
                 flipSeed='',
             )
             sp.emit(self.data.currentGameId, tag='gameCreated')
@@ -90,16 +101,18 @@ def main():
             g = self.data.games[params.gameId]
             assert g.gameStatus == 0, "game not open"
             assert sp.amount == g.wager + self.data.fee, "must match wager + fee"
-            assert sp.sender != g.player1, "can't join your own game"
+            assert sp.sender != g.white, "can't join your own game"
             sp.send(self.data.txlContract, self.data.fee)
-            self.data.games[params.gameId].player2 = sp.sender
+            self.data.games[params.gameId].black = sp.sender
             self.data.games[params.gameId].gameStatus = 1   # awaiting oracle flip
+            self.data.games[params.gameId].lastMoveBlock = sp.level
             sp.emit([params.gameId], tag='gameJoined')
 
         @sp.entrypoint()
         def flipForFirst(self, params):
-            '''Oracle picks 0 or 1; sets toMove to player1 or player2 and
-            advances the game to status 2 (in-progress).'''
+            '''Oracle picks 0 or 1; sets toMove to white (1) or black (2)
+            and advances to status 2 (in-progress). Without this flip,
+            no moves can be submitted.'''
             sp.cast(params.gameId, sp.nat)
             sp.cast(params.bit, sp.nat)
             sp.cast(params.seed, sp.string)
@@ -109,98 +122,80 @@ def main():
             assert g.gameStatus == 1, "game not awaiting flip"
             self.data.games[params.gameId].toMove = params.bit + 1
             self.data.games[params.gameId].gameStatus = 2
+            self.data.games[params.gameId].lastMoveBlock = sp.level
             self.data.games[params.gameId].flipSeed = params.seed
             sp.emit([params.gameId, params.bit], tag='firstFlipped')
 
-        # Trust-but-verify: the *client* computes the flipped discs and
-        # the resulting board. The contract enforces (a) it's your turn,
-        # (b) you're touching an empty square, and (c) the flip count is
-        # plausible (≥ 1). Full rule enforcement lives in the legacy
-        # contract; this stub trades correctness for compile simplicity.
         @sp.entrypoint()
         def submitMove(self, params):
+            '''Client-validated. Contract trusts the board diff and records
+            it. Use the legacy chess contract for on-chain validation.'''
             sp.cast(params.gameId, sp.nat)
-            sp.cast(params.cell, sp.nat)
             sp.cast(params.newBoard, sp.map[sp.nat, sp.nat])
-            sp.cast(params.blackCount, sp.nat)
-            sp.cast(params.whiteCount, sp.nat)
             g = self.data.games[params.gameId]
             assert g.gameStatus == 2, "game not in progress"
-            assert params.cell < 64, "cell out of range"
-            mover = g.player1
+            mover = g.white
             if g.toMove == 2:
-                mover = g.player2
+                mover = g.black
             assert sp.sender == mover, "not your turn"
-            assert g.board[params.cell] == 0, "cell not empty"
-            # Must have flipped at least one disc (in addition to placing one).
-            assert params.blackCount + params.whiteCount > g.blackCount + g.whiteCount, "no flips"
             nextToMove = 2
             if g.toMove == 2:
                 nextToMove = 1
             self.data.games[params.gameId] = sp.record(
-                player1=g.player1,
-                player2=g.player2,
+                white=g.white,
+                black=g.black,
                 wager=g.wager,
                 board=params.newBoard,
                 toMove=nextToMove,
                 moveCount=g.moveCount + 1,
+                lastMoveBlock=sp.level,
                 gameStatus=g.gameStatus,
                 winner=g.winner,
-                blackCount=params.blackCount,
-                whiteCount=params.whiteCount,
                 flipSeed=g.flipSeed,
             )
-            sp.emit([params.gameId, params.cell], tag='moveSubmitted')
 
         @sp.entrypoint()
-        def settle(self, params):
-            '''Either player calls settle once the board is full or both
-            sides pass. Payout uses the recorded blackCount/whiteCount.'''
+        def resign(self, params):
             sp.cast(params.gameId, sp.nat)
             g = self.data.games[params.gameId]
             assert g.gameStatus == 2, "game not in progress"
-            assert sp.sender == g.player1 or sp.sender == g.player2, "not a player"
+            assert sp.sender == g.white or sp.sender == g.black, "not a player"
+            winnerAddr = g.black
+            if sp.sender == g.black:
+                winnerAddr = g.white
             pot = sp.split_tokens(g.wager, 2, 1)
-            winnerAddr = g.player1
-            if g.blackCount > g.whiteCount:
-                sp.send(g.player1, pot)
-                winnerAddr = g.player1
-            if g.whiteCount > g.blackCount:
-                sp.send(g.player2, pot)
-                winnerAddr = g.player2
-            if g.blackCount == g.whiteCount:
-                sp.send(g.player1, g.wager)
-                sp.send(g.player2, g.wager)
-            self.data.games[params.gameId] = sp.record(
-                player1=g.player1,
-                player2=g.player2,
-                wager=g.wager,
-                board=g.board,
-                toMove=g.toMove,
-                moveCount=g.moveCount,
-                gameStatus=3,                  # settled
-                winner=winnerAddr,
-                blackCount=g.blackCount,
-                whiteCount=g.whiteCount,
-                flipSeed=g.flipSeed,
-            )
-            sp.emit([params.gameId], tag='gameSettled')
+            sp.send(winnerAddr, pot)
+            self.data.games[params.gameId].gameStatus = 3
+            self.data.games[params.gameId].winner = winnerAddr
+            sp.emit([params.gameId], tag='resigned')
+
+        @sp.entrypoint()
+        def claimByTimeout(self, params):
+            '''Opponent has been idle for staleBlocks; claim victory.'''
+            sp.cast(params.gameId, sp.nat)
+            g = self.data.games[params.gameId]
+            assert g.gameStatus == 2, "game not in progress"
+            assert sp.level - g.lastMoveBlock >= self.data.staleBlocks, "not stale yet"
+            mover = g.white
+            if g.toMove == 2:
+                mover = g.black
+            assert sp.sender != mover, "you owe the move"
+            pot = sp.split_tokens(g.wager, 2, 1)
+            sp.send(sp.sender, pot)
+            self.data.games[params.gameId].gameStatus = 3
+            self.data.games[params.gameId].winner = sp.sender
+            sp.emit([params.gameId], tag='claimedByTimeout')
 
         @sp.entrypoint()
         def cancelGame(self, params):
             sp.cast(params.gameId, sp.nat)
             g = self.data.games[params.gameId]
             assert g.gameStatus == 0, "game already in progress"
-            assert sp.sender == g.player1, "only creator can cancel"
-            sp.send(g.player1, g.wager)
-            self.data.games[params.gameId].gameStatus = 4  # cancelled
+            assert sp.sender == g.white, "only creator can cancel"
+            sp.send(g.white, g.wager)
+            self.data.games[params.gameId].gameStatus = 4   # cancelled
 
         # ─── Admin ──────────────────────────────────────────────────
-        @sp.entrypoint()
-        def updateOracle(self, params):
-            assert sp.sender == self.data.admin, "not admin"
-            self.data.oracle = params.newOracle
-
         @sp.entrypoint()
         def updateTxlContract(self, params):
             assert sp.sender == self.data.admin, "not admin"
@@ -217,9 +212,14 @@ def main():
             assert sp.sender == self.data.admin, "not admin"
             self.data.fee = params.fee
 
+        @sp.entrypoint()
+        def updateStaleBlocks(self, params):
+            assert sp.sender == self.data.admin, "not admin"
+            self.data.staleBlocks = params.staleBlocks
+
 
 @sp.add_test()
 def test():
-    s = sp.test_scenario("reversi basic", main)
-    c = main.Reversi()
+    s = sp.test_scenario("chess basic", main)
+    c = main.Chess()
     s += c

@@ -191,13 +191,13 @@ export function clearStaleBeaconStorage() {
 // ── Shadownet (current testnet, primary dev target) ──
 export const ORACLE_CONTRACT_SHADOWNET             = 'KT19V1YiyPtyCbxouhyeM96SekRTVC7Gw6qq'
 export const TXL_CONTRACT_ADDRESS_SHADOWNET        = 'KT1Ro63rVDUx2x8pMChCLSySso8t6JH47oRQ'
-export const AD_CONTRACT_ADDRESS_SHADOWNET         = 'KT1VpPzzwqyJEywjEv2TyfMNrQRPs3rGT1Zs'
+export const AD_CONTRACT_ADDRESS_SHADOWNET         = 'KT1KsPsFDaTbFCF2DeDnZ4CJXy7zmw3BaRiz'
 export const TTT_CONTRACT_ADDRESS_SHADOWNET        = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
 export const OBJECT_CONTRACT_SHADOWNET             = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
-export const SQUARES_CONTRACT_ADDRESS_SHADOWNET    = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+export const SQUARES_CONTRACT_ADDRESS_SHADOWNET    = 'KT1SNsuFFQ4dDuU9FNNvxUan1hqyy279WZqa'
 export const RNG_ORACLE_CONTRACT_ADDRESS_SHADOWNET = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
 export const REVERSI_CONTRACT_ADDRESS_SHADOWNET    = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
-export const PLINKO_CONTRACT_ADDRESS_SHADOWNET     = 'KT1TqeFFmrV7VKChZwxT3VFL19JyyPbjLyJG'
+export const PLINKO_CONTRACT_ADDRESS_SHADOWNET     = 'KT1FxbWXhetbNC7d9xWNi17cwk2rtQUW1rJw'
 export const CHESS_CONTRACT_ADDRESS_SHADOWNET      = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
 export const WAR_CONTRACT_ADDRESS_SHADOWNET        = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
 
@@ -244,14 +244,13 @@ export const NFT_INFO = [
 ]
 
 export const AD_GAME_INFO = [
-  'Choose Ace High or Ace Low and then Ante up for 0.3 XTZ (plus you pay a 0.1 XTZ 2.725K holder fee)',
-  'Your bet goes into the pot',
-  'If you get a pair to start, you get half your bet back and the game is over (holders get the other half of your bet)',
-  "If the cards don't match, then you can bet up to the pot (plus a 0.1 XTZ fee) that the next card will between your low and high card",
-  'Get good cards on your ante and then big on your Acey Duecey Hand!',
-  'Submit your bet (along with another 0.1 XTZ 2.725K holder fee) and try your luck',
-  'NOTE: If the next card hits the rail, your bet is removed from the pot and sent the the 2.725K fund!',
-  "It's always a good time to be a 2.725K holder",
+  'Choose Ace High or Ace Low and ante up 0.3 ꜩ (plus a 0.1 ꜩ 2.725K holder fee).',
+  'Two cards are dealt. If they pair, the ante is forfeit to the pot.',
+  'Otherwise, place an Acey-Duecey bet (up to 30% of the pot) that the next card lands strictly between them.',
+  'Payouts are TRUE ODDS with a 5% house rake — tight spreads pay big, wide spreads pay slim:',
+  '  spread 1  →  12.35× · spread 5  →  2.47× · spread 11  →  1.12×',
+  'Edge or out-of-range third card forfeits the bet.',
+  'Win, lose, or pair — every bet keeps the pot growing.',
 ]
 
 export const CHESS_GAME_INFO = [
@@ -320,15 +319,17 @@ export const SQUARES_GAME_INFO = [
 ]
 
 export const GAME_INFO = [
-  'The goal of the game is to connect four in a row before you oponent does!',
-  'Sync your wallet and check out the game center ',
-  'Create a game or select a game to play, join, leave, or view',
-  'To create a game specifying the amount of XTZ (+ 3% TXL holder fee) you want to wager that you can beat your opponent',
-  'Leave an unmatched game to retrieve your XTZ at any time (but you forfeit your 3% fee)',
-  "Once you've matchwith an opponent you have to play to win your money",
-  "If it's your turn, select a move and submit it to the block chain",
-  'Wait for your opponent to play',
-  'Connect four in a row before you opponent and win the amount specificied at the start of the game!',
-  'In the case of the cats game, both users get 75% of thier wager back and the rest goes to 2P725K holders',
-  "It's always a good time to be a 2.725K holder",
+  'The goal of the game is to connect four in a row before your opponent does!',
+  'Sync your wallet and check out the game center.',
+  'Create a game or select a game to play, join, leave, or view.',
+  'Drag the wager slider to set your stake. Both players lock the same wager (plus a flat 0.1 ꜩ holder fee per transaction).',
+  'Leave an unmatched game to retrieve your wager at any time (the per-tx fee is non-refundable — it has already paid out to TXL holders).',
+  "Once matched with an opponent you have to play to win the pot.",
+  "If it's your turn, select a move and submit it to the blockchain.",
+  'Wait for your opponent to play.',
+  'WIN: connect four and the contract pays you the full pot minus the house cut (default 2.5%).',
+  "CAT'S GAME: each side gets back their wager minus half the house cut.",
+  'SURRENDER: you get back 30% of the net pot, your opponent gets 70%; house keeps the cut.',
+  'The house cut and per-tx fee both flow to TXL holders — every game pays the holder fund three ways.',
+  "It's always a good time to be a 2.725K holder.",
 ]

@@ -26,16 +26,18 @@
                                                         (pair
                                                             (nat %finalSlot)
                                                             (pair
-                                                                (mutez %payout)
+                                                                (map %path nat nat)
                                                                 (pair
-                                                                    (address %player)
+                                                                    (mutez %payout)
                                                                     (pair
-                                                                        (nat %risk)
+                                                                        (address %player)
                                                                         (pair
-                                                                            (nat %roundStatus)
+                                                                            (nat %risk)
                                                                             (pair
-                                                                                (nat %rows)
-                                                                                (string %seed)))))))))
+                                                                                (nat %roundStatus)
+                                                                                (pair
+                                                                                    (nat %rows)
+                                                                                    (string %seed))))))))))
                                                 (address %txlContract)))))))))));
     parameter
         (or
@@ -47,10 +49,10 @@
                         (nat %rows)))
                 (or
                     (pair %resolve
-                        (nat %roundId)
+                        (map %bits nat nat)
                         (pair
-                            (string %seed)
-                            (nat %slot)))
+                            (nat %roundId)
+                            (string %seed)))
                     (or
                         (pair %setMultiplier
                             (nat %key)
@@ -165,7 +167,7 @@
                                     SUB_MUTEZ;
                                     IF_NONE
                                         {
-                                            PUSH int 132;
+                                            PUSH int 139;
                                             FAILWITH
                                         }
                                         {
@@ -183,7 +185,7 @@
                                     CONTRACT unit;
                                     IF_NONE
                                         {
-                                            PUSH int 134;
+                                            PUSH int 141;
                                             FAILWITH
                                         }
                                         {
@@ -193,20 +195,24 @@
                                     UNIT;
                                     TRANSFER_TOKENS;
                                     CONS;
-                                    DUP 4;
+                                    EMPTY_MAP nat nat;
+                                    DUP 5;
                                     DUP;
                                     GET 19;
                                     PUSH string "";
-                                    DUP 6;
+                                    DUP 7;
                                     CDR;
                                     PUSH nat 0;
-                                    DUP 8;
+                                    DUP 9;
                                     CAR;
                                     SENDER;
                                     PUSH mutez 0;
+                                    DUP 9;
                                     PUSH nat 0;
-                                    DUP 11;
-                                    PAIR 8;
+                                    DUP 13;
+                                    PAIR 9;
+                                    DIG 3;
+                                    DROP;
                                     DIG 4;
                                     DROP;
                                     SOME;
@@ -255,18 +261,18 @@
                                     DUP 2;
                                     GET 19;
                                     DUP 2;
-                                    CAR;
+                                    GET 3;
                                     GET;
                                     IF_NONE
                                         {
-                                            PUSH int 163;
+                                            PUSH int 174;
                                             FAILWITH
                                         }
                                         {
                                         };
                                     PUSH nat 0;
                                     DUP 2;
-                                    GET 11;
+                                    GET 13;
                                     COMPARE;
                                     EQ;
                                     IF
@@ -276,32 +282,65 @@
                                             PUSH string "already resolved";
                                             FAILWITH
                                         };
-                                    DUP;
-                                    GET 13;
+                                    PUSH nat 0;
+                                    PUSH nat 0;
+                                    DUP 4;
+                                    CAR;
+                                    ITER
+                                        {
+                                            CAR;
+                                            DUP 5;
+                                            CAR;
+                                            SWAP;
+                                            GET;
+                                            IF_NONE
+                                                {
+                                                    PUSH int 181;
+                                                    FAILWITH
+                                                }
+                                                {
+                                                };
+                                            PUSH nat 2;
+                                            DUP 2;
+                                            COMPARE;
+                                            LT;
+                                            IF
+                                                {
+                                                }
+                                                {
+                                                    PUSH string "bit must be 0 or 1";
+                                                    FAILWITH
+                                                };
+                                            DIG 2;
+                                            ADD;
+                                            SWAP;
+                                            PUSH nat 1;
+                                            ADD
+                                        };
                                     DUP 3;
-                                    GET 4;
+                                    GET 15;
+                                    DUP 2;
                                     COMPARE;
-                                    LE;
+                                    EQ;
                                     IF
                                         {
                                         }
                                         {
-                                            PUSH string "slot out of range";
+                                            PUSH string "bits length must equal rows";
                                             FAILWITH
                                         };
                                     DUP 2;
-                                    GET 4;
                                     PUSH nat 100;
-                                    DUP 3;
-                                    GET 9;
+                                    DUP 5;
+                                    GET 11;
                                     MUL;
                                     PUSH nat 1000;
-                                    DUP 4;
-                                    GET 13;
+                                    DUP 6;
+                                    GET 15;
                                     MUL;
                                     ADD;
                                     ADD;
-                                    DUP 4;
+                                    DUP 6;
                                     GET 11;
                                     DUP 2;
                                     GET;
@@ -313,20 +352,20 @@
                                         };
                                     PUSH nat 100;
                                     DUP 2;
-                                    DUP 5;
+                                    DUP 7;
                                     CAR;
                                     MUL;
                                     EDIV;
                                     IF_NONE
                                         {
-                                            PUSH int 170;
+                                            PUSH int 190;
                                             FAILWITH
                                         }
                                         {
                                         };
                                     CAR;
                                     PUSH nat 3;
-                                    DUP 5;
+                                    DUP 7;
                                     CAR;
                                     DUP 3;
                                     COMPARE;
@@ -338,7 +377,7 @@
                                         }
                                         {
                                         };
-                                    DUP 5;
+                                    DUP 7;
                                     CAR;
                                     DUP 3;
                                     COMPARE;
@@ -350,32 +389,33 @@
                                         }
                                         {
                                         };
-                                    DIG 6;
+                                    DIG 8;
                                     DUP;
                                     GET 19;
-                                    DUP 8;
-                                    GET 3;
-                                    DUP 8;
-                                    GET 13;
-                                    DUP 5;
                                     DUP 10;
-                                    GET 9;
-                                    DUP 11;
-                                    GET 7;
-                                    DUP 9;
-                                    DUP 14;
                                     GET 4;
-                                    DUP 14;
+                                    DUP 10;
+                                    GET 15;
+                                    DUP 5;
+                                    DUP 12;
+                                    GET 11;
+                                    DUP 13;
+                                    GET 9;
+                                    DUP 9;
+                                    DUP 16;
                                     CAR;
-                                    PAIR 8;
+                                    DUP 15;
+                                    DUP 17;
+                                    CAR;
+                                    PAIR 9;
                                     DIG 3;
                                     DROP;
                                     SOME;
-                                    DUP 8;
-                                    CAR;
+                                    DUP 10;
+                                    GET 3;
                                     UPDATE;
                                     UPDATE 19;
-                                    DUG 5;
+                                    DUG 7;
                                     PUSH mutez 0;
                                     DUP 2;
                                     COMPARE;
@@ -384,26 +424,28 @@
                                         {
                                             DIG 2;
                                             DROP;
-                                            DUP 5;
+                                            DIG 2;
+                                            DROP;
+                                            DUP 6;
                                             GET 15;
                                             DUP 2;
                                             COMPARE;
                                             GT;
                                             IF
                                                 {
-                                                    DUP 5;
+                                                    DUP 6;
                                                     GET 15;
                                                     DUP 2;
                                                     SUB_MUTEZ;
                                                     IF_NONE
                                                         {
-                                                            PUSH int 199;
+                                                            PUSH int 220;
                                                             FAILWITH
                                                         }
                                                         {
                                                         };
                                                     DUP;
-                                                    DUP 7;
+                                                    DUP 8;
                                                     GET 17;
                                                     COMPARE;
                                                     GE;
@@ -414,7 +456,7 @@
                                                             PUSH string "pot + reserve too low";
                                                             FAILWITH
                                                         };
-                                                    DIG 5;
+                                                    DIG 6;
                                                     DUP;
                                                     GET 17;
                                                     DUP 3;
@@ -422,7 +464,7 @@
                                                     SUB_MUTEZ;
                                                     IF_NONE
                                                         {
-                                                            PUSH int 201;
+                                                            PUSH int 222;
                                                             FAILWITH
                                                         }
                                                         {
@@ -433,11 +475,11 @@
                                                     DIG 2;
                                                     ADD;
                                                     UPDATE 15;
-                                                    DUG 4
+                                                    DUG 5
                                                 }
                                                 {
                                                 };
-                                            DIG 4;
+                                            DIG 5;
                                             DUP;
                                             GET 15;
                                             DUP 3;
@@ -445,20 +487,20 @@
                                             SUB_MUTEZ;
                                             IF_NONE
                                                 {
-                                                    PUSH int 203;
+                                                    PUSH int 224;
                                                     FAILWITH
                                                 }
                                                 {
                                                 };
                                             UPDATE 15;
-                                            DUG 4;
+                                            DUG 5;
                                             NIL operation;
-                                            DIG 3;
-                                            GET 7;
+                                            DIG 4;
+                                            GET 9;
                                             CONTRACT unit;
                                             IF_NONE
                                                 {
-                                                    PUSH int 204;
+                                                    PUSH int 225;
                                                     FAILWITH
                                                 }
                                                 {
@@ -474,16 +516,17 @@
                                             DROP;
                                             SWAP;
                                             DROP;
+                                            DIG 2;
+                                            DROP;
                                             NIL operation
                                         };
                                     NIL nat;
                                     DIG 2;
                                     CONS;
-                                    DUP 3;
-                                    GET 4;
+                                    DIG 2;
                                     CONS;
                                     DIG 2;
-                                    CAR;
+                                    GET 3;
                                     CONS;
                                     EMIT %playResolved
                                         (list nat);
@@ -551,7 +594,7 @@
                                                     GET;
                                                     IF_NONE
                                                         {
-                                                            PUSH int 111;
+                                                            PUSH int 118;
                                                             FAILWITH
                                                         }
                                                         {
@@ -595,7 +638,7 @@
                                     SUB_MUTEZ;
                                     IF_NONE
                                         {
-                                            PUSH int 218;
+                                            PUSH int 239;
                                             FAILWITH
                                         }
                                         {

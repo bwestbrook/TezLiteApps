@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """
-oracle_worker.py — off-chain oracle for the Acey-Duecey contract.
+oracle_worker.py — off-chain oracle daemon for TezLiteApps games.
 
-What it does
-------------
+Supports multiple games behind one process. Pick which to run with
+`--game`:
+
+    --game acey-duecey   only AD (deals cards)
+    --game plinko        only Plinko (resolves drops)
+    --game all           both (default)
+
+For Acey-Duecey
+---------------
 Polls AD's on-chain storage every few seconds. For each game it finds:
 
   status == 0  AND  hand[1] == -1                 → call firstCard
@@ -11,47 +18,58 @@ Polls AD's on-chain storage every few seconds. For each game it finds:
   status == 2  (player has placed continueBet)    → call lastCard
 
 Each call picks a uniform-random deck index 0..51 and tags it with a hex
-hash so the operation is traceable. The worker only acts on its OWN
-games (i.e. ones it's authorised to advance) — it reads AD.storage.oracle
-once at startup and bails if our key doesn't match.
+hash so the operation is traceable.
+
+For Plinko
+----------
+Polls Plinko's on-chain storage. For each round it finds:
+
+  roundStatus == 0 (pending)  → call resolve(roundId, slot, seed)
+
+The slot is drawn from a true binomial distribution (sum of N independent
+50/50 coin flips for an N-row board), so the on-chain landing matches
+real Plinko physics — center slots are exponentially more likely than
+edges, mirroring Pascal's triangle. The UI's `animateBall()` then draws
+a plausible left/right path to land on that slot. The seed is a hex
+token committed on chain so the result is auditable.
 
 Why this exists
 ---------------
-The AD contract trusts a single tz1 address (stored in `oracle`) to
-deliver cards. The dApp UI exposes manual "Deal first card" buttons for
-that role, but during real play you don't want a human in the loop. This
-worker is the production-style equivalent: a daemon that sees a new game
-and advances it within a few seconds, no clicks required.
+Both contracts trust a single tz1 address (`storage.oracle`) to advance
+state. The dApp UI exposes manual buttons for that role during dev, but
+in production you want a daemon doing it in seconds, not a human. The
+worker reads the oracle key once at startup and bails if our key
+doesn't match the on-chain `oracle` for any selected game.
 
 Design notes
 ------------
 - *Stateless across runs.* All decisions come from re-reading on-chain
-  storage. Restart anytime — the worker will pick up wherever the chain
+  storage. Restart anytime — the worker picks up wherever the chain
   left off. No local DB, no journal.
-- *Single-threaded.* Tezos rejects a second operation from the same
-  address while one is still in the mempool, so we use sequential
-  `.send(min_confirmations=1)` calls. With shadownet's ~15-second block
-  time that means at most ~4 actions per minute per worker. Plenty.
-- *Reads AD address from constants.js* so it always matches whatever the
-  dApp is pointing at (you don't have to update two places after a
-  redeploy).
-- *Pure functions where possible.* `next_action_for_game()` decides what
-  to do from a game record; tests can call it directly without RPC.
+- *Single-threaded.* Tezos rejects a second op from the same address
+  while one is in the mempool, so we use sequential
+  `.send(min_confirmations=1)`. With shadownet's ~15s block time that
+  means at most ~4 actions per minute per worker. Plenty.
+- *One action per game per cycle.* Keeps ops serial per contract and
+  lets the next poll see the chain-of-effects from this one.
+- *Reads contract addresses from constants.js* so the worker always
+  matches whatever the dApp is pointing at (no two-places-to-update).
 
 Usage
 -----
-    ./scripts/oracle-worker.sh              # default — runs forever
-    ./scripts/oracle-worker.sh --once       # process one poll cycle then exit
-    ./scripts/oracle-worker.sh --poll 3     # 3-second poll interval
-    ./scripts/oracle-worker.sh --dry-run    # log what it WOULD do, no signing
+    ./scripts/oracle-worker.sh                      # runs both games forever
+    ./scripts/oracle-worker.sh --game plinko        # only Plinko
+    ./scripts/oracle-worker.sh --game acey-duecey   # only AD
+    ./scripts/oracle-worker.sh --once               # one poll cycle then exit
+    ./scripts/oracle-worker.sh --poll 3             # 3-second poll interval
+    ./scripts/oracle-worker.sh --dry-run            # log decisions, don't sign
 
-    # Override the AD address from the command line (otherwise we read
-    # AD_CONTRACT_ADDRESS_SHADOWNET / _MAINNET from src/constants.js):
-    ./scripts/oracle-worker.sh --address KT1...
+    # Override the contract address (only valid with a single --game):
+    ./scripts/oracle-worker.sh --game plinko --address KT1...
 
-Authentication: same as deploy.py — DEPLOY_MNEMONIC in .env. (The wallet
-that mnemonic derives must be the one set as storage.oracle for AD,
-otherwise every call will fail with `notOracleADFirst2C` etc.)
+Authentication: same as deploy.py — DEPLOY_MNEMONIC in .env. The wallet
+that mnemonic derives must be the one set as storage.oracle for every
+selected game, otherwise every call will fail.
 """
 
 from __future__ import annotations
@@ -65,10 +83,14 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Callable
 
 # ─── Project paths ────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
+# Make sibling scripts importable (sports_api lives next to this file).
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 ENV_PATH = PROJECT_ROOT / ".env"
 CONSTANTS_PATH = PROJECT_ROOT / "src" / "constants.js"
 
@@ -117,73 +139,505 @@ def read_constant(name: str) -> str | None:
     return m.group(1) if m else None
 
 
-# ─── Pure decision function — easy to test ───────────────────────────
+# ─── Storage helpers ──────────────────────────────────────────────────
+def _field(record: Any, name: str, default: Any) -> Any:
+    """tzkt/pytezos sometimes returns records as dicts, sometimes as
+    objects with attributes. Read either way."""
+    if isinstance(record, dict):
+        return record.get(name, default)
+    return getattr(record, name, default)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# AD — Acey-Duecey decision logic (pure, easy to unit-test)
+# ═══════════════════════════════════════════════════════════════════════
+
 @dataclass
-class NextAction:
+class ADAction:
     entrypoint: str          # 'firstCard' | 'secondCard' | 'lastCard'
     game_id: int             # contract's monotonic gameId
     card: int                # random deck index 0..51
     hash: str                # tag string for traceability
 
-def next_action_for_game(game_id: int, game: dict) -> NextAction | None:
-    """Inspect one game record and decide whether the oracle should act.
-
-    Returns a NextAction to submit, or None if the game doesn't need
-    oracle help right now (already advanced, or finished).
+def next_action_for_game(game_id: int, game: dict) -> ADAction | None:
+    """Inspect one AD game record and decide whether the oracle should
+    act. Returns an ADAction to submit, or None if the game doesn't
+    need help right now (already advanced, or finished).
 
     `game` is the dict tzkt/pytezos returns for storage.games[gid].
     Card slots live under `hand` as a map keyed by 1/2/3. tzkt returns
     int values as strings, so coerce."""
     def slot(key: int) -> int:
-        h = game.get("hand", {}) or {}
-        raw = h.get(key, h.get(str(key), -1))
+        h = _field(game, "hand", {}) or {}
+        raw = h.get(key, h.get(str(key), -1)) if isinstance(h, dict) else -1
         try:
             return int(raw)
         except (TypeError, ValueError):
             return -1
 
-    status = int(game.get("gameStatus", 0))
+    status = int(_field(game, "gameStatus", 0))
     h1 = slot(1)
     h2 = slot(2)
 
     if status == 0 and h1 == -1:
-        return _build_action("firstCard", game_id)
+        return _build_ad_action("firstCard", game_id)
     if status == 0 and h1 >= 0 and h2 == -1:
-        return _build_action("secondCard", game_id)
+        return _build_ad_action("secondCard", game_id)
     if status == 2:
-        return _build_action("lastCard", game_id)
+        return _build_ad_action("lastCard", game_id)
 
     # status 1 (awaiting player's continueBet) — not our problem.
     # status 3 / 4 / 5 — finished. Ignore.
     return None
 
 
-def _build_action(entrypoint: str, game_id: int) -> NextAction:
+def _build_ad_action(entrypoint: str, game_id: int) -> ADAction:
     """Pick a random card + a unique tag for traceability."""
     card = secrets.randbelow(52)
     hash_tag = f"{entrypoint}-{secrets.token_hex(6)}"
-    return NextAction(entrypoint=entrypoint, game_id=int(game_id), card=card, hash=hash_tag)
+    return ADAction(entrypoint=entrypoint, game_id=int(game_id), card=card, hash=hash_tag)
 
 
-# ─── Main loop ────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════
+# Plinko — drop resolution logic (pure)
+# ═══════════════════════════════════════════════════════════════════════
+
+@dataclass
+class PlinkoAction:
+    round_id: int
+    rows: int
+    bits: dict[int, int]     # per-row 0/1 decisions (left/right)
+    slot: int                # = sum(bits.values())
+    seed: str                # auditable hex tag committed on chain
+
+def next_action_for_round(round_id: int, rnd: Any) -> PlinkoAction | None:
+    """Inspect one Plinko round and decide whether to resolve it.
+    Returns a PlinkoAction, or None if the round is already settled or
+    the row count is bogus.
+
+    We draw N independent 50/50 coin flips up front — one per peg row —
+    and submit them as a list. The contract derives the slot from their
+    sum (binomial distribution: center exponentially more likely than
+    edges, mirroring Pascal's triangle). The UI replays the bits as the
+    ball's left/right decisions, so the on-chain randomness directly
+    drives the animation."""
+    status = int(_field(rnd, "roundStatus", 0))
+    if status != 0:
+        return None
+    rows = int(_field(rnd, "rows", 0))
+    if rows not in (8, 12, 16):
+        # Shouldn't happen — the contract rejects other values at play()
+        # time — but if we somehow see one, skip rather than guess.
+        return None
+    bits = {i: secrets.randbelow(2) for i in range(rows)}
+    slot = sum(bits.values())
+    seed = f"plinko-{round_id}-{secrets.token_hex(8)}"
+    return PlinkoAction(round_id=int(round_id), rows=rows, bits=bits, slot=slot, seed=seed)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Game handler — one per supported contract
+# ═══════════════════════════════════════════════════════════════════════
+
+@dataclass
+class HandlerAction:
+    """One submittable action, with a human-readable label and a
+    closure that performs the actual pytezos call. The closure is
+    deferred so dry-run can log without signing."""
+    label: str
+    submit: Callable[[Any], str]   # takes pytezos contract proxy → op hash
+
+
+class GameHandler:
+    """Base class. Override `find_actions` and `address_constant_for`."""
+
+    name: str = ""
+
+    def __init__(self, network: str, address: str, client: Any):
+        self.network = network
+        self.address = address
+        self.client = client
+        self.contract = client.contract(address)
+
+    @classmethod
+    def address_constant_for(cls, network: str) -> str:
+        raise NotImplementedError
+
+    def storage_oracle(self) -> str:
+        """Return the on-chain `oracle` field for auth check."""
+        return _field(self.contract.storage(), "oracle", "") or ""
+
+    def find_actions(self) -> list[HandlerAction]:
+        """Walk storage and return AT MOST one action this cycle. (We
+        keep it serial per contract so each new poll can see the prior
+        op's effects.)"""
+        raise NotImplementedError
+
+
+class ADHandler(GameHandler):
+    name = "acey-duecey"
+
+    @classmethod
+    def address_constant_for(cls, network: str) -> str:
+        return f"AD_CONTRACT_ADDRESS_{network.upper()}"
+
+    def find_actions(self) -> list[HandlerAction]:
+        storage = self.contract.storage()
+        games = _field(storage, "games", {}) or {}
+        for raw_id, game in games.items():
+            try:
+                gid = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            action = next_action_for_game(gid, game)
+            if action:
+                return [self._wrap(action)]
+        return []
+
+    def _wrap(self, action: ADAction) -> HandlerAction:
+        label = f"game {action.game_id:>3} → {action.entrypoint}(card={action.card})  tag={action.hash}"
+        def submit(contract: Any) -> str:
+            # PyTezos exposes each entrypoint as an attribute on the
+            # contract proxy — no `.methodsObject[name]` accessor like
+            # Taquito. We have the name as a string, so getattr.
+            entrypoint_fn = getattr(contract, action.entrypoint)
+            op = entrypoint_fn(
+                card=action.card,
+                gameId=action.game_id,
+                hash=action.hash,
+            ).send(min_confirmations=1)
+            return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+        return HandlerAction(label=label, submit=submit)
+
+
+class PlinkoHandler(GameHandler):
+    name = "plinko"
+
+    @classmethod
+    def address_constant_for(cls, network: str) -> str:
+        return f"PLINKO_CONTRACT_ADDRESS_{network.upper()}"
+
+    def find_actions(self) -> list[HandlerAction]:
+        storage = self.contract.storage()
+        rounds = _field(storage, "rounds", {}) or {}
+        for raw_id, rnd in rounds.items():
+            try:
+                rid = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            action = next_action_for_round(rid, rnd)
+            if action:
+                return [self._wrap(action)]
+        return []
+
+    def _wrap(self, action: PlinkoAction) -> HandlerAction:
+        bits_preview = "".join(str(action.bits[i]) for i in range(action.rows))
+        label = (f"round {action.round_id:>3} → resolve(bits={bits_preview}, "
+                 f"slot={action.slot}/{action.rows})")
+        def submit(contract: Any) -> str:
+            op = contract.resolve(
+                roundId=action.round_id,
+                bits=action.bits,
+                seed=action.seed,
+            ).send(min_confirmations=1)
+            return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+        return HandlerAction(label=label, submit=submit)
+
+
+class WarHandler(GameHandler):
+    """Two-card showdown. Each game with gameStatus == 1 (joined, awaiting
+    deal) gets a single call to deal(gameId, card1, card2, seed)."""
+    name = "war"
+
+    @classmethod
+    def address_constant_for(cls, network: str) -> str:
+        return f"WAR_CONTRACT_ADDRESS_{network.upper()}"
+
+    def find_actions(self) -> list[HandlerAction]:
+        storage = self.contract.storage()
+        games = _field(storage, "games", {}) or {}
+        for raw_id, g in games.items():
+            try:
+                gid = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if int(_field(g, "gameStatus", 0)) != 1:
+                continue
+            c1 = secrets.randbelow(52)
+            c2 = secrets.randbelow(52)
+            seed = f"war-{gid}-{secrets.token_hex(6)}"
+            label = f"game {gid:>3} → deal(c1={c1}, c2={c2})"
+            def submit(contract: Any, gid=gid, c1=c1, c2=c2, seed=seed) -> str:
+                op = contract.deal(
+                    gameId=gid, card1=c1, card2=c2, seed=seed,
+                ).send(min_confirmations=1)
+                return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+            return [HandlerAction(label=label, submit=submit)]
+        return []
+
+
+class _CoinFlipHandler(GameHandler):
+    """Shared base for skill games that need a single coin flip at start
+    to fairly assign first move. Subclasses just set `name` + address var."""
+
+    def find_actions(self) -> list[HandlerAction]:
+        storage = self.contract.storage()
+        games = _field(storage, "games", {}) or {}
+        for raw_id, g in games.items():
+            try:
+                gid = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if int(_field(g, "gameStatus", 0)) != 1:
+                continue
+            bit = secrets.randbelow(2)
+            seed = f"{self.name}-flip-{gid}-{secrets.token_hex(6)}"
+            label = f"game {gid:>3} → flipForFirst(bit={bit})"
+            def submit(contract: Any, gid=gid, bit=bit, seed=seed) -> str:
+                op = contract.flipForFirst(
+                    gameId=gid, bit=bit, seed=seed,
+                ).send(min_confirmations=1)
+                return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+            return [HandlerAction(label=label, submit=submit)]
+        return []
+
+
+class ReversiHandler(_CoinFlipHandler):
+    name = "reversi"
+    @classmethod
+    def address_constant_for(cls, network: str) -> str:
+        return f"REVERSI_CONTRACT_ADDRESS_{network.upper()}"
+
+
+class ChessHandler(_CoinFlipHandler):
+    name = "chess"
+    @classmethod
+    def address_constant_for(cls, network: str) -> str:
+        return f"CHESS_CONTRACT_ADDRESS_{network.upper()}"
+
+
+class TTTHandler(_CoinFlipHandler):
+    """TTT uses the same flipForFirst pattern. (If the deployed TTT
+    contract doesn't have that entrypoint yet, this handler will fail
+    on submit — that's the signal to upgrade and redeploy TTT.)"""
+    name = "ttt"
+    @classmethod
+    def address_constant_for(cls, network: str) -> str:
+        return f"TTT_CONTRACT_ADDRESS_{network.upper()}"
+
+
+class SquaresHandler(GameHandler):
+    """Super-Bowl squares (v2): once a game reaches PHASE_LOCKED (sales
+    closed, either by sell-out or admin closeSales), the daemon picks two
+    independent Fisher-Yates permutations of [0..9] and calls
+    setAxes(gameId, axisHome, axisAway) to commit them on-chain.
+
+    setAxes is admin-only in v2. Run this daemon with a key that is the
+    squares contract's admin — same operational model as the other game
+    handlers in this file. (The v2 contract also exposes a requestAxes →
+    on-chain RandomOracle round-trip for fully-verifiable randomness; the
+    daemon flow here is the simpler operator-trust path that the contract
+    explicitly supports: "admin or a relayer bot" in setAxes' docstring.)
+
+    Phases (must mirror smart_contract_squares_v2.py):
+      0 = SELLING, 1 = LOCKED, 2 = AXES_SET, 3 = COMPLETE
+
+    Two action paths, both admin-only:
+      • PHASE_LOCKED (no axes yet)  → setAxes(gameId, axisHome, axisAway)
+      • PHASE_AXES_SET + ESPN tag   → reportQuarter(gameId, q, home, away)
+        when the live game has a quarter ESPN considers final but the
+        chain still has quarterReported[q] == False. The grid's
+        `createGame.name` carries the tag (e.g. "ESPN:401871337  ·  Cavs
+        vs Pistons G6"), parsed by scripts/sports_api.parse_espn_id.
+    """
+    name = "squares"
+    PHASE_LOCKED = 1
+    PHASE_AXES_SET = 2
+    # Squares pays out 4 quarters total. ESPN reports OT as period 5+,
+    # which we ignore here — overtime points roll into Q4's settlement
+    # decision off-platform if the operator wants to handle that.
+    MAX_QUARTERS = 4
+
+    @classmethod
+    def address_constant_for(cls, network: str) -> str:
+        return f"SQUARES_CONTRACT_ADDRESS_{network.upper()}"
+
+    @staticmethod
+    def _shuffled_0_9() -> dict[int, int]:
+        """Fisher-Yates shuffle on [0..9]. Returns {position: digit}, the
+        shape v2's axisHome / axisAway maps expect (TMap(TInt, TInt))."""
+        order = list(range(10))
+        for i in range(len(order) - 1, 0, -1):
+            j = secrets.randbelow(i + 1)
+            order[i], order[j] = order[j], order[i]
+        return {i: v for i, v in enumerate(order)}
+
+    def find_actions(self) -> list[HandlerAction]:
+        storage = self.contract.storage()
+        games = _field(storage, "games", {}) or {}
+        for raw_id, game in games.items():
+            try:
+                gid = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            phase = int(_field(game, "phase", 0))
+
+            # ─── 1. Axes step (existing) ────────────────────────────
+            assigned = bool(_field(game, "axesAssigned", False))
+            if phase == self.PHASE_LOCKED and not assigned:
+                axis_home = self._shuffled_0_9()
+                axis_away = self._shuffled_0_9()
+                label = (f"game {gid:>3} → setAxes("
+                         f"home={list(axis_home.values())}, "
+                         f"away={list(axis_away.values())})")
+                def submit(contract: Any, gid=gid, ah=axis_home, aa=axis_away) -> str:
+                    op = contract.setAxes(
+                        gameId=gid, axisHome=ah, axisAway=aa,
+                    ).send(min_confirmations=1)
+                    return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+                return [HandlerAction(label=label, submit=submit)]
+
+            # ─── 2. Sports score step ───────────────────────────────
+            if phase == self.PHASE_AXES_SET:
+                action = self._sports_action(gid, game)
+                if action:
+                    return [action]
+        return []
+
+    def _sports_action(self, gid: int, game: Any) -> HandlerAction | None:
+        """Look at the grid's name for an `ESPN:<event_id>` tag, fetch the
+        live game from ESPN, and (if a quarter is final but the contract
+        still has `quarterReported[q] == False`) return a reportQuarter
+        action. Returns None if no tag, no event, no finished quarter
+        left, or if the HTTP fetch failed (we'll just retry next poll).
+        """
+        # Lazy import so squares-less worker runs don't pull ESPN code.
+        try:
+            from sports_api import parse_espn_id, fetch_game
+        except ImportError:
+            return None
+
+        name = _field(game, "name", "") or ""
+        event_id = parse_espn_id(name)
+        if not event_id:
+            return None
+
+        try:
+            espn = fetch_game(event_id)
+        except Exception as e:  # noqa: BLE001 — broad: ESPN reliability is best-effort
+            warn(f"squares: ESPN fetch for event {event_id} failed: {e!s:.140}")
+            return None
+        if not espn:
+            return None
+
+        # On-chain `quarterReported` is a TMap(TInt, TBool) keyed 0..3.
+        # tzkt sometimes returns ints, sometimes strings, sometimes the
+        # booleans wrapped — defensively coerce both sides.
+        reported = _field(game, "quarterReported", {}) or {}
+        def is_done(q: int) -> bool:
+            raw = reported.get(q, reported.get(str(q), False)) if isinstance(reported, dict) else False
+            return bool(raw) and str(raw).lower() != "false"
+
+        # ESPN's quarter_finals() returns one entry per finished period
+        # (including OT). We only care about Q1..Q4 — index 0..3 — so
+        # the contract's `quarter < 4` precondition holds.
+        for q_info in espn.quarter_finals():
+            q = int(q_info["q"])
+            if q >= self.MAX_QUARTERS:
+                continue
+            if is_done(q):
+                continue
+            home_pts = int(q_info["home"])
+            away_pts = int(q_info["away"])
+            label = (f"game {gid:>3} → reportQuarter(q={q}, "
+                     f"{espn.home.abbr}={home_pts}, "
+                     f"{espn.away.abbr}={away_pts}) · ESPN:{event_id}")
+            def submit(contract: Any, gid=gid, q=q, h=home_pts, a=away_pts) -> str:
+                op = contract.reportQuarter(
+                    gameId=gid, quarter=q, homeScore=h, awayScore=a,
+                ).send(min_confirmations=1)
+                return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+            return HandlerAction(label=label, submit=submit)
+        return None
+
+    def storage_oracle(self) -> str:
+        """v2 stores the trusted authority as `admin` (both setAxes and
+        reportQuarter are admin-only), not `oracle`. Override the auth
+        check so the daemon verifies its key matches the contract's
+        admin instead."""
+        return _field(self.contract.storage(), "admin", "") or ""
+
+
+class RandomnessHandler(GameHandler):
+    """RandomOracle (v2) — generic randomness service for 3rd-party dApps.
+
+    Watches the deployed RandomOracle contract for requests with
+    requestStatus == 0 and calls fulfillRandom(requestId, values, seed)
+    with cryptographically-random nats in [0, maxValue].
+
+    This is the same daemon code that powers AD / Plinko / War / Reversi /
+    Chess / TTT / Squares, just pointed at a different contract. Any dApp
+    on Tezos can request randomness from RandomOracle — see
+    src/services/smart_contract_oracle_reference.py for an integration
+    example and docs/ORACLE_INTEGRATION.md for the full walkthrough."""
+    name = "randomness"
+
+    @classmethod
+    def address_constant_for(cls, network: str) -> str:
+        return f"ORACLE_CONTRACT_{network.upper()}"
+
+    def find_actions(self) -> list[HandlerAction]:
+        storage = self.contract.storage()
+        requests = _field(storage, "requests", {}) or {}
+        for raw_id, req in requests.items():
+            try:
+                rid = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if int(_field(req, "requestStatus", 0)) != 0:
+                continue
+            n = int(_field(req, "nRandoms", 1))
+            max_value = int(_field(req, "maxValue", 1))
+            # secrets.randbelow(max_value + 1) gives an inclusive draw.
+            values = [secrets.randbelow(max_value + 1) for _ in range(n)]
+            seed = f"oracle-{rid}-{secrets.token_hex(8)}"
+            label = (f"req {rid:>3} → fulfillRandom(n={n}, max={max_value}, "
+                     f"values={values})")
+            def submit(contract: Any, rid=rid, values=values, seed=seed) -> str:
+                op = contract.fulfillRandom(
+                    requestId=rid,
+                    randomValues=values,
+                    seed=seed,
+                ).send(min_confirmations=1)
+                return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+            return [HandlerAction(label=label, submit=submit)]
+        return []
+
+
+HANDLERS: dict[str, type[GameHandler]] = {
+    "acey-duecey": ADHandler,
+    "plinko": PlinkoHandler,
+    "war": WarHandler,
+    "reversi": ReversiHandler,
+    "chess": ChessHandler,
+    "ttt": TTTHandler,
+    "squares": SquaresHandler,
+    "randomness": RandomnessHandler,
+}
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Worker — owns the RPC client + poll loop, dispatches to handlers
+# ═══════════════════════════════════════════════════════════════════════
+
 class Worker:
-    def __init__(self, args):
+    def __init__(self, args: argparse.Namespace):
         from pytezos import pytezos, Key
-        from pytezos.crypto.key import Key as _UnusedKey   # silence unused-warnings
-        del _UnusedKey
 
         self.args = args
         self.network = args.network
         self.rpc = NETWORK_RPCS[self.network]
         self.tzkt = TZKT_HOSTS[self.network]
-
-        # Address: explicit override > constants.js per-network entry
-        addr_var = f"AD_CONTRACT_ADDRESS_{self.network.upper()}"
-        self.contract_address = args.address or read_constant(addr_var)
-        if not self.contract_address or "KT1XXX" in self.contract_address:
-            die(f"No usable AD contract address. Looked up {addr_var} in "
-                f"constants.js (got: {self.contract_address!r}). "
-                f"Pass --address KT1... explicitly if needed.")
 
         mnemonic = os.environ.get("DEPLOY_MNEMONIC", "").strip()
         if not mnemonic and not args.dry_run:
@@ -198,15 +652,36 @@ class Worker:
             self.key = Key.from_mnemonic(mnemonic.split())
             self.client = pytezos.using(shell=self.rpc, key=self.key)
 
-        self.contract = self.client.contract(self.contract_address)
+        # Build the list of active handlers.
+        chosen = list(HANDLERS) if args.game == "all" else [args.game]
+        if args.address and len(chosen) != 1:
+            die("--address can only be used together with a single --game "
+                "(it would be ambiguous with --game all).")
+
+        self.handlers: list[GameHandler] = []
+        for game in chosen:
+            cls = HANDLERS[game]
+            addr_var = cls.address_constant_for(self.network)
+            addr = args.address if args.address else read_constant(addr_var)
+            if not addr or "KT1XXX" in addr:
+                warn(f"{game}: no usable contract address (looked up {addr_var} in "
+                     f"constants.js, got {addr!r}). Skipping.")
+                continue
+            self.handlers.append(cls(self.network, addr, self.client))
+
+        if not self.handlers:
+            die("No active handlers — every selected game had a missing or "
+                "placeholder address. Nothing to do.")
+
         self.stopping = False
 
-    def announce(self):
-        section("Oracle worker — Acey-Duecey")
+    def announce(self) -> None:
+        section("Oracle worker")
         info(f"Network:  {self.network}")
         info(f"RPC:      {self.rpc}")
-        info(f"Contract: {self.contract_address}")
-        info(f"Explorer: https://{self.tzkt}/{self.contract_address}")
+        for h in self.handlers:
+            info(f"  • {h.name:11} {h.address}")
+            info(f"    https://{self.tzkt}/{h.address}")
         info(f"Poll:     every {self.args.poll}s   (--once to do one cycle and exit)")
         info(f"Mode:     {'DRY-RUN — no operations will be signed' if self.args.dry_run else 'live'}")
         info("")
@@ -221,98 +696,82 @@ class Worker:
             info("")
 
     def check_authorised(self) -> bool:
-        """Sanity check: storage.oracle must match our key. If not, every
-        deal would fail. Bail loudly so the user knows to update the
-        oracle address (via the contract's updateOracle entrypoint or a
-        redeploy)."""
-        try:
-            storage = self.contract.storage()
-        except Exception as e:
-            err(f"Couldn't read contract storage: {e}")
-            return False
-
-        on_chain_oracle = storage.get("oracle", "") if isinstance(storage, dict) else getattr(storage, "oracle", "")
+        """Each selected handler's `storage.oracle` must match our key,
+        otherwise every call would fail. Bail loudly so the user knows
+        to update the oracle address (via the contract's updateOracle
+        entrypoint or a redeploy)."""
         if self.args.dry_run:
-            info(f"storage.oracle = {on_chain_oracle}")
+            for h in self.handlers:
+                try:
+                    info(f"{h.name}: storage.oracle = {h.storage_oracle()}")
+                except Exception as e:
+                    warn(f"{h.name}: couldn't read storage.oracle: {e}")
             return True
 
         my_addr = self.key.public_key_hash()
-        if (on_chain_oracle or "").lower() != my_addr.lower():
-            err(f"Authorisation mismatch.")
-            err(f"  storage.oracle = {on_chain_oracle}")
-            err(f"  my key         = {my_addr}")
-            err(f"  Either update AD.storage.oracle to my address, or run this")
-            err(f"  worker with the key that matches the current oracle address.")
+        kept: list[GameHandler] = []
+        for h in self.handlers:
+            try:
+                on_chain = (h.storage_oracle() or "").lower()
+            except Exception as e:
+                err(f"{h.name}: couldn't read contract storage — skipping ({e})")
+                continue
+            if on_chain != my_addr.lower():
+                warn(f"{h.name}: not authorised "
+                     f"(storage.oracle = {on_chain}, my key = {my_addr}). Skipping.")
+                continue
+            ok(f"{h.name}: authorised as oracle ({my_addr})")
+            kept.append(h)
+        self.handlers = kept
+        if not kept:
+            err("No authorised handlers. Update one of the contracts' "
+                f"storage.oracle to my key ({my_addr}), or run with a key "
+                f"that matches.")
             return False
-
-        ok(f"Authorised as the AD oracle ({my_addr})")
         return True
 
     def one_pass(self) -> int:
-        """Single poll cycle. Returns number of actions submitted."""
-        try:
-            storage = self.contract.storage()
-        except Exception as e:
-            err(f"Storage poll failed: {e}")
-            return 0
-
-        games = storage.get("games", {}) if isinstance(storage, dict) else getattr(storage, "games", {})
-
-        # Walk every game and act on the first one that needs help. We
-        # do at most one action per pass to keep ops serial and let the
-        # next poll see the chain-of-effects from this one.
-        for raw_id, game in games.items():
+        """Single poll cycle across every handler. Returns total ops
+        submitted. At most one action per handler per cycle."""
+        submitted = 0
+        for h in self.handlers:
             try:
-                gid = int(raw_id)
-            except (TypeError, ValueError):
+                actions = h.find_actions()
+            except Exception as e:
+                err(f"{h.name}: storage poll failed: {e}")
                 continue
-            action = next_action_for_game(gid, game)
-            if not action:
-                continue
-            return self._submit_action(action)
+            for action in actions:
+                submitted += self._submit(h, action)
+        return submitted
 
-        return 0
-
-    def _submit_action(self, action: NextAction) -> int:
-        label = f"game {action.game_id:>3} → {action.entrypoint}(card={action.card})"
-
+    def _submit(self, handler: GameHandler, action: HandlerAction) -> int:
+        prefix = f"[{handler.name}]"
         if self.args.dry_run:
-            warn(f"DRY-RUN: would submit {label}  tag={action.hash}")
+            warn(f"DRY-RUN {prefix} would submit  {action.label}")
             return 0
 
-        info(f"Submitting {label}  tag={action.hash}")
+        info(f"{prefix} submitting  {action.label}")
         try:
-            # PyTezos exposes each entrypoint as an attribute on the
-            # contract proxy — there's no `.methodsObject[name]` accessor
-            # like Taquito. We have the entrypoint name as a string, so
-            # grab it via getattr.
-            entrypoint_fn = getattr(self.contract, action.entrypoint)
-            op = entrypoint_fn(
-                card=action.card,
-                gameId=action.game_id,
-                hash=action.hash,
-            ).send(min_confirmations=1)
-            # PyTezos returns an OperationGroup whose injected hash is on
-            # `.hash`; some versions surface it as `opg_hash`.
-            op_hash = (
-                getattr(op, "hash", None)
-                or getattr(op, "opg_hash", None)
-                or "(unknown)"
-            )
+            op_hash = action.submit(handler.contract)
             ok(f"  confirmed — {op_hash}")
             info(f"  https://{self.tzkt}/{op_hash}")
             return 1
         except Exception as e:
             msg = str(e)
-            if any(s in msg.lower() for s in ("bad game", "notoracle", "previously")):
+            lower = msg.lower()
+            soft_fail_markers = (
+                "bad game", "notoracle", "not oracle", "previously",
+                "already resolved", "slot out of range",
+            )
+            if any(s in lower for s in soft_fail_markers):
                 warn(f"  contract rejected: {msg[:140]}")
-                warn(f"  (race with another oracle, or game advanced between "
+                warn(f"  (race with another oracle, or state advanced between "
                      f"poll and submit — will re-check next cycle)")
             else:
                 err(f"  submit failed: {msg[:200]}")
             return 0
 
-    def loop(self):
+    def loop(self) -> None:
         if not self.check_authorised():
             sys.exit(2)
 
@@ -323,42 +782,41 @@ class Worker:
         actions_total = 0
         while not self.stopping:
             cycles += 1
-            n = self.one_pass()
-            actions_total += n
-            if n == 0:
-                # Tighter polling when idle so users don't wait forever
-                # for the first action after they place a bet.
-                pass
+            actions_total += self.one_pass()
             if self.args.once:
                 ok(f"--once: {actions_total} action(s) in 1 cycle. Exiting.")
                 return
-            # Wait, but split into short slices so SIGINT lands fast.
+            # Sleep in short slices so SIGINT lands fast.
             for _ in range(self.args.poll * 4):
                 if self.stopping: break
                 time.sleep(0.25)
         ok(f"Stopped after {cycles} cycle(s), {actions_total} action(s) submitted.")
 
-    def _on_signal(self, signum, _frame):
+    def _on_signal(self, signum: int, _frame: Any) -> None:
         warn(f"Caught signal {signum} — finishing current cycle and exiting.")
         self.stopping = True
 
 
 # ─── helpers ──────────────────────────────────────────────────────────
-def die(msg: str, code: int = 1):
+def die(msg: str, code: int = 1) -> None:
     err(msg)
     sys.exit(code)
 
 
 # ─── Entry ────────────────────────────────────────────────────────────
-def main():
+def main() -> None:
     p = argparse.ArgumentParser(
-        description="Off-chain oracle daemon for the Acey-Duecey contract.",
+        description="Off-chain oracle daemon for TezLiteApps games (AD + Plinko).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__.split("Usage")[1] if "Usage" in __doc__ else "",
     )
+    p.add_argument("--game", choices=[*HANDLERS, "all"], default="all",
+                   help="Which game(s) to serve (default: all)")
     p.add_argument("--network", choices=list(NETWORK_RPCS), default="shadownet")
-    p.add_argument("--address", help="Override the AD contract address "
-                                     "(default: AD_CONTRACT_ADDRESS_<NETWORK> in constants.js)")
+    p.add_argument("--address", help="Override the contract address (only "
+                                     "valid with a single --game). Default: "
+                                     "<GAME>_CONTRACT_ADDRESS_<NETWORK> from "
+                                     "constants.js")
     p.add_argument("--poll", type=int, default=5,
                    help="Seconds between polls when idle (default: 5)")
     p.add_argument("--once", action="store_true",

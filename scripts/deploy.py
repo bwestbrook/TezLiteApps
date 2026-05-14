@@ -98,7 +98,7 @@ CONTRACTS: dict[str, ContractSpec] = {
     ),
     "squares": ContractSpec(
         id="squares",
-        source=SOURCES_DIR / "smart_contract_squares.py",
+        source=SOURCES_DIR / "smart_contract_squares_v2.py",
         constants_var="SQUARES_CONTRACT_ADDRESS",
     ),
     "txl": ContractSpec(
@@ -125,6 +125,11 @@ CONTRACTS: dict[str, ContractSpec] = {
         id="chess",
         source=SOURCES_DIR / "smart_contractChess.py",
         constants_var="CHESS_CONTRACT_ADDRESS",
+    ),
+    "oracle-reference": ContractSpec(
+        id="oracle-reference",
+        source=SOURCES_DIR / "smart_contract_oracle_reference.py",
+        constants_var="ORACLE_REFERENCE_CONTRACT_ADDRESS",
     ),
 }
 
@@ -230,15 +235,15 @@ def compile_contract(spec: ContractSpec) -> tuple[Path, Path]:
     if not smartpy_cmd:
         die(
             f"SmartPy compiler not found locally.\n\n"
-            f"The PyPI package named 'smartpy' is an unrelated state-machine\n"
-            f"library — NOT SmartPy.io's Tezos compiler. There's no reliable\n"
-            f"pip-install path for the real one.\n\n"
-            f"Easiest workaround — compile via the SmartPy online IDE. There's\n"
-            f"a script that walks you through it:\n\n"
+            f"Easiest path — compile + deploy in one shot via the local\n"
+            f"wrapper. It uses smartpy-tezos from ~/smartpy-cli-venv and\n"
+            f"runs in ~3s (no browser, no clipboard dance):\n\n"
+            f"    ./scripts/compile.sh {spec.id}\n\n"
+            f"First-time setup (if the venv doesn't exist yet):\n"
+            f"    /usr/local/opt/python@3.12/bin/python3.12 -m venv ~/smartpy-cli-venv\n"
+            f"    ~/smartpy-cli-venv/bin/pip install smartpy-tezos\n\n"
+            f"Browser-IDE fallback (works on any machine, slower):\n"
             f"    ./scripts/compile-via-ide.sh {spec.id}\n\n"
-            f"It opens https://smartpy.io/ide in your browser, copies the\n"
-            f"source to your clipboard, waits for you to drop the .tz files\n"
-            f"into src/services/build/{spec.id}/, then chain-deploys.\n\n"
             f"If you already have SmartPy.sh installed elsewhere, set\n"
             f"SMARTPY_CLI=/path/to/SmartPy.sh in .env."
         )

@@ -22,6 +22,12 @@ export default {
     activeComponent() {
       return APP_BY_ID[this.activeView]?.component || HOME_APP.component
     },
+    // The carousel order: TXL Manager (home) first, then every nav app.
+    // Single source of truth so the template loop and scroll-into-view
+    // logic stay in sync.
+    navTiles() {
+      return [this.HOME_APP, ...this.NAV_APPS]
+    },
   },
   created() {
     this.socket.on('newWallet', (newWallet) => {
@@ -40,6 +46,27 @@ export default {
       // Special hook: TezTacToe wants this every time it becomes active.
       if (target === 'tezTacToe') {
         this.socket.emit('updatePlayerControl')
+      }
+      this.$nextTick(() => this.scrollActiveIntoView())
+    },
+    // Scroll the carousel strip by ±~70% of its visible width per click.
+    // Smooth-scroll is browser-native; no JS easing needed.
+    scrollNav(dir) {
+      const strip = this.$refs.navStrip
+      if (!strip) return
+      const delta = Math.max(120, Math.round(strip.clientWidth * 0.7))
+      strip.scrollBy({ left: dir * delta, behavior: 'smooth' })
+    },
+    // Keep the selected pill in view when nav changes via socket / keyboard.
+    scrollActiveIntoView() {
+      const strip = this.$refs.navStrip
+      if (!strip) return
+      const active = strip.querySelector('.navPill--active')
+      if (!active) return
+      const stripRect = strip.getBoundingClientRect()
+      const pillRect = active.getBoundingClientRect()
+      if (pillRect.left < stripRect.left || pillRect.right > stripRect.right) {
+        active.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
       }
     },
     async toggleWallet() {
@@ -158,22 +185,32 @@ export default {
           </div>
         </div>
 
-        <div
-          :class="activeView === HOME_APP.id ? 'actionButtonSelected' : 'actionButton'"
-          @click="selectGame(HOME_APP.id)"
-        >
-          {{ HOME_APP.name }}
-        </div>
-
-        <div class="rowFlex">
-          <div
-            v-for="app in NAV_APPS"
-            :key="app.id"
-            :class="activeView === app.id ? 'actionButtonSelected' : 'actionButton'"
-            @click="selectGame(app.id)"
-          >
-            {{ app.name }}
+        <div class="navCarousel" role="tablist" aria-label="Apps">
+          <button
+            type="button"
+            class="navArrow navArrow--left"
+            aria-label="Scroll apps left"
+            @click="scrollNav(-1)"
+          >‹</button>
+          <div class="navStrip" ref="navStrip">
+            <button
+              v-for="app in navTiles"
+              :key="app.id"
+              type="button"
+              role="tab"
+              :aria-selected="activeView === app.id"
+              :class="['navPill', activeView === app.id ? 'navPill--active' : '']"
+              @click="selectGame(app.id)"
+            >
+              {{ app.name }}
+            </button>
           </div>
+          <button
+            type="button"
+            class="navArrow navArrow--right"
+            aria-label="Scroll apps right"
+            @click="scrollNav(1)"
+          >›</button>
         </div>
 
         <transition name="view" mode="out-in">
@@ -471,6 +508,91 @@ export default {
 .actionButtonSelected:hover {
   filter: brightness(1.05);
 }
+
+/* ─── App-nav carousel (TXL Manager first, then games) ─────────
+   A horizontally-scrolling pill row flanked by arrow buttons. The
+   strip itself is a CSS scroll-snap container so the active pill
+   keeps near a snap-point as the user clicks the arrows. The pills
+   carry their own active/inactive styling so we don't need the
+   .actionButton family rules to apply (they would force flex:1 and
+   wrap-stretch the pills full width). */
+.navCarousel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 8px;
+  width: 100%;
+}
+.navStrip {
+  flex: 1;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scroll-behavior: smooth;
+  /* Hide scrollbar without removing the wheel/swipe behavior. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 2px 4px;
+}
+.navStrip::-webkit-scrollbar { display: none; }
+.navPill {
+  flex: 0 0 auto;
+  scroll-snap-align: center;
+  padding: 8px 14px;
+  min-height: 36px;
+  border-radius: var(--ad-r-pill);
+  border: 1px solid var(--ad-border-soft);
+  background: var(--ad-bg-elev-1);
+  color: var(--ad-text-1);
+  font-family: var(--ad-font-body);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease,
+              transform 0.1s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.navPill:hover {
+  background: var(--ad-bg-elev-2);
+  border-color: rgba(167, 139, 250, 0.55);
+}
+.navPill:active { transform: scale(0.97); }
+.navPill--active {
+  background: var(--ad-grad-gold);
+  color: #1a1004;
+  border-color: rgba(245, 196, 81, 0.7);
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    var(--ad-glow-gold);
+}
+.navArrow {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--ad-border-soft);
+  background: var(--ad-bg-elev-1);
+  color: var(--ad-text-1);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, border-color 0.15s ease,
+              transform 0.1s ease;
+}
+.navArrow:hover {
+  background: var(--ad-bg-elev-2);
+  border-color: rgba(167, 139, 250, 0.55);
+}
+.navArrow:active { transform: scale(0.92); }
 
 /* ─── Native select — styled to match the buttons ─────────────── */
 .selectBox {

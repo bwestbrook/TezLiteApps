@@ -183,7 +183,7 @@
                                     GET;
                                     IF_NONE
                                         {
-                                            PUSH int 150;
+                                            PUSH int 149;
                                             FAILWITH
                                         }
                                         {
@@ -201,7 +201,7 @@
                                             SUB_MUTEZ;
                                             IF_NONE
                                                 {
-                                                    PUSH int 151;
+                                                    PUSH int 150;
                                                     FAILWITH
                                                 }
                                                 {
@@ -217,7 +217,7 @@
                                                     GET;
                                                     IF_NONE
                                                         {
-                                                            PUSH int 152;
+                                                            PUSH int 151;
                                                             FAILWITH
                                                         }
                                                         {
@@ -237,7 +237,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 153;
+                                                                    PUSH int 152;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -255,7 +255,7 @@
                                                             SUB_MUTEZ;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 157;
+                                                                    PUSH int 156;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -270,7 +270,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 157;
+                                                                    PUSH int 156;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -290,7 +290,7 @@
                                                             SUB_MUTEZ;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 158;
+                                                                    PUSH int 157;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -303,7 +303,7 @@
                                                             CONTRACT unit;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 159;
+                                                                    PUSH int 158;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -333,7 +333,7 @@
                                                                     SUB_MUTEZ;
                                                                     IF_NONE
                                                                         {
-                                                                            PUSH int 162;
+                                                                            PUSH int 161;
                                                                             FAILWITH
                                                                         }
                                                                         {
@@ -362,7 +362,7 @@
                                                             CONTRACT unit;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 166;
+                                                                    PUSH int 165;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -383,7 +383,7 @@
                                                     CONTRACT unit;
                                                     IF_NONE
                                                         {
-                                                            PUSH int 169;
+                                                            PUSH int 168;
                                                             FAILWITH
                                                         }
                                                         {
@@ -589,7 +589,7 @@
                                             GET;
                                             IF_NONE
                                                 {
-                                                    PUSH int 183;
+                                                    PUSH int 182;
                                                     FAILWITH
                                                 }
                                                 {
@@ -599,26 +599,28 @@
                                             EQ;
                                             IF
                                                 {
+                                                    PUSH int 2;
                                                     PUSH nat 4;
-                                                    DUP 3;
+                                                    DUP 4;
                                                     CAR;
                                                     EDIV;
                                                     IF_NONE
                                                         {
-                                                            PUSH int 187;
+                                                            PUSH int 186;
                                                             FAILWITH
                                                         }
                                                         {
                                                             CAR
                                                         };
                                                     INT;
+                                                    ADD;
                                                     PUSH nat 1;
                                                     DUP 4;
                                                     CAR;
                                                     EDIV;
                                                     IF_NONE
                                                         {
-                                                            PUSH int 188;
+                                                            PUSH int 187;
                                                             FAILWITH
                                                         }
                                                         {
@@ -636,7 +638,7 @@
                                                     GET;
                                                     IF_NONE
                                                         {
-                                                            PUSH int 190;
+                                                            PUSH int 189;
                                                             FAILWITH
                                                         }
                                                         {
@@ -663,7 +665,7 @@
                                                     GET;
                                                     IF_NONE
                                                         {
-                                                            PUSH int 191;
+                                                            PUSH int 190;
                                                             FAILWITH
                                                         }
                                                         {
@@ -689,16 +691,14 @@
                                                     GET;
                                                     IF_NONE
                                                         {
-                                                            PUSH int 192;
+                                                            PUSH int 191;
                                                             FAILWITH
                                                         }
                                                         {
                                                         };
                                                     DUP;
                                                     GET 11;
-                                                    PUSH int 2;
-                                                    DUP 8;
-                                                    ADD;
+                                                    DUP 7;
                                                     SOME;
                                                     PUSH nat 3;
                                                     UPDATE;
@@ -715,7 +715,7 @@
                                                     GET;
                                                     IF_NONE
                                                         {
-                                                            PUSH int 194;
+                                                            PUSH int 193;
                                                             FAILWITH
                                                         }
                                                         {
@@ -725,7 +725,7 @@
                                                     GET;
                                                     IF_NONE
                                                         {
-                                                            PUSH int 194;
+                                                            PUSH int 193;
                                                             FAILWITH
                                                         }
                                                         {
@@ -737,7 +737,7 @@
                                                     GET;
                                                     IF_NONE
                                                         {
-                                                            PUSH int 195;
+                                                            PUSH int 194;
                                                             FAILWITH
                                                         }
                                                         {
@@ -747,7 +747,7 @@
                                                     GET;
                                                     IF_NONE
                                                         {
-                                                            PUSH int 195;
+                                                            PUSH int 194;
                                                             FAILWITH
                                                         }
                                                         {
@@ -766,7 +766,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 197;
+                                                                    PUSH int 196;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -776,7 +776,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 197;
+                                                                    PUSH int 196;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -788,7 +788,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 198;
+                                                                    PUSH int 197;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -798,7 +798,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 198;
+                                                                    PUSH int 197;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -838,7 +838,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 201;
+                                                                    PUSH int 200;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -872,7 +872,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 203;
+                                                                    PUSH int 202;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -883,7 +883,7 @@
                                                             SUB_MUTEZ;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 203;
+                                                                    PUSH int 202;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -896,7 +896,7 @@
                                                             CONTRACT unit;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 204;
+                                                                    PUSH int 203;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -910,7 +910,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 204;
+                                                                    PUSH int 203;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -932,7 +932,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 205;
+                                                                    PUSH int 204;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -947,14 +947,14 @@
                                                         }
                                                         {
                                                         };
-                                                    SWAP;
-                                                    DUP 3;
+                                                    DUP 2;
+                                                    DUP 4;
                                                     COMPARE;
                                                     GT;
                                                     IF
                                                         {
                                                             DUP;
-                                                            DUP 3;
+                                                            DUP 4;
                                                             COMPARE;
                                                             LT
                                                         }
@@ -963,22 +963,46 @@
                                                         };
                                                     IF
                                                         {
-                                                            DUP 5;
+                                                            PUSH int 1;
+                                                            DIG 2;
+                                                            DUP 3;
+                                                            SUB;
+                                                            SUB;
+                                                            ISNAT;
+                                                            IF_NONE
+                                                                {
+                                                                    PUSH int 216;
+                                                                    FAILWITH
+                                                                }
+                                                                {
+                                                                };
+                                                            PUSH nat 100;
+                                                            SWAP;
+                                                            MUL;
+                                                            PUSH nat 1235;
+                                                            DUP 7;
                                                             GET 9;
-                                                            DUP 5;
+                                                            DUP 7;
                                                             GET 3;
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 207;
+                                                                    PUSH int 218;
                                                                     FAILWITH
                                                                 }
                                                                 {
                                                                 };
                                                             GET 3;
-                                                            PUSH nat 2;
-                                                            SWAP;
                                                             MUL;
+                                                            EDIV;
+                                                            IF_NONE
+                                                                {
+                                                                    PUSH int 217;
+                                                                    FAILWITH
+                                                                }
+                                                                {
+                                                                };
+                                                            CAR;
                                                             DIG 3;
                                                             DUP 6;
                                                             GET 9;
@@ -987,7 +1011,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 209;
+                                                                    PUSH int 222;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -996,7 +1020,7 @@
                                                             CONTRACT unit;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 209;
+                                                                    PUSH int 222;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -1017,7 +1041,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 210;
+                                                                    PUSH int 223;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -1035,7 +1059,7 @@
                                                             SUB_MUTEZ;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 211;
+                                                                    PUSH int 224;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -1053,6 +1077,8 @@
                                                             DUG 2
                                                         }
                                                         {
+                                                            SWAP;
+                                                            DROP
                                                         };
                                                     DUP;
                                                     DUP 3;
@@ -1073,7 +1099,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 215;
+                                                                    PUSH int 228;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -1084,7 +1110,7 @@
                                                             SUB_MUTEZ;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 215;
+                                                                    PUSH int 228;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -1097,7 +1123,7 @@
                                                             CONTRACT unit;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 216;
+                                                                    PUSH int 229;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -1111,7 +1137,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 216;
+                                                                    PUSH int 229;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -1133,7 +1159,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 217;
+                                                                    PUSH int 230;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -1163,7 +1189,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 219;
+                                                                    PUSH int 232;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -1204,7 +1230,7 @@
                                                             SUB_MUTEZ;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 223;
+                                                                    PUSH int 236;
                                                                     FAILWITH
                                                                 }
                                                                 {
@@ -1239,8 +1265,9 @@
                                     EQ;
                                     IF
                                         {
+                                            PUSH int 2;
                                             PUSH nat 4;
-                                            DUP 2;
+                                            DUP 3;
                                             CAR;
                                             EDIV;
                                             IF_NONE
@@ -1252,6 +1279,7 @@
                                                     CAR
                                                 };
                                             INT;
+                                            ADD;
                                             PUSH nat 1;
                                             DUP 3;
                                             CAR;
@@ -1283,9 +1311,7 @@
                                                 };
                                             DUP;
                                             GET 11;
-                                            PUSH int 2;
-                                            DUP 8;
-                                            ADD;
+                                            DUP 7;
                                             SOME;
                                             PUSH nat 2;
                                             UPDATE;
@@ -1375,78 +1401,10 @@
                                             IF
                                                 {
                                                     NIL operation;
-                                                    PUSH string "pairDraw Half Bet";
+                                                    PUSH string "pairDrawnFullForfeit";
                                                     EMIT %pairDrawn string;
                                                     CONS;
-                                                    PUSH nat 2;
-                                                    PUSH nat 1;
-                                                    DUP 5;
-                                                    GET 3;
-                                                    MUL;
-                                                    EDIV;
-                                                    IF_NONE
-                                                        {
-                                                            PUSH int 126;
-                                                            FAILWITH
-                                                        }
-                                                        {
-                                                        };
-                                                    CAR;
-                                                    SWAP;
-                                                    DUP 4;
-                                                    GET 9;
-                                                    DUP 4;
-                                                    GET 3;
-                                                    GET;
-                                                    IF_NONE
-                                                        {
-                                                            PUSH int 127;
-                                                            FAILWITH
-                                                        }
-                                                        {
-                                                        };
-                                                    GET 12;
-                                                    CONTRACT unit;
-                                                    IF_NONE
-                                                        {
-                                                            PUSH int 127;
-                                                            FAILWITH
-                                                        }
-                                                        {
-                                                        };
-                                                    DUP 3;
-                                                    UNIT;
-                                                    TRANSFER_TOKENS;
-                                                    CONS;
-                                                    DUP 4;
-                                                    GET 16;
-                                                    CONTRACT unit;
-                                                    IF_NONE
-                                                        {
-                                                            PUSH int 128;
-                                                            FAILWITH
-                                                        }
-                                                        {
-                                                        };
-                                                    DUP 3;
-                                                    UNIT;
-                                                    TRANSFER_TOKENS;
-                                                    CONS;
-                                                    SWAP;
-                                                    DIG 3;
-                                                    DUP;
-                                                    GET 13;
                                                     DIG 2;
-                                                    SWAP;
-                                                    SUB_MUTEZ;
-                                                    IF_NONE
-                                                        {
-                                                            PUSH int 129;
-                                                            FAILWITH
-                                                        }
-                                                        {
-                                                        };
-                                                    UPDATE 13;
                                                     DUP;
                                                     GET 9;
                                                     DUP;
@@ -1457,7 +1415,7 @@
                                                     GET;
                                                     IF_NONE
                                                         {
-                                                            PUSH int 130;
+                                                            PUSH int 129;
                                                             FAILWITH
                                                         }
                                                         {
@@ -1479,7 +1437,7 @@
                                                     GET;
                                                     IF_NONE
                                                         {
-                                                            PUSH int 132;
+                                                            PUSH int 131;
                                                             FAILWITH
                                                         }
                                                         {
@@ -1500,7 +1458,7 @@
                                                             GET;
                                                             IF_NONE
                                                                 {
-                                                                    PUSH int 136;
+                                                                    PUSH int 135;
                                                                     FAILWITH
                                                                 }
                                                                 {

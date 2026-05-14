@@ -19,18 +19,18 @@ export default {
             gamesObject: {},
             gameId: -1,
             leaveGameId: 'NA',
-            leavableGames: false, 
+            leavableGames: false,
             playGameId: 'NA',
             joinGameId: 'NA',
-            joinableGames: false, 
-            viewGameId: 'NA', 
-            viewableGames: false, 
+            joinableGames: false,
+            viewGameId: 'NA',
+            viewableGames: false,
             loadedGames: false,
             blockWaits: '',
             fee: 0.1,
             gameStatus: 'No Players',
             playerTurnStr: 'No Game',
-            playerTurn: -1, 
+            playerTurn: -1,
             playersInGame: '',
             player1Connected: '',
             player2Connected: '',
@@ -38,9 +38,49 @@ export default {
             blockchainStatus: 'No Activity',
             pointToPlay: 'XXX',
             tezosSymbol: 'ꜩ',
-            showInfo: false
-
+            showInfo: false,
+            // ── Wager controls (gambling) ─────────────────────────────
+            wagerTez: 1.0,
+            minWagerTez: 0,
+            maxWagerTez: 50,
+            // House cut in basis points (250 = 2.5%) — refreshed from storage.
+            houseCutBps: 250,
         }
+    },
+    computed: {
+        houseCutPercent() {
+            return (this.houseCutBps / 100).toFixed(2)
+        },
+        // Pot math for the slider preview (before a game is joined).
+        sliderGrossPotTez() {
+            return this.wagerTez * 2
+        },
+        sliderHouseCutTez() {
+            return this.sliderGrossPotTez * (this.houseCutBps / 10000)
+        },
+        sliderNetPotTez() {
+            return this.sliderGrossPotTez - this.sliderHouseCutTez
+        },
+        // Pot math for the currently loaded game (after wagers locked).
+        loadedGameWagerTez() {
+            const g = this.gamesObject?.[this.gameId]
+            if (!g || g.tzGameBet == null) return 0
+            return Number(g.tzGameBet) / 1_000_000
+        },
+        loadedGameHouseCutBps() {
+            const g = this.gamesObject?.[this.gameId]
+            if (!g || g.houseCutBps == null) return this.houseCutBps
+            return Number(g.houseCutBps)
+        },
+        loadedGameGrossPotTez() {
+            return this.loadedGameWagerTez * 2
+        },
+        loadedGameHouseCutTez() {
+            return this.loadedGameGrossPotTez * (this.loadedGameHouseCutBps / 10000)
+        },
+        loadedGameNetPotTez() {
+            return this.loadedGameGrossPotTez - this.loadedGameHouseCutTez
+        },
     },
     created() {
         this.rpcclient = new RpcClient(NODE_URL, GHOSTNET_CHAIN_ID);
@@ -169,21 +209,30 @@ export default {
                 .then((op) => op.confirmation().then(() => op.opHash))
                 .catch((error) => console.error('Tezos contract call failed:', error))
         },
-        async joinGameBC(gameId) { 
+        async joinGameBC(gameId) {
             if (gameId < 0) {
                 return
-            }    
-            const activeAccount = await this.wallet.client.getActiveAccount() 
+            }
+            const activeAccount = await this.wallet.client.getActiveAccount()
             if (!activeAccount) {
                 return
-            }    
-            this.blockchainStatus = 'Joining Game on Smart Contract'              
-            this.useWalletProvider()  
+            }
+            // Look up the game's actual wager from contract storage. The old
+            // code sent a hardcoded 1 ꜩ + fee regardless of game wager —
+            // that meant joining a 5 ꜩ game would silently underfund and
+            // revert (or, worse, succeed against a 0 ꜩ game and trap funds).
+            const g = this.gamesObject?.[gameId]
+            const gameWagerTez = g && g.tzGameBet != null
+                ? Number(g.tzGameBet) / 1_000_000
+                : this.wagerTez
+            const sendAmount = gameWagerTez + this.fee
+            this.blockchainStatus = `Joining game ${gameId} (${gameWagerTez} ꜩ wager + ${this.fee} ꜩ fee)`
+            this.useWalletProvider()
             this.tezos.wallet
                 .at(TTT_CONTRACT_ADDRESS)
                 .then((contract) => {
-                    return contract.methods.joinGame(gameId)
-                        .send({amount: 1 + this.fee})
+                    return contract.methodsObject.joinGame({ gameId })
+                        .send({ amount: sendAmount })
                 })
                 .then((op) => op.confirmation().then(() => op.opHash))
                 .then(() => { this.blockchainStatus = `Joined Game on Smart Contract ${gameId}` })
@@ -235,17 +284,27 @@ export default {
                 .catch((error) => console.error('Tezos contract call failed:', error))
         },
         async surrenderGameBC() {
-            const activeAccount = await this.wallet.client.getActiveAccount()   
+            const activeAccount = await this.wallet.client.getActiveAccount()
             if (!activeAccount) {
                 return
-            }    
+            }
+            if (this.gameId < 0) {
+                console.warn('surrenderGameBC: no active gameId')
+                return
+            }
+            // The new contract requires { gameId } — the old call signature
+            // (no params) reverted because surrenderGame referenced
+            // params.gameId without declaring params.
             this.useWalletProvider()
             await this.tezos.wallet
                 .at(TTT_CONTRACT_ADDRESS)
                 .then((contract) => {
-                    return contract.methodsObject.surrenderGame().send()
+                    return contract.methodsObject
+                        .surrenderGame({ gameId: this.gameId })
+                        .send()
                 })
                 .then((op) => op.confirmation().then(() => op.opHash))
+                .then(() => { this.blockchainStatus = `Surrendered game ${this.gameId}` })
                 .catch((error) => console.error('Tezos contract call failed:', error))
         },
         // The connected Beacon wallet IS the signer — Beacon proxies signing
@@ -258,10 +317,27 @@ export default {
         async getGamesFromContractBC() {
             // Returns the bigmap of games, or null if the contract isn't reachable
             // (e.g. wrong network, contract not yet redeployed, RPC down).
+            // Side effect: refreshes contract-wide config (houseCutBps, fee,
+            // wager bounds) into reactive data.
             if (!BLOCKCHAIN_ENABLED) return null
             try {
                 const contract = await this.tezos.wallet.at(TTT_CONTRACT_ADDRESS)
                 const storage = await contract.storage()
+                if (storage.houseCutBps != null) {
+                    this.houseCutBps = Number(storage.houseCutBps)
+                }
+                if (storage.fee != null) {
+                    this.fee = Number(storage.fee) / 1_000_000
+                }
+                if (storage.minWager != null) {
+                    this.minWagerTez = Number(storage.minWager) / 1_000_000
+                }
+                if (storage.maxWager != null) {
+                    this.maxWagerTez = Number(storage.maxWager) / 1_000_000
+                }
+                // Clamp wager into bounds (admin may have moved them).
+                if (this.wagerTez < this.minWagerTez) this.wagerTez = this.minWagerTez
+                if (this.wagerTez > this.maxWagerTez) this.wagerTez = this.maxWagerTez
                 return await storage.games
             } catch (err) {
                 if (!this._loggedContractMissing) {
@@ -311,13 +387,25 @@ export default {
                 let playerList = []
                 for (let player of players) {
                     playerList.push(player)
-                }                     
+                }
                 gameData['players'] = playerList
                 gameData['grid'] = await game.grid
+                // New per-game gambling fields. Defensive accessors so the
+                // UI tolerates contracts deployed before these were added.
+                if (game.tzGameBet != null) {
+                    gameData['tzGameBet'] = Number(game.tzGameBet?.toNumber
+                        ? game.tzGameBet.toNumber()
+                        : game.tzGameBet)
+                }
+                if (game.houseCutBps != null) {
+                    gameData['houseCutBps'] = Number(game.houseCutBps?.toNumber
+                        ? game.houseCutBps.toNumber()
+                        : game.houseCutBps)
+                }
                 gamesObject[j] = gameData
                 j ++;
-            }           
-            this.gameCount = j 
+            }
+            this.gameCount = j
             this.gamesObject = await gamesObject
             return gamesObject
         },
@@ -481,10 +569,10 @@ export default {
 
 </script>
 
-<template>                           
+<template>
         <div class="rowFlex">
             <div class="actionButtonHelp" @click="showLearnMore"> HOW TO PLAY </div>
-            <div class="infoPopup" v-if="showInfo" @click="showLearnMore" > 
+            <div class="infoPopup" v-if="showInfo" @click="showLearnMore" >
             <div>
             <ul>
               <li class="listItem" v-for="(key, value) in gameInfo" :key="key" :value="value">{{ key }}</li>
@@ -492,12 +580,60 @@ export default {
             </div>
             </div>
         </div>
-        <div class="rowFlex" >            
-            <div class="actionButton" @click="createGameBC(0)"> New 0{{this.tezosSymbol}} Game </div>  
-            <div class="actionButton" @click="createGameBC(0.5)"> New 0.5{{this.tezosSymbol}} Game</div> 
-            <div class="actionButton" @click="createGameBC(1)"> New 1{{this.tezosSymbol}} Game</div>  
-            <div class="actionButton" @click="createGameBC(5)"> New 5{{this.tezosSymbol}} Game</div> 
-            <div class="actionButton" @click="createGameBC(10)"> New 10{{this.tezosSymbol}} Game</div>   
+
+        <!-- ── Wager card (gambling + house cut) ─────────────────────── -->
+        <div class="tttWagerCard">
+            <div class="tttWagerHead">
+                <div class="tttWagerTitle">Set your wager</div>
+                <div class="tttWagerHint">
+                    min {{ minWagerTez.toFixed(2) }} ꜩ · max {{ maxWagerTez.toFixed(2) }} ꜩ ·
+                    house cut {{ houseCutPercent }}%
+                </div>
+            </div>
+            <div class="tttWagerRow">
+                <input
+                    type="range"
+                    class="tttWagerSlider"
+                    :min="minWagerTez"
+                    :max="maxWagerTez"
+                    step="0.05"
+                    v-model.number="wagerTez"
+                />
+                <div class="tttWagerValue">{{ wagerTez.toFixed(3) }} {{ tezosSymbol }}</div>
+            </div>
+            <div class="tttWagerMath">
+                <div class="tttMathRow">
+                    <span class="tttMathLabel">You lock</span>
+                    <span class="tttMathValue">{{ wagerTez.toFixed(3) }} ꜩ + {{ fee.toFixed(2) }} ꜩ fee</span>
+                </div>
+                <div class="tttMathRow">
+                    <span class="tttMathLabel">Pot if matched</span>
+                    <span class="tttMathValue">{{ sliderGrossPotTez.toFixed(3) }} ꜩ</span>
+                </div>
+                <div class="tttMathRow">
+                    <span class="tttMathLabel">House keeps</span>
+                    <span class="tttMathValue tttMathValue--house">
+                        {{ sliderHouseCutTez.toFixed(4) }} ꜩ ({{ houseCutPercent }}%)
+                    </span>
+                </div>
+                <div class="tttMathRow tttMathRow--strong">
+                    <span class="tttMathLabel">Winner takes</span>
+                    <span class="tttMathValue tttMathValue--win">
+                        {{ sliderNetPotTez.toFixed(3) }} ꜩ
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="rowFlex">
+            <div class="actionButton" @click="createGameBC(wagerTez)">
+                New {{ wagerTez.toFixed(2) }}{{ tezosSymbol }} Game
+            </div>
+            <div class="actionButtonHelp" @click="wagerTez = 0">0</div>
+            <div class="actionButtonHelp" @click="wagerTez = 0.5">0.5</div>
+            <div class="actionButtonHelp" @click="wagerTez = 1">1</div>
+            <div class="actionButtonHelp" @click="wagerTez = 5">5</div>
+            <div class="actionButtonHelp" @click="wagerTez = 10">10</div>
         </div>    
         <div class="rowFlex">
             <div class="gameInfo"> MY GAME HUB </div>
@@ -555,10 +691,19 @@ export default {
             <div class="actionButton" @click="surrenderGameBC" > Surrender </div>                
         </div>
 
-        <div class="rowFlex" >         
+        <div class="rowFlex" >
             <div class="gameInfo" > Game ID: {{ gameId }}</div>
             <div class="gameInfo" > {{ playersInGame[0] }} {{player1Connected}} vs. {{ playersInGame[1]}} {{player2Connected}} </div>
             <div class="gameInfo" > {{ playerTurnStr }}</div>
+        </div>
+
+        <!-- Per-game pot summary (only when a game is loaded with a wager) -->
+        <div v-if="loadedGameWagerTez > 0" class="tttPotLine">
+            Wager: <strong>{{ loadedGameWagerTez.toFixed(3) }} ꜩ</strong> each
+            · Pot: <strong>{{ loadedGameGrossPotTez.toFixed(3) }} ꜩ</strong>
+            · House keeps <strong>{{ loadedGameHouseCutTez.toFixed(4) }} ꜩ</strong>
+            ({{ (loadedGameHouseCutBps / 100).toFixed(2) }}%)
+            → Winner takes <strong>{{ loadedGameNetPotTez.toFixed(3) }} ꜩ</strong>
         </div>
 
         <div class="rowFlex">
@@ -566,5 +711,74 @@ export default {
         </div>
 </template>
 
-<style>
+<style scoped>
+.tttWagerCard {
+    margin: 8px 4px 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(245, 196, 81, 0.08) 0%, rgba(245, 196, 81, 0.02) 100%);
+    border: 1px solid rgba(245, 196, 81, 0.30);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+    color: #efeae2;
+    font-family: 'EB Garamond', serif;
+}
+.tttWagerHead {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 10px; flex-wrap: wrap; gap: 4px;
+}
+.tttWagerTitle {
+    font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
+    color: #f5c451; font-weight: 700;
+}
+.tttWagerHint { font-size: 11px; color: rgba(255, 255, 255, 0.55); }
+.tttWagerRow { display: flex; align-items: center; gap: 12px; }
+.tttWagerSlider {
+    flex: 1; appearance: none; height: 5px;
+    background: rgba(255, 255, 255, 0.15); border-radius: 4px; outline: none;
+}
+.tttWagerSlider::-webkit-slider-thumb {
+    appearance: none; width: 18px; height: 18px; border-radius: 50%;
+    background: #f5c451; cursor: pointer;
+    box-shadow: 0 0 6px rgba(245, 196, 81, 0.7);
+}
+.tttWagerSlider::-moz-range-thumb {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #f5c451; cursor: pointer; border: none;
+}
+.tttWagerValue {
+    min-width: 90px; text-align: right;
+    font-size: 17px; font-weight: 700; color: #fff;
+}
+.tttWagerMath {
+    margin-top: 12px; padding-top: 10px;
+    border-top: 1px dashed rgba(245, 196, 81, 0.25);
+}
+.tttMathRow {
+    display: flex; justify-content: space-between;
+    padding: 2px 0; font-size: 12px;
+    color: rgba(255, 255, 255, 0.78);
+}
+.tttMathRow--strong {
+    font-size: 13px; padding-top: 6px; margin-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.tttMathLabel {
+    letter-spacing: 1px; text-transform: uppercase; font-size: 10px;
+    color: rgba(255, 255, 255, 0.55);
+}
+.tttMathValue { font-weight: 600; }
+.tttMathValue--house { color: rgba(229, 121, 121, 0.95); }
+.tttMathValue--win { color: #b9e6a3; font-size: 14px; }
+
+.tttPotLine {
+    margin: 6px 4px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.78);
+    font-family: 'EB Garamond', serif;
+    font-size: 12px;
+}
+.tttPotLine strong { color: #f5c451; }
 </style>

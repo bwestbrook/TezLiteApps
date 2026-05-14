@@ -9,24 +9,36 @@ def main():
         
         def __init__(self):
             '''
-            '''               
-            #Game Control         
-            self.data.admin = sp.address("tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w")
-            self.data.oracle = sp.address("tz1XbrvTMVa5dWQQBSCn2jgX7BPZyLRhgtKS")
-            self.data.adContract = sp.address("KT1W3Z2zVw8FhNpihuFJS8P2iLDC2APwHTD2")
-            self.data.txlContract = sp.address("KT1HD71gj4ZdehpS4Ri8nasjpDTPDQ574Sxy")
-            self.data.games = {}
-            self.data.currentGridIndex = 0
-            self.data.winDict = {                
-                'winQ1': 0,
-                'winQ1R': 0,
-                'winQ2': 0,
-                'winQ2R': 0,
-                'winQ3': 0,
-                'winQ3R': 0,
-                'winQ4': 0,
-                'winQ4R': 0
-            }
+            KNOWN ISSUE: the original `games` map mixed string keys ('winDict')
+            with int keys (1..100 for grid spaces). SmartPy can't compile a
+            mixed-key map. Until this is restructured into a proper per-game
+            record (spaces / winDict / xLabels / yLabels), the contract will
+            fail compile. See TODO in newGrid().
+            '''
+            self.data.admin = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
+            self.data.oracle = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
+            # AD contract (current deployed on shadownet). When AD redeploys,
+            # update via `updateAdContract` — no admin entrypoint exists yet;
+            # add one when ready.
+            self.data.adContract = sp.address("KT1VpPzzwqyJEywjEv2TyfMNrQRPs3rGT1Zs")
+            self.data.txlContract = sp.address("KT1Ro63rVDUx2x8pMChCLSySso8t6JH47oRQ")
+            self.data.games = sp.cast({}, sp.map[sp.nat, sp.map[sp.nat, sp.record(
+                owner=sp.address,
+                amountPerSquare=sp.mutez,
+                x=sp.nat,
+                y=sp.nat,
+            )]])
+            self.data.currentGridIndex = sp.nat(0)
+            # winDict moved out of the per-grid map (string keys + nat keys
+            # can't coexist). Holds per-grid quarter-winner records keyed by
+            # gridId, then by quarter-tag string.
+            self.data.winDicts = sp.cast({}, sp.map[sp.nat, sp.map[sp.string, sp.nat]])
+            # Oracle-supplied axis randomization. Keyed by gridId.
+            self.data.axes = sp.cast({}, sp.map[sp.nat, sp.record(
+                xLabels=sp.map[sp.nat, sp.nat],
+                yLabels=sp.map[sp.nat, sp.nat],
+                seed=sp.string,
+            )])
             self.data.fee = sp.mutez(100000)
             
            
@@ -35,121 +47,91 @@ def main():
             pass
             
         @sp.entrypoint
-        def newGrid (self, params):
-            '''
-            '''
+        def newGrid(self, params):
+            '''Open a new grid. Creator buys `nSquares` of the 100 spaces.'''
             sp.cast(params.nSquares, sp.nat)
-            amountPerSquare = sp.split_tokens(sp.amount - self.data.fee, 1, params.nSquares)            
-            grid_space = sp.record(
-                owner =  sp.sender,
-                amountPerSquare = amountPerSquare,
-                x =  sp.nat(0),
-                y =  sp.nat(0),
-                
-                
-            )
-            
-            i = 0 
-            new_grid = {
-                'winDict': self.data.winDict
-            }
-            while i < params.nSquares:
-                new_grid[i + 1] = grid_space
-                i+= 1
+            assert params.nSquares > 0, "nSquares must be > 0"
+            assert params.nSquares <= 100, "nSquares too large"
+            assert sp.amount > self.data.fee, "amount must exceed fee"
+            amountPerSquare = sp.split_tokens(sp.amount - self.data.fee, 1, params.nSquares)
+            sp.send(self.data.txlContract, self.data.fee)
+            new_grid = sp.cast({}, sp.map[sp.nat, sp.record(
+                owner=sp.address,
+                amountPerSquare=sp.mutez,
+                x=sp.nat,
+                y=sp.nat,
+            )])
+            i = sp.nat(1)
+            while i <= params.nSquares:
+                new_grid[i] = sp.record(
+                    owner=sp.sender,
+                    amountPerSquare=amountPerSquare,
+                    x=sp.nat(0),
+                    y=sp.nat(0),
+                )
+                i += 1
             self.data.games[self.data.currentGridIndex] = new_grid
+            # Initialize the win-dict for this grid (all quarters zeroed).
+            self.data.winDicts[self.data.currentGridIndex] = sp.cast({
+                'winQ1': 0, 'winQ1R': 0,
+                'winQ2': 0, 'winQ2R': 0,
+                'winQ3': 0, 'winQ3R': 0,
+                'winQ4': 0, 'winQ4R': 0,
+            }, sp.map[sp.string, sp.nat])
             self.data.currentGridIndex += 1
 
         @sp.entrypoint
         def joinGrid(self, params):
-            '''
-            '''
+            '''Join an existing grid by buying additional squares.'''
             sp.cast(params.nSquares, sp.nat)
             sp.cast(params.gridId, sp.nat)
-            amountPerSquare = sp.split_tokens(sp.amount - self.data.fee, 1, params.nSquares)   
- 
-            grid_space = sp.record(
-                owner =  sp.sender,
-                amountPerSquare = amountPerSquare,
-                x =  sp.nat(0),
-                y =  sp.nat(0),
-            )
+            assert params.nSquares > 0, "nSquares must be > 0"
+            assert sp.amount > self.data.fee, "amount must exceed fee"
+            amountPerSquare = sp.split_tokens(sp.amount - self.data.fee, 1, params.nSquares)
+            sp.send(self.data.txlContract, self.data.fee)
             grid = self.data.games[params.gridId]
-            sp.emit(len(grid))
-            grid_size = len(grid)
-            i = 0 
-            if params.nSquares + grid_size > 100:
-                sp.emit('grid full')
-            else:
-                while i + grid_size < grid_size + params.nSquares:             
-                    grid[i + grid_size + 1] = grid_space
-                    i += 1 
-            self.data.games[params.gridId] = grid
-
-        @sp.entrypoint
-        def randomizeGrid(self, params):
-            '''
-            '''
-            sp.cast(params.gridId, sp.nat)
-            i = 1
-            grid = self.data.games[params.gridId]
-            while i < 100:
-                grid[i].x = 1
-                grid[i].y = 2
+            grid_size = sp.cast(0, sp.nat)
+            for _k in grid.keys():
+                grid_size += 1
+            assert params.nSquares + grid_size <= 100, "grid full"
+            i = sp.nat(0)
+            while i < params.nSquares:
+                grid[grid_size + i + 1] = sp.record(
+                    owner=sp.sender,
+                    amountPerSquare=amountPerSquare,
+                    x=sp.nat(0),
+                    y=sp.nat(0),
+                )
                 i += 1
             self.data.games[params.gridId] = grid
 
+        @sp.entrypoint
+        def randomizeAxes(self, params):
+            '''Oracle submits two shuffled [0..9] permutations.'''
+            assert sp.sender == self.data.oracle, "not oracle"
+            sp.cast(params.gridId, sp.nat)
+            sp.cast(params.xLabels, sp.map[sp.nat, sp.nat])
+            sp.cast(params.yLabels, sp.map[sp.nat, sp.nat])
+            sp.cast(params.seed, sp.string)
+            self.data.axes[params.gridId] = sp.record(
+                xLabels=params.xLabels,
+                yLabels=params.yLabels,
+                seed=params.seed,
+            )
+            sp.emit([params.gridId, params.seed], tag='axesRandomized')
 
         @sp.entrypoint
         def setWinner(self, params):
-            '''
-            '''
+            '''Mark a quarter winner. Oracle-only.'''
+            assert sp.sender == self.data.oracle, "not oracle"
             sp.cast(params.gridId, sp.nat)
-            sp.cast(params.gridIndex, sp.nat)
             sp.cast(params.winType, sp.string)
-            grid = self.data.games[params.gridId]
-            grid[params.gridIndex].winDict[params.winType] = sp.nat(1)
-            sp.emit(grid)
-            self.data.games[params.gridId] = grid
+            self.data.winDicts[params.gridId][params.winType] = sp.nat(1)
+            sp.emit([params.gridId, params.winType], tag='winnerSet')
 
        
 @sp.add_test()
 def test():
-    s = sp.test_scenario("my first test", main)
-  
+    s = sp.test_scenario("squares basic compile", main)
     a = main.FootBallSquares()
     s += a
-    #a.set_initial_balance(sp.tez(2))
-    player1 = sp.test_account("player1")
-    player2 = sp.test_account("player2")
-    player3 = sp.test_account("player3")   
-    fee = sp.mutez(400000)
-    a.newGrid(
-        _sender = player1.address,
-        _amount = sp.mutez(3400000),
-        nSquares = sp.nat(33)
-    )
-     
-    a.joinGrid(
-        _sender = player2.address,
-        _amount = sp.mutez(3400000),
-        nSquares = sp.nat(33),
-        gridId = sp.nat(0)        
-    )
-    a.joinGrid(
-        _sender = player3.address,
-        _amount = sp.mutez(3500000),
-        nSquares = sp.nat(34),
-        gridId = sp.nat(0)        
-    )
-    a.randomizeGrid(
-        gridId = sp.nat(0)
-    )
-    a.setWinner(
-        gridId = sp.nat(0),
-        gridIndex = sp.nat(3),
-        winType = sp.string('winQ1')
-    )
-    s.show(a.balance) 
-    
-    
-     

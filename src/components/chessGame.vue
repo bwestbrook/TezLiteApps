@@ -1,9 +1,19 @@
 <script>
-// Chess H2H — UI mirrors the contract. Pure skill, on-chain validation.
+// Chess H2H — UI mirrors the new gambling-aware contract.
 //
-// Two-mode component (lobby/landing + play view). Board ALWAYS renders, with
+// Two-mode component (lobby/landing + play view). Board ALWAYS renders with
 // the standard opening position when no contract game is active so users can
 // browse, learn, and try moves in demo mode before staking.
+//
+// Contract → UI field mapping (new gambling contract):
+//   g.wager        (mutez)   — each side's locked stake
+//   g.gameStatus   (nat)     — 0 open, 1 awaiting flip, 2 in-play, 3 settled, 4 cancelled
+//   g.toMove       (nat)     — 1 white, 2 black (0 = awaiting flip)
+//   g.board        (map)     — 64 cells, see GLYPH below
+//   g.winner       (addr)    — settled winner (BURN if draw)
+//   g.drawOfferedBy (nat)    — 0/1/2
+//   g.houseCutBps  (nat)     — basis points snapshotted at game creation
+//   g.status       (variant) — { play | finished: "player_1_won"|"player_2_won"|"draw" | ... }
 
 import { getContractStorage } from '../services/tzkt'
 import {
@@ -15,39 +25,39 @@ import {
 // Piece codes (must match contract): 0 empty, 1-6 white P/N/B/R/Q/K, 7-12 black p/n/b/r/q/k.
 const GLYPH = {
   0: '',
-  1: '♙', 2: '♘', 3: '♗', 4: '♖', 5: '♕', 6: '♔', // ♙♘♗♖♕♔ white
-  7: '♟', 8: '♞', 9: '♝', 10: '♜', 11: '♛', 12: '♚', // ♟♞♝♜♛♚ black
+  1: '♙', 2: '♘', 3: '♗', 4: '♖', 5: '♕', 6: '♔', // white
+  7: '♟', 8: '♞', 9: '♝', 10: '♜', 11: '♛', 12: '♚', // black
 }
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
 
 // Standard chess starting position, ranks 0..7 with white at rank 0.
 function openingBoard() {
   const b = new Array(64).fill(0)
-  // Rank 0: white back row
   b[0] = 4; b[1] = 2; b[2] = 3; b[3] = 5; b[4] = 6; b[5] = 3; b[6] = 2; b[7] = 4
-  // Rank 1: white pawns
   for (let c = 0; c < 8; c++) b[8 + c] = 1
-  // Rank 6: black pawns
   for (let c = 0; c < 8; c++) b[48 + c] = 7
-  // Rank 7: black back row
   b[56] = 10; b[57] = 8; b[58] = 9; b[59] = 11; b[60] = 12; b[61] = 9; b[62] = 8; b[63] = 10
   return b
 }
 
 const PHASE_LABELS = {
   0: 'Open — waiting for opponent',
-  1: 'In play',
-  2: 'White wins',
-  3: 'Black wins',
-  4: 'Draw',
+  1: 'Awaiting first-move flip',
+  2: 'In play',
+  3: 'Settled',
+  4: 'Cancelled',
 }
 const PHASE_TONES = {
   0: 'phaseOpen',
   1: 'phaseLive',
-  2: 'phaseDone',
+  2: 'phaseLive',
   3: 'phaseDone',
   4: 'phaseDone',
 }
+
+// ── Helpers to coerce contract storage values ──────────────────────────────
+function nat(v) { return Number(v ?? 0) }
+function mutez(v) { return Number(v ?? 0) }
 
 export default {
   name: 'chessGame',
@@ -59,15 +69,21 @@ export default {
       currentGameId: 0,
       activeGameId: null,
       games: {},
-      stakeMutez: 1_000_000,
+      // Wager (in tez) — slider-bound, clamped to contract bounds at submit.
+      wagerTez: 1.0,
+      minWagerTez: 0.1,
+      maxWagerTez: 50.0,
+      feeTez: 0.1,
+      // House cut (basis points) — pulled from contract storage at refresh.
+      houseCutBps: 250,
       selectedSq: null,
       pollInterval: null,
       blockchainStatus: 'idle',
       view: 'landing',
       showRules: false,
       demoBoard: openingBoard(),
-      demoTurn: 1, // 1=white, 2=black
-      lastMove: null, // { from, to }
+      demoTurn: 1,
+      lastMove: null,
     }
   },
   computed: {
@@ -75,7 +91,7 @@ export default {
       return this.activeGameId == null ? null : this.games[this.activeGameId]
     },
     inRealGame() {
-      return !!this.game && Number(this.game.phase) === 1
+      return !!this.game && nat(this.game.gameStatus) === 2
     },
     displayBoard() {
       if (this.game?.board) return this.game.board
@@ -87,7 +103,7 @@ export default {
         const row = []
         for (let c = 0; c < 8; c++) {
           const idx = r * 8 + c
-          const code = Number(this.displayBoard?.[idx] ?? 0)
+          const code = nat(this.displayBoard?.[idx] ?? 0)
           row.push({
             idx, r, c,
             piece: code,
@@ -103,36 +119,39 @@ export default {
     },
     openGames() {
       return Object.entries(this.games)
-        .filter(([, g]) => Number(g.phase) === 0)
+        .filter(([, g]) => nat(g.gameStatus) === 0)
         .map(([id, g]) => ({ id: Number(id), ...g }))
     },
     myColor() {
       if (!this.game || !this.walletAddress) return 0
+      if (this.game.white === this.walletAddress) return 1
+      if (this.game.black === this.walletAddress) return 2
+      // Fallback to suffix match (older record format).
       const me = this.walletAddress.slice(-4)
       if (this.game.white?.endsWith(me)) return 1
       if (this.game.black?.endsWith(me)) return 2
       return 0
     },
     myTurn() {
-      if (!this.inRealGame) return true // demo mode: always your turn
-      return Number(this.game.turn) === this.myColor
+      if (!this.inRealGame) return true
+      return nat(this.game.toMove) === this.myColor
     },
     phaseLabel() {
       if (!this.game) return 'Demo board'
-      const phase = Number(this.game.phase)
-      if (phase === 1) {
-        return `In play · ${Number(this.game.turn) === 1 ? 'White' : 'Black'} to move`
+      const phase = nat(this.game.gameStatus)
+      if (phase === 2) {
+        return `In play · ${nat(this.game.toMove) === 1 ? 'White' : 'Black'} to move`
       }
       return PHASE_LABELS[phase] || `phase ${phase}`
     },
     phaseTone() {
       if (!this.game) return 'phaseNone'
-      return PHASE_TONES[Number(this.game.phase)] || 'phaseNone'
+      return PHASE_TONES[nat(this.game.gameStatus)] || 'phaseNone'
     },
     turnLabel() {
       if (!this.game) return this.demoTurn === 1 ? 'White' : 'Black'
-      if (Number(this.game.phase) !== 1) return '—'
-      return Number(this.game.turn) === 1 ? 'White' : 'Black'
+      if (nat(this.game.gameStatus) !== 2) return '—'
+      return nat(this.game.toMove) === 1 ? 'White' : 'Black'
     },
     myColorLabel() {
       if (!this.inRealGame) return '—'
@@ -140,18 +159,42 @@ export default {
       if (this.myColor === 2) return 'Black'
       return 'Spectating'
     },
-    stakeTez() {
-      if (!this.game) return (this.stakeMutez / 1_000_000).toFixed(3)
-      return (Number(this.game.stake) / 1_000_000).toFixed(3)
+    // ── Stake / pot / house-cut math (display only) ─────────────────────
+    activeWagerTez() {
+      if (!this.game) return this.wagerTez
+      return mutez(this.game.wager) / 1_000_000
     },
-    potTez() {
-      if (!this.game) return '—'
-      return ((Number(this.game.stake) * 2) / 1_000_000).toFixed(3)
+    activeHouseCutBps() {
+      if (!this.game) return this.houseCutBps
+      return nat(this.game.houseCutBps)
+    },
+    grossPotTez() {
+      return this.activeWagerTez * 2
+    },
+    houseCutTez() {
+      return this.grossPotTez * (this.activeHouseCutBps / 10000)
+    },
+    netPotTez() {
+      return this.grossPotTez - this.houseCutTez
+    },
+    houseCutPercent() {
+      return (this.activeHouseCutBps / 100).toFixed(2)
     },
     drawOfferedByOpponent() {
       if (!this.game) return false
-      const offered = Number(this.game.drawOfferedBy)
+      const offered = nat(this.game.drawOfferedBy)
       return offered !== 0 && offered !== this.myColor
+    },
+    statusBanner() {
+      // Show a finished-game banner if the contract status variant is a winner.
+      const s = this.game?.status
+      if (!s) return ''
+      if (typeof s === 'object' && s.finished) {
+        if (s.finished === 'player_1_won') return 'White wins'
+        if (s.finished === 'player_2_won') return 'Black wins'
+        if (s.finished === 'draw') return 'Drawn game'
+      }
+      return ''
     },
   },
   created() {
@@ -174,12 +217,24 @@ export default {
     toggleRules() {
       this.showRules = !this.showRules
     },
+    sqToIJ(idx) {
+      // Contract uses i = rank, j = file.
+      return { i: Math.floor(idx / 8), j: idx % 8 }
+    },
     async refresh() {
       try {
         const storage = await getContractStorage(CHESS_CONTRACT_ADDRESS)
         if (!storage) return
-        this.currentGameId = Number(storage.currentGameId || 0)
+        this.currentGameId = nat(storage.currentGameId)
         this.games = storage.games || {}
+        // Pull live config so UI reflects on-chain changes.
+        if (storage.houseCutBps != null) this.houseCutBps = nat(storage.houseCutBps)
+        if (storage.minWager != null) this.minWagerTez = mutez(storage.minWager) / 1_000_000
+        if (storage.maxWager != null) this.maxWagerTez = mutez(storage.maxWager) / 1_000_000
+        if (storage.fee != null) this.feeTez = mutez(storage.fee) / 1_000_000
+        // Clamp slider value into bounds in case the admin moved them.
+        if (this.wagerTez < this.minWagerTez) this.wagerTez = this.minWagerTez
+        if (this.wagerTez > this.maxWagerTez) this.wagerTez = this.maxWagerTez
         if (this.activeGameId == null && this.currentGameId > 0) {
           this.activeGameId = this.currentGameId - 1
         }
@@ -187,17 +242,23 @@ export default {
         console.warn('chess refresh failed:', e?.message)
       }
     },
+    setWagerPercent(pct) {
+      const range = this.maxWagerTez - this.minWagerTez
+      this.wagerTez = +(this.minWagerTez + range * (pct / 100)).toFixed(3)
+    },
     async createGame() {
       try {
         this.tezos.setWalletProvider(this.wallet)
         this.blockchainStatus = 'creating chess game...'
-        const total = this.stakeMutez + 50000
+        const wagerMutez = Math.round(this.wagerTez * 1_000_000)
+        const feeMutez = Math.round(this.feeTez * 1_000_000)
+        const totalTez = (wagerMutez + feeMutez) / 1_000_000
         const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
         const op = await contract.methodsObject
-          .createGame({ stake: this.stakeMutez })
-          .send({ amount: total / 1_000_000 })
+          .createGame({ wager: wagerMutez })
+          .send({ amount: totalTez })
         await op.confirmation()
-        this.blockchainStatus = 'created.'
+        this.blockchainStatus = `created (wager ${this.wagerTez} ꜩ).`
         await this.refresh()
       } catch (err) {
         console.error('chess create failed:', err)
@@ -208,22 +269,26 @@ export default {
       try {
         this.tezos.setWalletProvider(this.wallet)
         const g = this.games[gameId]
-        const total = Number(g.stake) + 50000
+        const wagerMutez = mutez(g.wager)
+        const feeMutez = Math.round(this.feeTez * 1_000_000)
+        const totalTez = (wagerMutez + feeMutez) / 1_000_000
         const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
-        const op = await contract.methodsObject.joinGame({ gameId }).send({ amount: total / 1_000_000 })
+        const op = await contract.methodsObject
+          .joinGame({ gameId })
+          .send({ amount: totalTez })
         await op.confirmation()
         this.activeGameId = gameId
         this.view = 'play'
         await this.refresh()
       } catch (err) {
         console.error('chess join failed:', err)
+        this.blockchainStatus = 'join failed'
       }
     },
     clickSq(cell) {
       // ── DEMO MODE: relaxed piece movement, no rule checks ───────────
       if (!this.inRealGame) {
         if (this.selectedSq == null) {
-          // Must click a piece (not an empty square) to begin a move.
           if (cell.piece === 0) return
           this.selectedSq = cell.idx
           return
@@ -232,7 +297,6 @@ export default {
           this.selectedSq = null
           return
         }
-        // Move the piece. No legality checks in demo mode.
         const fromPiece = this.demoBoard[this.selectedSq]
         const next = [...this.demoBoard]
         next[this.selectedSq] = 0
@@ -264,8 +328,27 @@ export default {
       try {
         this.tezos.setWalletProvider(this.wallet)
         this.blockchainStatus = `move ${fromSq}→${toSq}...`
+        // Build the new board client-side (trust-but-verify model).
+        const board = { ...(this.game?.board || {}) }
+        const piece = nat(board[fromSq])
+        // Auto-promote pawns to queens on the back rank for now.
+        const toRank = Math.floor(toSq / 8)
+        let placed = piece
+        if (piece === 1 && toRank === 7) placed = 5     // white pawn → queen
+        if (piece === 7 && toRank === 0) placed = 11    // black pawn → queen
+        board[toSq] = placed
+        board[fromSq] = 0
+        const move = {
+          f: this.sqToIJ(fromSq),
+          t: this.sqToIJ(toSq),
+          promotion: placed !== piece ? 5 : null,
+        }
         const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
-        const op = await contract.methodsObject.makeMove({ gameId: this.activeGameId, fromSq, toSq }).send()
+        const op = await contract.methodsObject.play({
+          gameId: this.activeGameId,
+          newBoard: board,
+          move,
+        }).send()
         await op.confirmation()
         this.lastMove = { from: fromSq, to: toSq }
         this.blockchainStatus = 'moved.'
@@ -277,50 +360,75 @@ export default {
         this.selectedSq = null
       }
     },
-    async resign() {
+    async giveup() {
       try {
         this.tezos.setWalletProvider(this.wallet)
         const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
-        const op = await contract.methodsObject.resign({ gameId: this.activeGameId }).send()
+        const op = await contract.methodsObject
+          .giveup({ gameId: this.activeGameId }).send()
         await op.confirmation()
         await this.refresh()
-      } catch (err) { console.error('resign failed:', err) }
+      } catch (err) { console.error('giveup failed:', err) }
+    },
+    async claimCheckmate() {
+      try {
+        this.tezos.setWalletProvider(this.wallet)
+        const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
+        const op = await contract.methodsObject
+          .claim_checkmate({ gameId: this.activeGameId }).send()
+        await op.confirmation()
+        await this.refresh()
+      } catch (err) { console.error('claim checkmate failed:', err) }
     },
     async offerDraw() {
       try {
         this.tezos.setWalletProvider(this.wallet)
         const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
-        const op = await contract.methodsObject.offerDraw({ gameId: this.activeGameId }).send()
+        const op = await contract.methodsObject
+          .offer_draw({ gameId: this.activeGameId }).send()
         await op.confirmation()
         await this.refresh()
       } catch (err) { console.error('offerDraw failed:', err) }
     },
-    async acceptDraw() {
+    async denyDraw() {
       try {
         this.tezos.setWalletProvider(this.wallet)
         const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
-        const op = await contract.methodsObject.acceptDraw({ gameId: this.activeGameId }).send()
+        const op = await contract.methodsObject
+          .deny_draw({ gameId: this.activeGameId }).send()
         await op.confirmation()
         await this.refresh()
-      } catch (err) { console.error('acceptDraw failed:', err) }
+      } catch (err) { console.error('denyDraw failed:', err) }
+    },
+    async claimStalemate() {
+      try {
+        this.tezos.setWalletProvider(this.wallet)
+        const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
+        const op = await contract.methodsObject
+          .claim_stalemate({ gameId: this.activeGameId }).send()
+        await op.confirmation()
+        await this.refresh()
+      } catch (err) { console.error('claim stalemate failed:', err) }
     },
     async claimByTimeout() {
       try {
         this.tezos.setWalletProvider(this.wallet)
         const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
-        const op = await contract.methodsObject.claimByTimeout({ gameId: this.activeGameId }).send()
+        const op = await contract.methodsObject
+          .claimByTimeout({ gameId: this.activeGameId }).send()
         await op.confirmation()
         await this.refresh()
       } catch (err) { console.error('claimByTimeout failed:', err) }
     },
-    async claim() {
+    async cancelGame() {
       try {
         this.tezos.setWalletProvider(this.wallet)
         const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
-        const op = await contract.methodsObject.claim().send()
+        const op = await contract.methodsObject
+          .cancelGame({ gameId: this.activeGameId }).send()
         await op.confirmation()
-        this.blockchainStatus = 'claimed.'
-      } catch (err) { console.error('chess claim failed:', err) }
+        await this.refresh()
+      } catch (err) { console.error('cancelGame failed:', err) }
     },
     resetDemo() {
       this.demoBoard = openingBoard()
@@ -338,20 +446,20 @@ export default {
     <template v-if="view === 'landing'">
       <div class="chHero">
         <div class="chHeroBrand">
-          <div class="chHeroEyebrow">CHESS · H2H · ON-CHAIN</div>
-          <div class="chHeroTitle">Standard chess. Every move validated.</div>
+          <div class="chHeroEyebrow">CHESS · H2H · WAGERED · ON-CHAIN</div>
+          <div class="chHeroTitle">Standard chess. Stake set per match. House takes a small cut.</div>
           <div class="chHeroSub">
-            White moves first. Pawns auto-promote to queens. Castling, en passant,
-            and path-clear rules are enforced by the contract. Resign, offer a
-            draw, or claim by timeout if your opponent stalls. Winner takes the
-            pot minus the holder fee.
+            White moves first. Pawns auto-promote to queens. Resign, claim
+            checkmate, offer a draw, or claim by timeout if your opponent
+            stalls. Each side locks an equal wager; on settlement the house
+            keeps a small percentage of the combined pot, and the winner takes
+            the rest. Drawn games refund both sides minus the cut.
           </div>
         </div>
         <div class="chHeroBoard" aria-hidden="true">
           <svg viewBox="0 0 120 120" class="chHeroSvg">
             <rect x="2" y="2" width="116" height="116" rx="6" fill="#3e2914"/>
             <g>
-              <!-- 8x8 mini board -->
               <g v-for="(_, r) in 8" :key="'rr-' + r">
                 <rect
                   v-for="(__, c) in 8"
@@ -363,7 +471,6 @@ export default {
                 />
               </g>
             </g>
-            <!-- A couple of pieces for character -->
             <text x="22" y="105" font-family="serif" font-size="12" fill="#fff" text-anchor="middle">♙</text>
             <text x="97" y="22" font-family="serif" font-size="12" fill="#1a1a1a" text-anchor="middle">♛</text>
           </svg>
@@ -380,13 +487,19 @@ export default {
           <div class="chPillValue">{{ activeGameId == null ? '—' : '#' + activeGameId }}</div>
         </div>
         <div class="chPill">
-          <div class="chPillLabel">Stake</div>
-          <div class="chPillValue">{{ stakeTez }} ꜩ</div>
-          <div class="chPillFootnote">+ 0.05 ꜩ fee</div>
+          <div class="chPillLabel">Wager (each)</div>
+          <div class="chPillValue">{{ activeWagerTez.toFixed(3) }} ꜩ</div>
+          <div class="chPillFootnote">+ {{ feeTez.toFixed(2) }} ꜩ fee</div>
         </div>
-        <div class="chPill">
-          <div class="chPillLabel">Pot</div>
-          <div class="chPillValue">{{ potTez }} ꜩ</div>
+        <div class="chPill chPill--house">
+          <div class="chPillLabel">House cut</div>
+          <div class="chPillValue">{{ houseCutPercent }}%</div>
+          <div class="chPillFootnote">{{ houseCutTez.toFixed(4) }} ꜩ on this pot</div>
+        </div>
+        <div class="chPill chPill--pot">
+          <div class="chPillLabel">Net pot to winner</div>
+          <div class="chPillValue">{{ netPotTez.toFixed(3) }} ꜩ</div>
+          <div class="chPillFootnote">gross {{ grossPotTez.toFixed(3) }} ꜩ</div>
         </div>
         <div class="chPill">
           <div class="chPillLabel">Your side</div>
@@ -394,11 +507,65 @@ export default {
         </div>
       </div>
 
+      <!-- ── Wager controls ──────────────────────────────────────────── -->
+      <div class="chWagerCard">
+        <div class="chWagerHead">
+          <div class="chWagerTitle">Set your wager</div>
+          <div class="chWagerHint">
+            min {{ minWagerTez.toFixed(2) }} ꜩ · max {{ maxWagerTez.toFixed(2) }} ꜩ
+          </div>
+        </div>
+        <div class="chWagerRow">
+          <input
+            type="range"
+            class="chWagerSlider"
+            :min="minWagerTez"
+            :max="maxWagerTez"
+            step="0.05"
+            v-model.number="wagerTez"
+          />
+          <div class="chWagerValue">{{ wagerTez.toFixed(3) }} ꜩ</div>
+        </div>
+        <div class="chWagerQuick">
+          <button class="chQuickBtn" @click="setWagerPercent(0)">Min</button>
+          <button class="chQuickBtn" @click="setWagerPercent(25)">25%</button>
+          <button class="chQuickBtn" @click="setWagerPercent(50)">50%</button>
+          <button class="chQuickBtn" @click="setWagerPercent(75)">75%</button>
+          <button class="chQuickBtn" @click="setWagerPercent(100)">Max</button>
+        </div>
+        <div class="chWagerMath">
+          <div class="chMathRow">
+            <span class="chMathLabel">You lock</span>
+            <span class="chMathValue">{{ wagerTez.toFixed(3) }} ꜩ + {{ feeTez.toFixed(2) }} ꜩ fee</span>
+          </div>
+          <div class="chMathRow">
+            <span class="chMathLabel">Pot if matched</span>
+            <span class="chMathValue">{{ (wagerTez * 2).toFixed(3) }} ꜩ</span>
+          </div>
+          <div class="chMathRow">
+            <span class="chMathLabel">House keeps</span>
+            <span class="chMathValue chMathValue--house">
+              {{ ((wagerTez * 2) * (houseCutBps / 10000)).toFixed(4) }} ꜩ
+              ({{ (houseCutBps / 100).toFixed(2) }}%)
+            </span>
+          </div>
+          <div class="chMathRow chMathRow--strong">
+            <span class="chMathLabel">Winner takes</span>
+            <span class="chMathValue chMathValue--win">
+              {{ ((wagerTez * 2) * (1 - houseCutBps / 10000)).toFixed(3) }} ꜩ
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div class="rowFlex chPrimaryRow">
         <div class="actionButton chPrimary" @click="setView('play')">Open board</div>
-        <div class="actionButton" @click="createGame">New game ({{ (stakeMutez / 1000000).toFixed(2) }} ꜩ)</div>
-        <div class="actionButton" @click="claim">Claim winnings</div>
-        <div class="actionButtonHelp" @click="toggleRules">{{ showRules ? 'Hide rules' : 'How it works' }}</div>
+        <div class="actionButton" @click="createGame">
+          New wagered game · {{ wagerTez.toFixed(2) }} ꜩ
+        </div>
+        <div class="actionButtonHelp" @click="toggleRules">
+          {{ showRules ? 'Hide rules' : 'How it works' }}
+        </div>
       </div>
 
       <div v-if="openGames.length" class="rowFlex">
@@ -408,12 +575,37 @@ export default {
           :key="g.id"
           class="actionButton"
           @click="joinGame(g.id)"
-        >Join #{{ g.id }} — {{ (Number(g.stake) / 1000000).toFixed(2) }} ꜩ</div>
+        >
+          Join #{{ g.id }} — {{ (Number(g.wager) / 1000000).toFixed(2) }} ꜩ
+        </div>
       </div>
 
       <div v-if="showRules" class="chRules">
         <ol>
           <li v-for="(line, i) in info" :key="i">{{ line }}</li>
+        </ol>
+        <ol class="chRulesGambling">
+          <li>
+            <strong>Stake.</strong> Both sides lock the same wager (plus a flat
+            holder fee per transaction).
+          </li>
+          <li>
+            <strong>House cut.</strong> The contract retains
+            {{ houseCutPercent }}% of the combined pot at settlement; the
+            remainder pays the winner. Configurable by admin (capped at 10%).
+          </li>
+          <li>
+            <strong>Draw.</strong> Each side gets back their wager minus half
+            the house cut.
+          </li>
+          <li>
+            <strong>Cancel.</strong> The creator can cancel an un-joined game
+            and reclaim the wager (the fee is non-refundable).
+          </li>
+          <li>
+            <strong>Timeout.</strong> If your opponent stalls beyond the stale
+            window, you can claim the pot directly.
+          </li>
         </ol>
       </div>
 
@@ -433,8 +625,12 @@ export default {
       <div class="rowFlex">
         <div class="txlRank">Turn: <strong>{{ turnLabel }}</strong></div>
         <div class="txlRank">Your side: {{ myColorLabel }}</div>
-        <div class="txlRank">Pot: {{ potTez }} ꜩ</div>
+        <div class="txlRank">Wager: {{ activeWagerTez.toFixed(3) }} ꜩ</div>
+        <div class="txlRank">House: {{ houseCutPercent }}%</div>
+        <div class="txlRank">Net pot: {{ netPotTez.toFixed(3) }} ꜩ</div>
       </div>
+
+      <div v-if="statusBanner" class="chFinalBanner">{{ statusBanner }}</div>
 
       <div class="chBoardWrap">
         <div class="chBoard">
@@ -479,17 +675,30 @@ export default {
         <button class="demoBtn" @click="resetDemo">Reset board</button>
       </div>
 
-      <div v-if="inRealGame" class="rowFlex">
-        <div class="actionButtonHelp" @click="offerDraw">Offer draw</div>
-        <div v-if="drawOfferedByOpponent" class="actionButton" @click="acceptDraw">Accept draw</div>
-        <div class="actionButtonHelp" @click="resign">Resign</div>
-        <div class="actionButtonHelp" @click="claimByTimeout">Claim timeout</div>
+      <div v-if="inRealGame" class="chPlayActions">
+        <div class="chPlayActionsRow">
+          <div class="actionButton" @click="claimCheckmate">Claim checkmate</div>
+          <div class="actionButtonHelp" @click="offerDraw">
+            {{ drawOfferedByOpponent ? 'Accept draw' : 'Offer draw' }}
+          </div>
+          <div v-if="drawOfferedByOpponent" class="actionButtonHelp" @click="denyDraw">Decline draw</div>
+          <div class="actionButtonHelp" @click="claimStalemate">Claim stalemate</div>
+        </div>
+        <div class="chPlayActionsRow">
+          <div class="actionButtonHelp" @click="giveup">Give up (resign)</div>
+          <div class="actionButtonHelp" @click="claimByTimeout">Claim by timeout</div>
+        </div>
+        <div class="chPotLine">
+          Settlement → winner: <strong>{{ netPotTez.toFixed(3) }} ꜩ</strong>,
+          house: <strong>{{ houseCutTez.toFixed(4) }} ꜩ</strong>
+          ({{ houseCutPercent }}% of {{ grossPotTez.toFixed(3) }} ꜩ pot)
+        </div>
       </div>
 
       <div class="rowFlex">
-        <div class="actionButton" @click="createGame">New game</div>
-        <div class="actionButton" @click="claim">Claim</div>
         <div class="actionButton" @click="setView('landing')">Back to lobby</div>
+        <div v-if="game && Number(game.gameStatus) === 0 && myColor === 1"
+             class="actionButtonHelp" @click="cancelGame">Cancel open game</div>
       </div>
 
       <div class="gameInfo chStatusLine">{{ blockchainStatus }}</div>
@@ -526,6 +735,8 @@ export default {
 .chPillLabel { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.55); }
 .chPillValue { font-size: 16px; font-weight: 700; color: #fff; margin-top: 2px; }
 .chPillFootnote { font-size: 10px; color: rgba(255,255,255,0.55); margin-top: 2px; }
+.chPill--house { border-color: rgba(196, 82, 79, 0.45); background: rgba(196, 82, 79, 0.08); }
+.chPill--pot { border-color: rgba(118, 196, 138, 0.55); background: rgba(118, 196, 138, 0.08); }
 .phaseOpen { border-color: rgba(118, 196, 138, 0.5); }
 .phaseLive { border-color: rgba(245, 196, 81, 0.6); }
 .phaseDone { border-color: rgba(196, 82, 79, 0.5); }
@@ -539,15 +750,74 @@ export default {
 }
 .chOpenLabel { flex: 0 0 auto; align-self: center; font-size: 12px; }
 
+/* ─── Wager card (gambling controls) ────────────────────────────────── */
+.chWagerCard {
+  margin: 4px 4px 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(245,196,81,0.08) 0%, rgba(245,196,81,0.02) 100%);
+  border: 1px solid rgba(245, 196, 81, 0.30);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+.chWagerHead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.chWagerTitle { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: #f5c451; font-weight: 700; }
+.chWagerHint { font-size: 11px; color: rgba(255,255,255,0.55); }
+.chWagerRow { display: flex; align-items: center; gap: 12px; }
+.chWagerSlider { flex: 1; appearance: none; height: 5px; background: rgba(255,255,255,0.15); border-radius: 4px; outline: none; }
+.chWagerSlider::-webkit-slider-thumb {
+  appearance: none; width: 18px; height: 18px; border-radius: 50%;
+  background: #f5c451; cursor: pointer;
+  box-shadow: 0 0 6px rgba(245, 196, 81, 0.7);
+}
+.chWagerSlider::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #f5c451; cursor: pointer; border: none;
+}
+.chWagerValue { min-width: 80px; text-align: right; font-size: 17px; font-weight: 700; color: #fff; }
+.chWagerQuick { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.chQuickBtn {
+  background: transparent; border: 1px solid rgba(245, 196, 81, 0.4);
+  color: #f5c451; padding: 4px 10px; border-radius: 4px;
+  font-family: 'EB Garamond', serif; font-size: 11px; letter-spacing: 1.5px;
+  font-weight: 700; cursor: pointer;
+}
+.chQuickBtn:hover { background: rgba(245, 196, 81, 0.1); }
+
+.chWagerMath { margin-top: 12px; padding-top: 10px; border-top: 1px dashed rgba(245, 196, 81, 0.25); }
+.chMathRow { display: flex; justify-content: space-between; padding: 2px 0; font-size: 12px; color: rgba(255,255,255,0.78); }
+.chMathRow--strong { font-size: 13px; padding-top: 6px; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.08); }
+.chMathLabel { letter-spacing: 1px; text-transform: uppercase; font-size: 10px; color: rgba(255,255,255,0.55); }
+.chMathValue { font-weight: 600; }
+.chMathValue--house { color: rgba(229, 121, 121, 0.95); }
+.chMathValue--win { color: #b9e6a3; font-size: 14px; }
+
 .chRules { margin: 8px 4px 12px; padding: 12px 16px; border-radius: 8px;
   background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); }
 .chRules ol { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.55; color: rgba(255,255,255,0.85); }
+.chRulesGambling { margin-top: 10px !important; padding-top: 10px; border-top: 1px dashed rgba(245, 196, 81, 0.2); }
+.chRulesGambling li { color: rgba(255,255,255,0.78); font-size: 12.5px; }
+.chRulesGambling strong { color: #f5c451; }
 
 .chStatusLine { font-size: 12px; color: #d4a24e; font-style: italic; }
 
 /* ─── Play header ───────────────────────────────────────────────────── */
 .chPlayHeader { margin: 4px 0 8px; }
 .chBackBtn { flex: 0 0 auto; min-width: 90px; }
+.chFinalBanner {
+  text-align: center; margin: 6px 4px 8px;
+  padding: 8px 12px; border-radius: 8px;
+  background: linear-gradient(135deg, rgba(118,196,138,0.18), rgba(118,196,138,0.04));
+  border: 1px solid rgba(118, 196, 138, 0.45);
+  color: #d8f0ce; font-weight: 700; letter-spacing: 1px;
+}
+
+/* ─── Play actions / pot summary ────────────────────────────────────── */
+.chPlayActions { margin: 8px 4px; padding: 8px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); }
+.chPlayActionsRow { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
+.chPotLine { font-size: 11.5px; color: rgba(255,255,255,0.7); margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.08); }
+.chPotLine strong { color: #f5c451; }
 
 /* ─── Board ─────────────────────────────────────────────────────────── */
 .chBoardWrap { display: flex; justify-content: center; margin: 8px 0 12px; }
@@ -605,6 +875,7 @@ export default {
   .chFileLabel, .chLabelCorner { width: 34px; }
   .chRankLabel { height: 34px; }
   .chHero { flex-direction: column; gap: 12px; }
+  .chWagerHead { flex-direction: column; align-items: flex-start; gap: 4px; }
 }
 
 /* ─── Demo hint ─────────────────────────────────────────────────────── */

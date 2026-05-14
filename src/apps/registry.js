@@ -43,7 +43,7 @@ const IMG = {
 export const APPS = [
   {
     id: 'welcome',
-    name: 'TXL Home',
+    name: 'TXL Manager',
     blurb: 'The lobby — pick a game or browse the collection.',
     tag: 'home',
     component: welcomeIn,

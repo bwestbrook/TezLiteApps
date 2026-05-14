@@ -26,17 +26,18 @@ const RISK_LABELS = { 0: 'Low', 1: 'Medium', 2: 'High' }
 function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3) }
 function easeInOutSine(t) { return -(Math.cos(Math.PI * t) - 1) / 2 }
 
-// Given a final slot index and a row count, generate a plausible left/right
-// path for the ball. Each row, the ball moves L (+0) or R (+1) in column.
-// We shuffle so the visual path looks random.
-function pathForSlot(slot, rows) {
-  const moves = new Array(rows).fill(0)
-  for (let i = 0; i < slot; i++) moves[i] = 1
-  for (let i = moves.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[moves[i], moves[j]] = [moves[j], moves[i]]
+// Decode the per-row bit map from contract storage into a flat array of
+// 0s and 1s. tzkt returns map values as strings; coerce to numbers. The
+// bits drive the ball's left/right decision at each peg row, so the
+// on-chain randomness directly produces the animation.
+function bitsFromStoragePath(rawPath, rows) {
+  const out = []
+  const src = rawPath || {}
+  for (let i = 0; i < rows; i++) {
+    const v = src[i] != null ? src[i] : src[String(i)]
+    out.push(Number(v || 0))
   }
-  return moves
+  return out
 }
 
 export default {
@@ -62,6 +63,7 @@ export default {
       lastSeenStatus: 0,
       ball: null,
       ballSettleAt: 0,
+      ballLanded: false,             // true once the ball reaches its bucket — gates the bucket-hit highlight so the bin only lights up on touchdown, not the moment chain status flips
       animationFrame: 0,
       ballTick: 0,                   // bumped each rAF to force position recompute
       blockchainStatus: 'Idle.',
@@ -149,25 +151,75 @@ export default {
     ballPosition() {
       // ballTick referenced so Vue re-evaluates each frame
       this.ballTick // eslint-disable-line no-unused-expressions
-      if (!this.ball) return null
+      // Resting position: above the first peg row, centered. Used on
+      // first load and between drops so the ball is always visible.
+      if (!this.ball) {
+        return {
+          x: this.boardWidth / 2,
+          y: this.boardPadY - 4,
+          done: true,
+          resting: true,
+        }
+      }
       const elapsed = (performance.now() - this.ball.t0) / 1000
       const totalRows = this.ball.path.length
-      const totalDuration = 0.18 * totalRows + 0.35
+      // Slower overall — roughly 0.32s per row + 0.6s tail. 16-row board
+      // ≈ 5.7s, enough to see each peg interaction.
+      const totalDuration = 0.32 * totalRows + 0.6
       const tNorm = Math.min(1, elapsed / totalDuration)
-      const rowsTraversed = Math.min(totalRows, tNorm * (totalRows + 1))
-      const rowIdx = Math.floor(rowsTraversed)
-      const intraRow = rowsTraversed - rowIdx
+      // rowsTraversed goes from 0 to totalRows+1 over the animation.
+      // Segments [0..totalRows-1] are peg-row bounces; segment totalRows
+      // is the final drop into the bucket. The earlier cap at totalRows
+      // froze intraRow=0 during the bucket segment, so the ball settled
+      // on the last peg row instead of falling into the slot.
+      const rowsTraversed = Math.min(totalRows + 1, tNorm * (totalRows + 1))
+      const rowIdx = Math.min(totalRows, Math.floor(rowsTraversed))
+      const intraRow = Math.min(1, rowsTraversed - rowIdx)
+      // ─── x: shift-from-center, smoothly through the row, eased out
+      // so the ball "leans" toward its next column slowly.
       let col = 0
       for (let i = 0; i < rowIdx; i++) col += this.ball.path[i]
       const nextStep = rowIdx < totalRows ? this.ball.path[rowIdx] : 0
       const colNow = col + nextStep * easeOutCubic(intraRow)
+      // Horizontal shift is driven by peg-row transitions only — once the
+      // ball clears the last peg row, x must lock to the bucket center.
+      // Using the uncapped rowsTraversed here lets the ball drift left by
+      // colSpacing/2 during the bucket-drop phase (lands between bins).
+      const horizontalRows = Math.min(rowsTraversed, totalRows)
+      const shift = (2 * colNow - horizontalRows) * 0.5
       const xCenter = this.boardWidth / 2
-      const xOffset = (colNow - totalRows / 2) * this.columnSpacing
-      const x = xCenter + xOffset
-      const yStart = this.boardPadY
-      const yEnd = this.boardPadY + (totalRows + 1) * this.rowSpacing
-      const y = yStart + (yEnd - yStart) * easeInOutSine(tNorm)
-      return { x, y, done: tNorm >= 1 }
+      const x = xCenter + shift * this.columnSpacing
+      // ─── y: per-row "fall then bounce" anchored to actual peg
+      // positions, with a final drop into the bucket. Segments
+      // 0..totalRows-1 bounce off peg rows. Segment totalRows is the
+      // final settle from the last peg into the bucket.
+      const yStart = this.boardPadY - 4
+      // Y of peg row `i` (0-indexed), matching pegPositions().
+      const pegY = (i) => this.boardPadY + (i + 1) * this.rowSpacing
+      // Land the ball at the vertical mid-area of the bucket strip.
+      const yBucket = this.boardPadY + (totalRows + 1) * this.rowSpacing + 16
+      let y
+      if (rowIdx < totalRows) {
+        const yRowTop = rowIdx === 0 ? yStart : pegY(rowIdx - 1)
+        const yRowBot = pegY(rowIdx)
+        if (intraRow < 0.7) {
+          // Falling — squared ease-in for gravity feel.
+          const fallT = intraRow / 0.7
+          y = yRowTop + (yRowBot - yRowTop) * (fallT * fallT)
+        } else {
+          // Damped half-sine upward kick — visible bounce off the peg.
+          const bounceT = (intraRow - 0.7) / 0.3
+          const kick = Math.sin(bounceT * Math.PI) * (1 - bounceT * 0.5)
+          y = yRowBot - kick * (yRowBot - yRowTop) * 0.22
+        }
+      } else {
+        // Final drop from last peg row into the bucket — ease-out so
+        // the ball "settles" rather than slamming.
+        const yLastPeg = pegY(totalRows - 1)
+        const t = Math.min(1, intraRow)
+        y = yLastPeg + (yBucket - yLastPeg) * (1 - Math.pow(1 - t, 2))
+      }
+      return { x, y, done: tNorm >= 1, resting: false }
     },
   },
   created() {
@@ -228,12 +280,51 @@ export default {
         if (active) {
           const status = Number(active.roundStatus)
           if (status !== 0 && this.lastSeenStatus === 0) {
-            this.animateBall(Number(active.rows), Number(active.finalSlot))
+            const rows = Number(active.rows)
+            // Snap the board to the round's geometry. Without this the
+            // SVG buckets stay positioned for whatever this.rows was last
+            // set to (e.g. user changed the selector mid-flight), and
+            // the ball animates to a y that doesn't line up with the
+            // visible bucket — "falls through" the bin.
+            if (this.rows !== rows) this.rows = rows
+            const r = Number(active.risk)
+            if (Number.isFinite(r) && this.risk !== r) this.risk = r
+            const path = bitsFromStoragePath(active.path, rows)
+            this.animateBall(rows, path)
             this.blockchainStatus = this.summarizeResolve(active)
           }
           this.lastSeenStatus = status
         }
       }
+    },
+    // Click handler for the "recent drops" list. Selects the round AND
+    // replays its ball-drop animation by feeding the on-chain path back
+    // through animateBall. Pending rounds (status 0) just get selected —
+    // there's no path to replay yet.
+    replayRound(id) {
+      this.activeRoundId = id
+      const r = this.rounds[id]
+      if (!r) return
+      const status = Number(r.roundStatus)
+      // Keep lastSeenStatus in sync so the next chain poll doesn't
+      // immediately re-fire the animation as if the round just resolved.
+      this.lastSeenStatus = status
+      if (status === 0) {
+        this.blockchainStatus = `Round #${id} still pending oracle resolve.`
+        return
+      }
+      const rows = Number(r.rows)
+      // Match the SVG layout to the replayed round's geometry — same
+      // reason as in refresh(): otherwise the ball animates to a y
+      // computed from the round's rows while the buckets are still
+      // drawn for whatever this.rows was, and the ball appears to
+      // "fall through" the bin.
+      if (this.rows !== rows) this.rows = rows
+      const rsk = Number(r.risk)
+      if (Number.isFinite(rsk) && this.risk !== rsk) this.risk = rsk
+      const path = bitsFromStoragePath(r.path, rows)
+      this.animateBall(rows, path)
+      this.blockchainStatus = `Replaying round #${id} — ${this.summarizeResolve(r)}`
     },
     summarizeResolve(r) {
       const status = Number(r.roundStatus)
@@ -252,21 +343,31 @@ export default {
       const val = Number(((max - this.minBet) * (pct / 100) + this.minBet).toFixed(3))
       this.bet = Math.max(this.minBet, Math.min(max, val))
     },
-    animateBall(rows, slot) {
+    animateBall(rows, path) {
+      // `path` is the array of N_rows on-chain bits (0=left, 1=right).
+      // Slot = sum(path) — same value the contract derived.
+      const slot = path.reduce((a, b) => a + b, 0)
+      // Reset landed state so the bucket-hit highlight re-fires for this
+      // drop, even when replaying a round whose bucket is already lit.
+      this.ballLanded = false
       this.ball = {
         rows,
         slot,
-        path: pathForSlot(slot, rows),
+        path,
         t0: performance.now(),
       }
-      this.ballSettleAt = performance.now() + (0.18 * rows + 0.5) * 1000
+      this.ballSettleAt = performance.now() + (0.32 * rows + 0.6) * 1000
       const tick = () => {
         if (!this.ball) return
         this.ballTick++
         const pos = this.ballPosition
         if (pos?.done) {
           if (performance.now() > this.ballSettleAt + 500) {
-            this.ball = null
+            // Touchdown: stop the rAF loop but leave `this.ball` set so
+            // the ball stays parked at the bucket position until the
+            // next drop. Flipping ballLanded triggers the bucket-hit
+            // CSS animation exactly when the ball arrives.
+            this.ballLanded = true
             this.animationFrame = 0
             return
           }
@@ -292,6 +393,10 @@ export default {
       return 'rgba(255,255,255,0.10)'
     },
     isBucketHit(i) {
+      // Only light up the bin once the ball physically lands. Without
+      // this guard the bucket flashed at the moment the chain status
+      // flipped — well before the ball reached it.
+      if (!this.ballLanded) return false
       const a = this.activeRound
       if (!a) return false
       return Number(a.finalSlot) === i && Number(a.roundStatus) !== 0
@@ -448,10 +553,10 @@ export default {
             <stop offset="0%" stop-color="#ffe089" />
             <stop offset="100%" stop-color="#d4a24e" />
           </radialGradient>
-          <radialGradient id="ballGrad" cx="35%" cy="30%" r="65%">
-            <stop offset="0%" stop-color="#ffffff" />
-            <stop offset="60%" stop-color="#f5c451" />
-            <stop offset="100%" stop-color="#a04300" />
+          <radialGradient id="ballGrad" cx="35%" cy="30%" r="70%">
+            <stop offset="0%" stop-color="#ffe0e0" />
+            <stop offset="45%" stop-color="#ef4444" />
+            <stop offset="100%" stop-color="#7f1d1d" />
           </radialGradient>
         </defs>
         <rect x="0" y="0" :width="boardWidth" :height="boardHeight" fill="url(#boardBg)" rx="14" />
@@ -487,12 +592,11 @@ export default {
         >{{ (multipliers[i] != null ? multipliers[i] : 1).toString().replace(/\.0$/, '') }}×</text>
 
         <circle
-          v-if="ballPosition"
           :cx="ballPosition.x"
           :cy="ballPosition.y"
-          r="6"
+          r="3.5"
           fill="url(#ballGrad)"
-          class="ball"
+          :class="['ball', ballPosition.resting ? 'ball--resting' : '']"
         />
       </svg>
     </div>
@@ -513,7 +617,8 @@ export default {
           v-for="id in myRoundIds.slice(0, 8)"
           :key="id"
           :class="['recentItem', `recent--${rounds[id]?.roundStatus}`]"
-          @click="activeRoundId = id"
+          @click="replayRound(id)"
+          :title="rounds[id]?.roundStatus != 0 ? 'Click to replay this drop' : ''"
         >
           <span class="recentId">#{{ id }}</span>
           <span class="recentSpec">{{ rounds[id]?.rows }}r · {{ RISK_LABELS[Number(rounds[id]?.risk)] || '?' }}</span>
@@ -682,9 +787,27 @@ export default {
 }
 .board { width: 100%; display: block; }
 .peg { filter: drop-shadow(0 0 2px rgba(245, 196, 81, 0.4)); }
-.ball { filter: drop-shadow(0 2px 6px rgba(245, 196, 81, 0.7)); }
+.ball { filter: drop-shadow(0 2px 6px rgba(239, 68, 68, 0.75)); }
+.ball--resting {
+  /* Soft breathing pulse so the ball feels "ready" between drops. */
+  animation: ballRest 2.4s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+@keyframes ballRest {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 2px 4px rgba(239, 68, 68, 0.55));
+  }
+  50% {
+    transform: scale(1.08);
+    filter: drop-shadow(0 2px 10px rgba(239, 68, 68, 0.90));
+  }
+}
 .bucket { transition: filter 0.2s ease; }
-.bucket--hit { animation: bucketHit 0.9s ease-out; }
+/* forwards: stay lit at the 100% keyframe so the highlight remains on
+   the winning bin until the next drop reset it (ballLanded → false). */
+.bucket--hit { animation: bucketHit 0.9s ease-out forwards; }
 @keyframes bucketHit {
   0%   { filter: brightness(1.0) drop-shadow(0 0 0 transparent); }
   30%  { filter: brightness(1.8) drop-shadow(0 0 12px var(--ad-gold-1)); }

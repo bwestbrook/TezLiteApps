@@ -49,7 +49,9 @@ def main():
             # Monotonic round counter
             self.data.currentRoundId = sp.nat(0)
 
-            # Per-round state
+            # Per-round state. `path` holds the per-row 0/1 bits the oracle
+            # supplied — each bit is one peg-collision decision (0=left,
+            # 1=right). slot = sum of bits.
             self.data.rounds = sp.cast({}, sp.map[sp.nat, sp.record(
                 player=sp.address,
                 bet=sp.mutez,
@@ -59,6 +61,7 @@ def main():
                 finalSlot=sp.nat,
                 payout=sp.mutez,
                 seed=sp.string,
+                path=sp.map[sp.nat, sp.nat],
             )])
 
             # Multiplier table  key = rows*1000 + risk*100 + slot
@@ -137,6 +140,7 @@ def main():
             self.data.pot += betAfterFee
             sp.send(self.data.txlContract, self.data.fee)
 
+            empty_path = sp.cast({}, sp.map[sp.nat, sp.nat])
             self.data.rounds[self.data.currentRoundId] = sp.record(
                 player=sp.sender,
                 bet=betAfterFee,
@@ -146,6 +150,7 @@ def main():
                 finalSlot=0,
                 payout=sp.mutez(0),
                 seed='',
+                path=empty_path,
             )
             sp.emit(
                 [self.data.currentRoundId, params.rows, params.risk],
@@ -154,22 +159,33 @@ def main():
             self.data.currentRoundId += 1
 
         # ─── Oracle: settle a drop ──────────────────────────────────
-        # `slot` is the bucket index 0..rows. `seed` is whatever string
-        # the oracle wants to commit (random hash, block hash, etc.) for
-        # off-chain verifiability.
+        # `bits` is a map keyed by row index (0..rows-1) with values 0
+        # (left) or 1 (right). The contract derives slot = sum(bits),
+        # which means every drop's path is verifiable on chain — the UI
+        # can replay the exact left/right decisions the oracle made.
+        # `seed` is whatever auditable tag the oracle wants to commit.
         @sp.entrypoint()
         def resolve(self, params):
             sp.cast(params.roundId, sp.nat)
-            sp.cast(params.slot, sp.nat)
+            sp.cast(params.bits, sp.map[sp.nat, sp.nat])
             sp.cast(params.seed, sp.string)
             assert sp.sender == self.data.oracle, "not oracle"
 
             r = self.data.rounds[params.roundId]
             assert r.roundStatus == 0, "already resolved"
-            assert params.slot <= r.rows, "slot out of range"
+
+            # Sum bits → slot. Also enforces 0/1 range and length == rows.
+            slot = sp.nat(0)
+            bitCount = sp.nat(0)
+            for i in params.bits.keys():
+                bit = params.bits[i]
+                assert bit < 2, "bit must be 0 or 1"
+                slot += bit
+                bitCount += 1
+            assert bitCount == r.rows, "bits length must equal rows"
 
             # Look up the multiplier (default 100 = 1.0x return-the-bet).
-            key = r.rows * 1000 + r.risk * 100 + params.slot
+            key = r.rows * 1000 + r.risk * 100 + slot
             multBp = self.data.multipliers.get(key, default=sp.nat(100))
             payout = sp.split_tokens(r.bet, multBp, 100)
 
@@ -189,9 +205,10 @@ def main():
                 rows=r.rows,
                 risk=r.risk,
                 roundStatus=newStatus,
-                finalSlot=params.slot,
+                finalSlot=slot,
                 payout=payout,
                 seed=params.seed,
+                path=params.bits,
             )
 
             # Settle: pull payout from pot. If short, auto-pull from
@@ -208,7 +225,7 @@ def main():
                 sp.send(r.player, payout)
 
             sp.emit(
-                [params.roundId, params.slot, multBp],
+                [params.roundId, slot, multBp],
                 tag='playResolved',
             )
 

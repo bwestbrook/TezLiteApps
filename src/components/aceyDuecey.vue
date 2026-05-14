@@ -223,7 +223,7 @@ export default {
       if (status === 2) return 'Bet locked in. Waiting for the oracle to deal the final card.'
       if (status === 3) return 'You win! Winnings sent to your wallet.'
       if (status === 4) return 'You lost. The pot keeps your bet.'
-      if (status === 5) return 'Pair drawn — half your ante refunded.'
+      if (status === 5) return 'Pair drawn — ante forfeit to the pot.'
       return `Game status: ${status}`
     },
     // Bet sizing — slider runs from 0.1 ꜩ up to 30% of the current pot.
@@ -305,6 +305,36 @@ export default {
       const norm = (r) => (r === 14 && !this.aceHigh ? 1 : r)
       const lo = Math.min(norm(a), norm(b))
       return Math.round(((lo - 1) / 13) * 100)
+    },
+    // Spread = number of ranks strictly between the two anchor cards.
+    // 1..11 for non-pairs. The contract pays 12.35 / spread × finalBet
+    // on a win (true odds with 5% rake).
+    spread() {
+      const a = rankOf(this.firstCard)
+      const b = rankOf(this.secondCard)
+      if (a == null || b == null) return null
+      const norm = (r) => (r === 14 && !this.aceHigh ? 1 : r)
+      const lo = Math.min(norm(a), norm(b))
+      const hi = Math.max(norm(a), norm(b))
+      const s = hi - lo - 1
+      return s > 0 ? s : 0
+    },
+    // True-odds payout multiplier the contract will pay if card 3 lands
+    // strictly between the anchors. (Pair handled separately → 0.)
+    payoutMultiplier() {
+      if (!this.spread || this.spread < 1) return 0
+      return 12.35 / this.spread
+    },
+    // Expected winnings on a successful third card, given current bet.
+    payoutIfWin() {
+      if (this.payoutMultiplier <= 0) return 0
+      return Number(this.thisBet) * this.payoutMultiplier
+    },
+    // Probability third card lands in-range (uniform deck draw, ~1/13
+    // per rank). Same value the contract uses to set true odds.
+    winProbability() {
+      if (this.spread == null) return 0
+      return this.spread / 13
     },
   },
   methods: {
@@ -737,7 +767,17 @@ export default {
       } else if (Number(this.gameId) > n_games) {
         return
       }
-      if (this.lastGameId !== this.gameId || this.needsLastCard) {
+      // Refresh card slots from chain whenever the active game still has
+      // cards to reveal. Without this, the per-card refresh only fired on
+      // game-switch or after continueBet, so worker-dealt firstCard /
+      // secondCard sat in storage but stayed hidden in the UI until the
+      // user clicked into ACTIVE GAMES.
+      const needCardRefresh =
+        this.lastGameId !== this.gameId ||
+        this.needsLastCard ||
+        this.firstCard < 0 ||
+        this.secondCard < 0
+      if (needCardRefresh) {
         this.loadGameInfo()
       }
       this.lastGameId = this.gameId
@@ -806,6 +846,27 @@ export default {
       <div class="gameInfo">Game Id: {{ gameId }}</div>
       <div class="gameInfo">Pot Balance: {{ potBalance }} {{ tezosSymbol }}</div>
     </div>
+    <!-- True-odds payout preview — visible once both anchor cards are out
+         (spread > 0) so the player can see what they'd win before
+         clicking continueBet. Replaces the old fixed-2× payout assumption. -->
+    <div v-if="spread > 0" class="adOddsPanel">
+      <div class="adOddsRow">
+        <span class="adOddsLabel">Spread</span>
+        <span class="adOddsValue">{{ spread }} rank{{ spread === 1 ? '' : 's' }}</span>
+        <span class="adOddsLabel">Win prob</span>
+        <span class="adOddsValue">{{ (winProbability * 100).toFixed(1) }}%</span>
+      </div>
+      <div class="adOddsRow adOddsRow--main">
+        <span class="adOddsLabel">If you win</span>
+        <span class="adOddsValuePay">
+          {{ payoutMultiplier.toFixed(2) }}× · {{ payoutIfWin.toFixed(3) }} {{ tezosSymbol }}
+        </span>
+      </div>
+      <div class="adOddsHint">
+        True odds with 5% house rake. Pairs forfeit the ante outright.
+      </div>
+    </div>
+
     <div class="adBetSliderRow">
       <div class="adBetSliderHeader">
         <span class="adBetSliderLabel">Your bet</span>
@@ -1317,6 +1378,64 @@ export default {
 @media (max-width: 380px) {
   .adCardRow { gap: 6px; }
   .adBrand { font-size: 8px; letter-spacing: 2px; }
+}
+
+/* ─── True-odds preview panel ─────────────────────────────────────── */
+.adOddsPanel {
+  margin: 8px 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: linear-gradient(
+    135deg,
+    rgba(124, 58, 237, 0.10) 0%,
+    rgba(245, 196, 81, 0.08) 100%
+  );
+  border: 1px solid rgba(245, 196, 81, 0.35);
+  box-shadow: 0 0 0 1px rgba(245, 196, 81, 0.10), 0 4px 18px rgba(124, 58, 237, 0.15);
+  animation: adOddsFadeIn 0.35s ease-out;
+}
+@keyframes adOddsFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.adOddsRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+.adOddsRow--main {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.adOddsLabel {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(243, 241, 238, 0.55);
+  font-size: 10px;
+}
+.adOddsValue {
+  color: var(--ad-text-1, #f3f1ee);
+  font-weight: 600;
+  margin-right: 12px;
+}
+.adOddsValuePay {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #ffe089 0%, #f5c451 50%, #d4a24e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.adOddsHint {
+  margin-top: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: rgba(243, 241, 238, 0.40);
+  letter-spacing: 0.04em;
 }
 
 /* ─── Bet slider ───────────────────────────────────────────────────── */

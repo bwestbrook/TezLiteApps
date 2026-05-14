@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# compile-via-ide.sh — Walk you through compiling a contract via the
-# SmartPy online IDE, then chain into the deploy script.
+# compile-via-ide.sh — FALLBACK ONLY. Walk through compiling a contract
+# via the SmartPy online IDE, then chain into the deploy script.
 #
-# Use this when local SmartPy install isn't working (which is most of the
-# time — SmartPy.io's compiler isn't on PyPI, and the bash installer is
-# flaky). The IDE compile is the SmartPy team's officially-supported path
-# that works in any browser.
+# ⚠  Prefer ./scripts/compile.sh — it compiles locally via smartpy-tezos
+#    (no browser, no clipboard dance, ~3s end-to-end). Use this script
+#    only if ~/smartpy-cli-venv is broken or the wheel's macOS binary
+#    won't run for some reason.
 #
 # Usage:
 #   ./scripts/compile-via-ide.sh oracle
@@ -18,6 +18,15 @@ cd "$(dirname "$0")/.."
 
 CONTRACT="${1:-oracle}"
 
+# Suggest the faster path unless the user has explicitly disabled it.
+if [[ "${SUPPRESS_COMPILE_HINT:-}" != "1" ]]; then
+  printf '\033[0;33m'
+  echo "Note: this is the browser-IDE fallback. The local path is faster:"
+  echo "  ./scripts/compile.sh $CONTRACT"
+  echo "Set SUPPRESS_COMPILE_HINT=1 to silence this hint."
+  printf '\033[0m\n'
+fi
+
 # ─── colours ─────────────────────────────────────────────────────────
 G="\033[0;32m"; R="\033[0;31m"; Y="\033[0;33m"; C="\033[0;36m"; B="\033[1m"; RESET="\033[0m"
 
@@ -27,7 +36,7 @@ case "$CONTRACT" in
   acey-duecey|ad) SRC="src/services/smart_contractAD.py"; CONTRACT="acey-duecey" ;;
   txl)         SRC="src/services/smart_contract_txl.py" ;;
   ttt)         SRC="src/services/smart_contract_TTT.py" ;;
-  squares)     SRC="src/services/smart_contract_squares.py" ;;
+  squares)     SRC="src/services/smart_contract_squares_v2.py" ;;
   reversi)     SRC="src/services/smart_contractReversi.py" ;;
   chess)       SRC="src/services/smart_contractChess.py" ;;
   plinko)      SRC="src/services/smart_contractPlinko.py" ;;

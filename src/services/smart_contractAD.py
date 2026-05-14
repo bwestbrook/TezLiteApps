@@ -15,9 +15,9 @@ def main():
             5: Pair Drawn
             '''
             # Game control
-            self.data.admin = sp.address("tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w")
-            self.data.oracle = sp.address("tz1XbrvTMVa5dWQQBSCn2jgX7BPZyLRhgtKS")
-            self.data.txlContract = sp.address("KT1HD71gj4ZdehpS4Ri8nasjpDTPDQ574Sxy")
+            self.data.admin = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
+            self.data.oracle = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
+            self.data.txlContract = sp.address("KT1Ro63rVDUx2x8pMChCLSySso8t6JH47oRQ")
 
             # Outstanding & historical games, keyed by monotonic
             # currentGameIndex. The empty {} needs an explicit type cast so
@@ -122,12 +122,11 @@ def main():
                 self.data.games[params.gameId].hand[2] = card
                 self.data.games[params.gameId].handHashes[2] = params.hash
                 if self.data.games[params.gameId].handValue[1] == cardValue:
-                    sp.emit('pairDraw Half Bet', tag='pairDrawn')
-                    halfAmount = sp.split_tokens(self.data.ante, 1, 2)
-                    sp.send(self.data.games[params.gameId].player, halfAmount)
-                    sp.send(self.data.txlContract, halfAmount)
-                    self.data.pot -= halfAmount
-                    self.data.games[params.gameId].gameStatus = 5  
+                    # Pair: full forfeit. Ante stays in the pot — no refund
+                    # to the player, no fee skim. This is the house's
+                    # compensation for the volatility on wide spreads.
+                    sp.emit('pairDrawnFullForfeit', tag='pairDrawn')
+                    self.data.games[params.gameId].gameStatus = 5
                 else:
                     if self.data.games[params.gameId].gameStatus == 0:
                         sp.cast(params.gameId, sp.int_or_nat)
@@ -203,11 +202,25 @@ def main():
                         self.data.pot -= self.data.games[params.gameId].finalBet + self.data.ante
                         sp.send(self.data.txlContract, self.data.games[params.gameId].finalBet + self.data.ante)
                         self.data.games[params.gameId].gameStatus = 4
-                    if cardValue > lowCard and cardValue < highCard:    
-                        winAmount = self.data.games[params.gameId].finalBet
-                        winAmount = sp.split_tokens(winAmount, 2, 1)
-                        sp.send(self.data.games[params.gameId].player, winAmount) 
-                        self.data.games[params.gameId].gameStatus = 3                         
+                    if cardValue > lowCard and cardValue < highCard:
+                        # True-odds payout with 5% rake.
+                        #   Fair payout multiplier  = 13 / spread  (since P(win) = spread/13)
+                        #   With 5% rake            = 12.35 / spread
+                        # We multiply finalBet by 1235 / (100 * spread):
+                        #   spread = 1   →  12.35× payout
+                        #   spread = 5   →  2.47×
+                        #   spread = 11  →  1.12×
+                        # Tight spreads pay huge, wide ones pay slim. Player's
+                        # net EV is uniformly -5% regardless of spread choice
+                        # (plus the ante drag).
+                        spread = sp.as_nat(highCard - lowCard - 1)
+                        winAmount = sp.split_tokens(
+                            self.data.games[params.gameId].finalBet,
+                            1235,
+                            spread * 100,
+                        )
+                        sp.send(self.data.games[params.gameId].player, winAmount)
+                        self.data.games[params.gameId].gameStatus = 3
                         self.data.pot -= winAmount
                         sp.emit(self.data.pot, tag='finalPot')
                         sp.emit(winAmount, tag='winAmount')

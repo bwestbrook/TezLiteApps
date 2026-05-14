@@ -51,13 +51,6 @@ export default {
 
 <template>
   <div class="welcomeRoot">
-    <!-- Hero header: one liner so the rest of the screen is the lobby itself -->
-    <div class="welcomeHero">
-      <div class="welcomeEyebrow">TXL · LOBBY</div>
-      <div class="welcomeTitle">Welcome.</div>
-      <div class="welcomeSub">Pick a game, browse the collection, or check the tools.</div>
-    </div>
-
     <!-- Tabs row -->
     <div class="welcomeTabs" role="tablist">
       <button
@@ -111,38 +104,6 @@ export default {
   font-family: 'EB Garamond';
   color: #efeae2;
   padding: 8px 4px 12px;
-}
-
-/* ─── Hero ───────────────────────────────────────────────────────────── */
-.welcomeHero {
-  padding: 14px 14px 12px;
-  margin-bottom: 12px;
-  border-radius: 12px;
-  background:
-    radial-gradient(ellipse at 80% 20%, rgba(212, 162, 78, 0.15) 0%, transparent 60%),
-    linear-gradient(135deg, #190857 0%, #07041e 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 6px 16px rgba(0, 0, 0, 0.4);
-}
-.welcomeEyebrow {
-  font-size: 10px;
-  letter-spacing: 5px;
-  font-weight: 700;
-  color: rgba(245, 196, 81, 0.75);
-  margin-bottom: 4px;
-}
-.welcomeTitle {
-  font-size: clamp(22px, 5vw, 32px);
-  font-weight: 700;
-  color: #fff;
-  line-height: 1;
-  margin-bottom: 6px;
-}
-.welcomeSub {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.78);
-  line-height: 1.4;
 }
 
 /* ─── Tabs ───────────────────────────────────────────────────────────── */
