@@ -42,7 +42,9 @@ def main():
     #   3 Game has Winner
     #   4 Cats Game (no winning lines remain)
     #   5 Surrender
-    BURN: sp.address = sp.address("tz1burnburnburnburnburnburnburjAYjjX")
+    # Plain assignment, no type annotation — SmartPy's @sp.module parser
+    # rejects annotated assignments at module scope ("Not a module statement").
+    BURN = sp.address("tz1burnburnburnburnburnburnburjAYjjX")
 
     class TezTacToe(sp.Contract):
 
@@ -62,7 +64,8 @@ def main():
             # ── Bookkeeping ────────────────────────────────────────────
             self.data.games = {}
             self.data.currentGameIndex = 0
-            # Logic Control for game winners (4×4×4 win lines, 75 of them)
+            # Logic Control for game winners (4×4×4 win lines, 76 of them:
+            # 48 axis-aligned + 24 face diagonals + 4 space diagonals)
             self.data.game_winners = {
                 0: [111, 112, 113, 114],   1: [121, 122, 123, 124],
                 2: [131, 132, 133, 134],   3: [141, 142, 143, 144],
@@ -100,8 +103,10 @@ def main():
                 66: [112, 222, 332, 442], 67: [142, 232, 322, 412],
                 68: [113, 223, 333, 443], 69: [143, 233, 323, 413],
                 70: [114, 224, 334, 444], 71: [144, 234, 324, 414],
+                # The 4 space diagonals. 75 was missing — a 4-in-a-row on
+                # (1,4,4)-(4,1,1) used to go unrewarded.
                 72: [111, 222, 333, 444], 73: [414, 323, 232, 141],
-                74: [441, 332, 223, 114],
+                74: [441, 332, 223, 114], 75: [144, 233, 322, 411],
             }
             # Move-evaluation scratch space (reset each move)
             self.data.setSum = 0
@@ -196,6 +201,10 @@ def main():
                 "player1Paid": 1,
                 "player2Paid": 0,
                 "winningPlayer": 0,
+                # 0 until the oracle's flipForFirst runs once both players
+                # have paired. makeMove is gated on this so neither side can
+                # move before the coin flip sets playerTurn.
+                "firstMoveDecided": 0,
             }
             new_game = sp.record(
                 grid=new_game_grid,
@@ -222,6 +231,37 @@ def main():
             self.data.games[params.gameId].metaData["player2Paid"] = 1
             self.data.games[params.gameId].metaData["gameStatus"] = 2  # active
             sp.emit(params.gameId, tag="gameJoined")
+
+        @sp.entrypoint()
+        def flipForFirst(self, params):
+            """Oracle decides who moves first, once both players have paired.
+
+            bit 0 → player 1 moves first, bit 1 → player 2. The seed is
+            emitted (not stored — metaData is int-only) so the flip stays
+            auditable on-chain via the firstMoveDecided event. Idempotent:
+            the firstMoveDecided flag guards against a re-flip.
+            """
+            sp.cast(params.gameId, sp.int)
+            sp.cast(params.bit, sp.int)
+            sp.cast(params.seed, sp.string)
+            assert sp.sender == self.data.oracle, "not oracle"
+            g = self.data.games[params.gameId]
+            assert g.metaData["gameStatus"] == 2, "game not active"
+            assert g.metaData["firstMoveDecided"] == 0, "first move already decided"
+            assert params.bit == 0 or params.bit == 1, "bit must be 0 or 1"
+            firstPlayer = 1
+            if params.bit == 1:
+                firstPlayer = 2
+            self.data.games[params.gameId].metaData["playerTurn"] = firstPlayer
+            self.data.games[params.gameId].metaData["firstMoveDecided"] = 1
+            sp.emit(
+                sp.record(
+                    gameId=params.gameId,
+                    firstPlayer=firstPlayer,
+                    seed=params.seed,
+                ),
+                tag="firstMoveDecided",
+            )
 
         @sp.entrypoint()
         def leaveGame(self, params):
@@ -251,6 +291,7 @@ def main():
             self.data.gameWon = 0
             g = self.data.games[params.gameId]
             assert g.metaData["gameStatus"] == 2, "game not active"
+            assert g.metaData["firstMoveDecided"] == 1, "awaiting first-move flip"
             playerTurn = g.metaData["playerTurn"]
             assert sp.sender == g.players[playerTurn], "not your turn"
             assert g.grid[params.move] == 0, "cell occupied"
