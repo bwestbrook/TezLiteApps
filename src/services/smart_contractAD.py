@@ -65,6 +65,18 @@ def main():
             self.data.oracle = params.newOracle
 
         @sp.entrypoint()
+        def pruneGame(self, params):
+            '''Admin-only: delete a finished game record (status 3/4/5) to
+            reclaim storage. Emits the full pre-prune record so off-chain
+            indexers can keep history. Checklist §3.1.'''
+            sp.cast(params.gameId, sp.nat)
+            assert sp.sender == self.data.admin, "not admin"
+            g = self.data.games[params.gameId]
+            assert g.gameStatus >= 3, "game not finished"
+            sp.emit(g, tag='gamePruned')
+            del self.data.games[params.gameId]
+
+        @sp.entrypoint()
         def bet(self, params):
             '''
             Player creates a game by paying ante + fee.
