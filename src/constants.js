@@ -251,6 +251,10 @@ export const NFT_INFO = [
   'Each NFT has its own balance that gets set back to zero when claimed by the owner',
 ]
 
+// XC-2 — `default()` semantics: the AceyDuecey contract's default
+// entrypoint accepts anonymous tez and credits it to `potReserve`
+// (`self.data.potReserve += sp.amount`). Sending plain tez to the KT1
+// is a pot top-up, not a no-op.
 export const AD_GAME_INFO = [
   'Choose Ace High or Ace Low and ante up 0.3 ꜩ (plus a 0.1 ꜩ 2.725K holder fee).',
   'Two cards are dealt. If they pair, the ante is forfeit to the pot.',
@@ -288,6 +292,10 @@ export const WAR_GAME_INFO = [
   'No skill, no edge — just a fair 50/50 coin flip with prettier cards.',
 ]
 
+// XC-2 — `default()` semantics: the Plinko contract's default
+// entrypoint accepts anonymous tez and credits it to `potReserve`
+// ("Anyone can top up the reserve"). Same as AD — plain tez sent to
+// the KT1 is a reserve top-up.
 export const PLINKO_GAME_INFO = [
   'Drop a ball through a 3D peg pyramid — 8, 12, or 16 layers deep.',
   'Each layer the ball deflects on TWO axes at once: ±X and ±Z, 50/50 on each.',
@@ -322,6 +330,11 @@ export const PLINKO_MULTIPLIERS = {
   },
 }
 
+// XC-2 — `default()` semantics: the TezTacToe contract's default
+// entrypoint has an empty body (`pass`), so anonymous tez sent to the
+// KT1 is accepted into the contract balance but credited to nothing —
+// effectively discarded / unrecoverable. Unlike AD and Plinko, this is
+// NOT a pot top-up. Don't send plain tez to the TTT contract.
 export const GAME_INFO = [
   'TezTacToe is 3D four-in-a-row — line up four of your marks on the board before your opponent does.',
   'Sync your wallet to play. The board is up top; the wager controls and your Game Hub sit just below it.',
