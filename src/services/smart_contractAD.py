@@ -48,17 +48,21 @@ def main():
 
         @sp.entrypoint()
         def updateTxlContract(self, params):
-            '''
-            '''
-            if sp.sender == self.data.oracle:
-                self.data.txlContract = params.newContract
-        
+            '''Admin-only: point the contract at a new TXL holder-fee
+            contract. Previously gated on `oracle` with an `if` (silent
+            no-op for non-callers) — see AD-1.5 in docs/SECURITY_FIXES.md.
+            Checklist §1.1, §9.1.'''
+            assert sp.sender == self.data.admin, "not admin"
+            self.data.txlContract = params.newContract
+
         @sp.entrypoint()
         def updateOracle(self, params):
-            '''
-            '''
-            if sp.sender == self.data.admin:
-                self.data.txlContract = params.newContract
+            '''Admin-only: rotate the oracle key. Previously wrote to
+            `txlContract` (wrong field) so the oracle address could never
+            actually be rotated — see AD-1.5 in docs/SECURITY_FIXES.md.
+            Checklist §1.1, §1.3, §9.1.'''
+            assert sp.sender == self.data.admin, "not admin"
+            self.data.oracle = params.newOracle
 
         @sp.entrypoint()
         def bet(self, params):
