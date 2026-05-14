@@ -47,6 +47,16 @@ def main():
             pass
 
         @sp.entrypoint()
+        def updateAdmin(self, params):
+            '''Admin-only: rotate the admin key. Two-step would be safer;
+            for now, single-step. If the admin key is lost or compromised
+            this is the only recovery path, so call it deliberately.
+            Checklist §1.2.'''
+            sp.cast(params.newAdmin, sp.address)
+            assert sp.sender == self.data.admin, "not admin"
+            self.data.admin = params.newAdmin
+
+        @sp.entrypoint()
         def updateTxlContract(self, params):
             '''Admin-only: point the contract at a new TXL holder-fee
             contract. Previously gated on `oracle` with an `if` (silent
