@@ -121,6 +121,18 @@ def main():
             assert sp.sender == self.data.admin, "not admin"
             self.data.fee = params.fee
 
+        @sp.entrypoint()
+        def pruneRound(self, params):
+            '''Admin-only: delete a settled round to reclaim storage.
+            Emits the full pre-prune record so off-chain indexers can
+            keep history. Checklist §3.1.'''
+            sp.cast(params.roundId, sp.nat)
+            assert sp.sender == self.data.admin, "not admin"
+            r = self.data.rounds[params.roundId]
+            assert r.roundStatus != 0, "round not settled"
+            sp.emit(r, tag='roundPruned')
+            del self.data.rounds[params.roundId]
+
         # Single-cell update — useful for hot-patching one ring.
         @sp.entrypoint()
         def setMultiplier(self, params):
