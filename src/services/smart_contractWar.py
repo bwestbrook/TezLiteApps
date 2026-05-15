@@ -118,7 +118,15 @@ def main():
                 winner=winnerAddr,
                 seed=params.seed,
             )
-            sp.emit([params.gameId, params.card1, params.card2], tag='gameSettled')
+            sp.emit(
+                sp.record(
+                    gameId=params.gameId,
+                    card1=params.card1,
+                    card2=params.card2,
+                    winner=winnerAddr,
+                ),
+                tag='gameSettled',
+            )
 
         # ─── Admin ──────────────────────────────────────────────────
         @sp.entrypoint()

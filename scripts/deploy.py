@@ -506,7 +506,19 @@ def originate(spec: ContractSpec, code_tz: Path, storage_tz: Path, network: str,
     log(f"Connecting to {network} at {rpc}")
     client = pytezos.using(shell=rpc, key=key)
 
-    code_micheline = michelson_to_micheline(code_tz.read_text())
+    # Prefer the sibling .json (raw Micheline array) when available —
+    # SmartPy oasis emits both contract.tz (text) and contract.json
+    # (Micheline). The JSON skips a finicky text-parse step (the .tz
+    # output uses a `parameter ...; storage ...; code { … }` style
+    # without an outer `{ … }` wrapper, which trips pytezos's PLY
+    # parser even after wrapping). Canonical artifacts under contracts/
+    # ship only .tz, so fall through to the text parser there.
+    import json
+    code_json_path = code_tz.with_suffix(".json")
+    if code_json_path.exists():
+        code_micheline = json.loads(code_json_path.read_text())
+    else:
+        code_micheline = michelson_to_micheline(code_tz.read_text())
     storage_micheline = parse_storage(code_micheline, storage_tz)
 
     deployer = key.public_key_hash()

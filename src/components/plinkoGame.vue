@@ -38,6 +38,10 @@ const RISK_LABELS = { 0: 'Low', 1: 'Medium', 2: 'High' }
 const SP = 10    // horizontal spacing between adjacent lattice columns
 const LH = 12    // vertical drop per pyramid layer
 const BIN_DROP = 9 // extra fall from the last layer down into the bin tray
+// Each bin is rendered as a well: an inset hole on the same plane as
+// its rim. RIM_INSET sets how thick the ring of the rim looks (fraction
+// of cell width on each side).
+const RIM_INSET = 0.22
 
 // Camera angles (radians). Pitch is FIXED — it tilts the pyramid
 // forward so you see down into it, and never changes. Drag rotates
@@ -168,21 +172,35 @@ export default {
       return out
     },
     // ── Bin grid ───────────────────────────────────────────────────
-    // (rows+1)×(rows+1) cells at the bottom. Each is a projected quad
-    // filled with its ring's rainbow hue. On land the WHOLE winning
-    // ring lights up — payout is radial, so the ring is what you won.
+    // (rows+1)×(rows+1) cells. Each cell is a TUBE: a colored rim at the
+    // tray surface plus a darker, smaller, recessed inner polygon
+    // (projected at BIN_DROP+TUBE_DROP) — the offset between them creates
+    // the well-down-into-the-floor look. On land, the WHOLE winning ring
+    // lights up, since payout is radial.
     bins3d() {
       const out = []
       const a = this.activeRound
       const hitRing = a ? Number(a.ring) : -1
       const hitLive = !!a && Number(a.roundStatus) !== 0 && this.ballLanded
+      const innerHalf = 0.5 - RIM_INSET
       for (let X = 0; X <= this.rows; X++) {
         for (let Z = 0; Z <= this.rows; Z++) {
           const ring = Math.max(Math.abs(X - this.half), Math.abs(Z - this.half))
-          // four corners of the cell, projected
-          const corners = [
+          // Rim: cell footprint at the tray surface.
+          const rim = [
             [X - 0.5, Z - 0.5], [X + 0.5, Z - 0.5],
             [X + 0.5, Z + 0.5], [X - 0.5, Z + 0.5],
+          ].map(([cx, cz]) => {
+            const p = this.project(...this.worldOf(cx, cz, this.rows, BIN_DROP))
+            return `${p.x.toFixed(2)},${p.y.toFixed(2)}`
+          })
+          // Hole: inset polygon at the SAME wy as the rim, so it stays
+          // centred inside the cell footprint regardless of pitch. Depth
+          // feel comes from the colour contrast (darker shade of the
+          // ring colour) plus the ball's shrink-on-land animation.
+          const hole = [
+            [X - innerHalf, Z - innerHalf], [X + innerHalf, Z - innerHalf],
+            [X + innerHalf, Z + innerHalf], [X - innerHalf, Z + innerHalf],
           ].map(([cx, cz]) => {
             const p = this.project(...this.worldOf(cx, cz, this.rows, BIN_DROP))
             return `${p.x.toFixed(2)},${p.y.toFixed(2)}`
@@ -190,7 +208,8 @@ export default {
           const center = this.project(...this.worldOf(X, Z, this.rows, BIN_DROP))
           out.push({
             X, Z, ring,
-            points: corners.join(' '),
+            rimPoints: rim.join(' '),
+            holePoints: hole.join(' '),
             cx: center.x, cy: center.y, depth: center.depth,
             mult: this.multipliers[ring],
             hit: hitLive && ring === hitRing,
@@ -234,46 +253,13 @@ export default {
       const h = (yMax - yMin) + pad * 2
       return `${(-xExt).toFixed(1)} ${(yMin - pad).toFixed(1)} ${(2 * xExt).toFixed(1)} ${h.toFixed(1)}`
     },
-    // Screen-space basis vectors for the bin floor plane, given the
-    // current camera. eX/eZ are where one WORLD unit along the floor's
-    // X / Z axes lands on screen. Used as an affine transform so the
-    // payout labels are skewed INTO the floor plane — they read as
-    // painted on the board, foreshortening + flipping as it spins.
-    //   screen.x = wx·cosY + wz·sinY
-    //   screen.y = wy·cosP + wx·sinY·sinP − wz·cosY·sinP
-    planeBasis() {
-      const cyaw = Math.cos(this.yaw), syaw = Math.sin(this.yaw)
-      const spit = Math.sin(this.pitch)
-      return {
-        ex: { x: cyaw, y: syaw * spit },
-        ez: { x: syaw, y: -cyaw * spit },
-      }
+    // Which ring's chip should flash in the legend below. -1 when there
+    // is no active resolved round or the ball hasn't landed yet.
+    hitRing() {
+      const a = this.activeRound
+      if (!a || Number(a.roundStatus) === 0 || !this.ballLanded) return -1
+      return Number(a.ring)
     },
-    // Two payout labels per ring, on opposite (east/west) sides — ring
-    // 0 is the single centre cell. Each is anchored in its cell's
-    // low-X/low-Z corner (where two sides meet) and gets skewed into
-    // the floor plane via planeBasis in the template.
-    binLabels3d() {
-      const out = []
-      for (let ring = 0; ring <= this.half; ring++) {
-        const mult = this.multipliers[ring]
-        if (mult == null) continue
-        const cells = ring === 0
-          ? [[this.half, this.half]]
-          : [[this.half + ring, this.half], [this.half - ring, this.half]]
-        for (const [X, Z] of cells) {
-          const a = this.project(
-            ...this.worldOf(X - 0.46, Z - 0.42, this.rows, BIN_DROP),
-          )
-          out.push({ lx: a.x, ly: a.y, mult })
-        }
-      }
-      return out
-    },
-    // Tiny label font (world units — the plane transform scales it).
-    // Deliberately small per the spec; nudges up a hair on denser
-    // boards since the viewBox grows with row count.
-    labelFontSize() { return 1.9 + this.rows * 0.05 },
     // ── Ball position — projected, per frame ───────────────────────
     ballPosition() {
       this.ballTick // eslint-disable-line no-unused-expressions
@@ -284,13 +270,15 @@ export default {
       }
       const { xBits, zBits, rows, t0 } = this.ball
       const elapsed = (performance.now() - t0) / 1000
-      // ~0.30s per layer + a 0.6s tail. 16-row drop ≈ 5.4s.
-      const totalDuration = 0.30 * rows + 0.6
+      // ~0.30s per layer + 0.6s tray-drop tail + 0.4s tube-sink tail.
+      const totalDuration = 0.30 * rows + 0.6 + 0.4
       const tNorm = Math.min(1, elapsed / totalDuration)
-      const SETTLE = 0.6                       // fraction of a layer for the tray drop
-      const u = tNorm * (rows + SETTLE)         // 0 .. rows+SETTLE
+      const SETTLE = 0.6     // fall from last peg into the rim opening
+      const SINK   = 0.5     // sink down inside the tube
+      const u = tNorm * (rows + SETTLE + SINK)
 
       let world
+      let sinkScale = 1
       if (u <= rows) {
         // Walking the pyramid. Which layer-segment are we in?
         const layer = Math.min(rows - 1, Math.floor(u))
@@ -309,16 +297,28 @@ export default {
         const hop = Math.sin(intra * Math.PI) * LH * 0.16
         const wy = w0[1] + (w1[1] - w0[1]) * intra - hop
         world = [wx, wy, wz]
-      } else {
-        // Settling into the bin tray at (finalX, finalZ).
-        const s = Math.min(1, (u - rows) / SETTLE)
+      } else if (u <= rows + SETTLE) {
+        // Falling from the last peg layer down to the tube rim.
+        const s = (u - rows) / SETTLE
         const top = this.worldOf(this.ball.finalX, this.ball.finalZ, rows)
         const wy = top[1] + BIN_DROP * (1 - Math.pow(1 - s, 2))
         world = [top[0], wy, top[2]]
+      } else {
+        // Sinking into the tube — held at the rim's wy so the ball stays
+        // centred in its hole; only the scale changes, shrinking it down
+        // to a vanishing point inside the well.
+        const s = (u - rows - SETTLE) / SINK
+        const e = easeOutCubic(s)
+        const top = this.worldOf(this.ball.finalX, this.ball.finalZ, rows)
+        world = [top[0], top[1] + BIN_DROP, top[2]]
+        sinkScale = 1 - e * 0.75
       }
       const p = this.project(...world)
-      // Subtle depth perspective + a spin that runs while it falls.
-      const scale = 1 + p.depth * 0.012
+      // Constant size while the ball walks the pyramid + drops into the
+      // rim — orthographic projection means depth shouldn't grow it.
+      // sinkScale is the only intentional size change, applied during
+      // the tube-sink phase to read as falling away down the well.
+      const scale = sinkScale
       const spin = (elapsed * 540) % 360       // 1.5 rev/s — "for fun"
       return {
         sx: p.x, sy: p.y, depth: p.depth, scale, spin,
@@ -398,12 +398,14 @@ export default {
     },
     // Full-rainbow colour per ring: red at the centre ring, sweeping
     // through orange/yellow/green/blue to magenta at the corners. Every
-    // ring gets its own clearly-distinct hue.
-    ringColor(ring, alpha = 0.85) {
+    // ring gets its own clearly-distinct hue. `lightness` lets callers
+    // pull a darker shade of the same hue (used for the hole fill so
+    // each well matches its rim's colour).
+    ringColor(ring, alpha = 0.85, lightness = 55) {
       const span = Math.max(1, this.half)
       const t = Math.min(1, ring / span)          // 0 = centre … 1 = corner
       const hue = t * 300                         // 0° red → 300° magenta
-      return `hsla(${hue.toFixed(0)}, 80%, 55%, ${alpha})`
+      return `hsla(${hue.toFixed(0)}, 80%, ${lightness}%, ${alpha})`
     },
     async captureMyAddress() {
       try {
@@ -530,7 +532,7 @@ export default {
       const finalZ = zBits.reduce((a, b) => a + b, 0)
       this.ballLanded = false
       this.ball = { rows, xBits, zBits, finalX, finalZ, t0: performance.now() }
-      this.ballSettleAt = performance.now() + (0.30 * rows + 0.6) * 1000
+      this.ballSettleAt = performance.now() + (0.30 * rows + 0.6 + 0.4) * 1000
       const tick = () => {
         if (!this.ball) return
         this.ballTick++
@@ -705,31 +707,27 @@ export default {
         </defs>
 
         <!-- Bin grid (drawn first — it's the floor; the pyramid + ball
-             sit above it). Each cell filled with its ring's hue. -->
+             sit above it). Each cell is a TUBE: a colored rim at the
+             tray surface, plus a darker, smaller, recessed hole drawn
+             on top — together they read as a square well the ball drops
+             into. On a winning ring, both rim and hole light up.
+             Rendered as two parallel v-fors (all rims, then all holes)
+             so every hole paints over its own rim while the cells
+             themselves still tile without overlap. -->
         <polygon
           v-for="b in bins3d"
-          :key="`bin-${b.X}-${b.Z}`"
-          :points="b.points"
+          :key="`rim-${b.X}-${b.Z}`"
+          :points="b.rimPoints"
           :fill="ringColor(b.ring)"
-          :class="['bin', b.hit ? 'bin--hit' : '']"
+          :class="['bin', 'binRim', b.hit ? 'bin--hit' : '']"
         />
-
-        <!-- Two payout labels per ring (opposite sides), tucked into a
-             cell corner. The matrix maps text-local axes onto the floor
-             plane's screen basis (planeBasis) so each reads as painted
-             on the board — foreshortening + flipping as it spins.
-             text-local x runs along world-X, local y along world-Z. -->
-        <text
-          v-for="(l, i) in binLabels3d"
-          :key="`lbl-${i}`"
-          :transform="`matrix(${planeBasis.ex.x.toFixed(4)} ${planeBasis.ex.y.toFixed(4)} ${planeBasis.ez.x.toFixed(4)} ${planeBasis.ez.y.toFixed(4)} ${l.lx.toFixed(2)} ${l.ly.toFixed(2)})`"
-          x="0"
-          y="0"
-          :font-size="labelFontSize"
-          text-anchor="start"
-          dominant-baseline="hanging"
-          class="binLabel"
-        >{{ Number(l.mult).toString().replace(/\.0$/, '') }}×</text>
+        <polygon
+          v-for="b in bins3d"
+          :key="`hole-${b.X}-${b.Z}`"
+          :points="b.holePoints"
+          :fill="ringColor(b.ring, 0.95, 22)"
+          :class="['bin', 'binHole', b.hit ? 'bin--hit' : '']"
+        />
 
         <!-- Pegs are split at the ball's depth so the ball is correctly
              occluded — pegs further from the camera draw BEHIND it,
@@ -788,15 +786,15 @@ export default {
       </div>
     </div>
 
-    <!-- Ring → multiplier legend. With up to 289 bins we don't label
-         each cell; this compact strip maps every ring to its payout,
-         colour-matched to the board. -->
+    <!-- Ring → multiplier legend. The board cells are unlabeled; this
+         strip is the source of truth for payouts. The winning ring's
+         chip flashes gold the moment the ball lands. -->
     <div class="ringLegend">
       <div
         v-for="(m, ring) in multipliers"
         :key="`ring-${ring}`"
-        class="ringChip"
-        :style="{ background: ringColor(ring, 0.32), borderColor: ringColor(ring, 0.7) }"
+        :class="['ringChip', ring === hitRing ? 'ringChip--hit' : '']"
+        :style="{ background: ringColor(ring, 0.32), borderColor: ringColor(ring, 0.75) }"
       >
         <span class="ringIdx">ring {{ ring }}</span>
         <span class="ringMult">{{ Number(m).toString().replace(/\.0$/, '') }}×</span>
@@ -1011,22 +1009,20 @@ export default {
 /* Neutral soft shadow — pegs are gray now, not glowing gold. */
 .peg { filter: drop-shadow(0 0.5px 1px rgba(0, 0, 0, 0.45)); }
 
-/* Bin grid cells — fill is set inline per ring (ringColor). */
+/* Bin grid cells — rim fill is the ring color (set inline); the inner
+   hole is a deep, near-black void to read as the inside of a well. */
 .bin {
-  stroke: rgba(0, 0, 0, 0.5);
-  stroke-width: 0.5;
   transition: filter 0.2s ease;
 }
-/* Payout labels skewed into the board plane. Small + near-black; a
-   faint light halo lifts them off the darker rainbow cells. */
-.binLabel {
-  fill: #161616;
-  stroke: rgba(255, 255, 255, 0.5);
-  stroke-width: 0.16;
-  paint-order: stroke;
-  font-family: var(--ad-font-mono);
-  font-weight: 700;
-  pointer-events: none;
+.binRim {
+  stroke: rgba(0, 0, 0, 0.7);
+  stroke-width: 0.5;
+  filter: drop-shadow(0 0.5px 0.5px rgba(0, 0, 0, 0.45));
+}
+.binHole {
+  /* fill set inline — darker shade of the rim's ring colour. */
+  stroke: rgba(0, 0, 0, 0.85);
+  stroke-width: 0.4;
 }
 /* forwards: the winning ring stays lit until the next drop. */
 .bin--hit { animation: binHit 0.9s ease-out forwards; }
@@ -1048,33 +1044,57 @@ export default {
   50%      { filter: drop-shadow(0 1.5px 5px rgba(0, 0, 0, 0.55)); }
 }
 
-/* Ring → multiplier legend strip. */
+/* Ring → multiplier legend strip. The board no longer carries payout
+   labels, so this is the primary place to read what each ring pays. */
 .ringLegend {
-  display: flex; flex-wrap: wrap; gap: 5px; justify-content: center;
+  display: flex; flex-wrap: wrap; gap: 7px; justify-content: center;
   background: var(--ad-bg-elev-1);
   border: 1px solid var(--ad-border-soft);
   border-radius: var(--ad-r-md);
-  padding: 8px 10px;
+  padding: 10px 12px;
 }
 .ringChip {
   display: flex; flex-direction: column; align-items: center;
-  min-width: 52px;
-  padding: 4px 8px;
-  border-radius: var(--ad-r-sm);
-  border: 1px solid transparent;   /* colour set inline via ringColor */
+  min-width: 64px;
+  padding: 8px 12px;
+  border-radius: var(--ad-r-md);
+  border: 1.5px solid transparent;   /* colour set inline via ringColor */
   font-family: var(--ad-font-mono);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 .ringIdx {
-  font-size: 9px;
-  letter-spacing: 0.06em;
+  font-size: 10px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ad-text-3);
+  color: var(--ad-text-2);
 }
 .ringMult {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 800;
   color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  margin-top: 2px;
+}
+/* Win flash — held forwards so the chip stays highlighted until the
+   next drop clears the ballLanded state. */
+.ringChip--hit {
+  animation: chipHit 1.4s ease-out forwards;
+  z-index: 1;
+}
+@keyframes chipHit {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 196, 81, 0.0);
+    transform: scale(1);
+  }
+  18% {
+    box-shadow: 0 0 22px 6px rgba(245, 196, 81, 0.95);
+    transform: scale(1.22);
+  }
+  100% {
+    box-shadow: 0 0 9px 2px rgba(245, 196, 81, 0.6);
+    transform: scale(1.06);
+  }
 }
 
 /* Drag-to-rotate hint + reset-view control under the board. */

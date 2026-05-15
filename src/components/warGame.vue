@@ -1,20 +1,18 @@
 <script>
-// War — 5-card head-to-head showdown.
+// War — 1-card high-card showdown.
 //
-// Repackaging of the classic card game "War" as a fast, on-chain settled bet:
+// Mirrors src/services/smart_contractWar.py exactly:
 //
-//   1. Player A creates a game with a stake.
-//   2. Player B matches it. The oracle shuffles a deck.
-//   3. Five cards dealt to each player, face up.
-//   4. Hand value = sum of ranks (A=14, K=13, Q=12, J=11, 2-10 face value).
-//   5. Higher total takes the pot minus a 10% holder fee.
-//   6. Exact tie → one more card each (sudden death). Tie again → push.
+//   1. createGame(wager)    — player1 stakes wager + 0.1ꜩ fee
+//   2. joinGame(gameId)     — player2 matches; gameStatus → 1 (awaiting deal)
+//   3. (off-chain) oracle calls deal(gameId, card1, card2, seed)
+//   4. Inline settlement: higher rank wins the pot; tie refunds both.
 //
-// This is *strictly* 50/50 by construction — same deck, identical priors, zero
-// decisions on either side. The only "house edge" is the holder fee.
+// Storage shape per game (sp.record): player1, player2, wager, card1, card2,
+// gameStatus (0=open / 1=awaiting deal / 2=settled / 3=cancelled), winner, seed.
 //
-// Demo mode runs entirely client-side: redeal random shuffles to preview the
-// visuals before any contract is deployed or any wallet is connected.
+// Demo mode (no wallet, no contract) runs a random local draw so visitors can
+// see the 3D card-flip stage before any tez is staked.
 
 import { getContractStorage, isPlaceholderAddress } from '../services/tzkt'
 import {
@@ -22,6 +20,12 @@ import {
   WAR_CONTRACT_ADDRESS,
   WAR_GAME_INFO,
 } from '../constants'
+
+// Contract constants (must match smart_contractWar.py).
+const FEE_MUTEZ = 100_000          // 0.1 ꜩ holder fee per player
+const MIN_WAGER_MUTEZ = 100_000    // 0.1 ꜩ
+const MAX_WAGER_MUTEZ = 5_000_000  // 5 ꜩ
+const BURN_ADDR = 'tz1burnburnburnburnburnburnburjAYjjX'
 
 const SUIT_GLYPHS = ['♣', '♦', '♥', '♠']
 const RANK_LABELS = { 11: 'J', 12: 'Q', 13: 'K', 14: 'A' }
@@ -43,23 +47,20 @@ function suitColor(deckIndex) {
   return s === 1 || s === 2 ? 'red' : 'black'
 }
 
-// Fisher-Yates shuffle for demo mode. Returns array of unique deck indices.
-function shuffleDeck() {
-  const d = []
-  for (let i = 0; i < 52; i++) d.push(i)
-  for (let i = d.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[d[i], d[j]] = [d[j], d[i]]
-  }
-  return d
-}
-
+// Phase labels keyed to contract's gameStatus values.
 const PHASE_LABELS = {
   0: 'Open — waiting for opponent',
-  1: 'Dealing',
-  2: 'You win',
-  3: 'You lose',
-  4: 'Push (tie)',
+  1: 'Dealing — oracle in flight',
+  2: 'Settled',
+  3: 'Cancelled',
+}
+
+function pickPair() {
+  // Two distinct deck indices, 0..51.
+  let a = Math.floor(Math.random() * 52)
+  let b = Math.floor(Math.random() * 52)
+  while (b === a) b = Math.floor(Math.random() * 52)
+  return [a, b]
 }
 
 export default {
@@ -72,20 +73,19 @@ export default {
       currentGameId: 0,
       activeGameId: null,
       games: {},
-      stakeMutez: 1_000_000,
+      // Default 1 ꜩ wager — well within contract bounds (0.1 – 5 ꜩ).
+      wagerMutez: 1_000_000,
       pollInterval: null,
       blockchainStatus: 'idle',
       view: 'landing',
       showRules: false,
-      // ─── Demo mode state ─────────────────────────────────────────────
-      // Pre-deal a hand so the board has something to show on first load.
-      demoYou: [],
-      demoOpp: [],
-      // 0=face-down, 1=revealed
-      youRevealed: [false, false, false, false, false],
-      oppRevealed: [false, false, false, false, false],
+      // ─── Demo / animation state ──────────────────────────────────────
+      demoYouCard: null,
+      demoOppCard: null,
+      youRevealed: false,
+      oppRevealed: false,
       demoVerdict: null, // 'win' | 'lose' | 'push'
-      // Path the load deck — built lazily because we need require() resolved.
+      // Lazy-built lookup of card-face image URLs (built in created()).
       deck: [],
     }
   },
@@ -98,29 +98,87 @@ export default {
     },
     openGames() {
       return Object.entries(this.games)
-        .filter(([, g]) => Number(g.phase) === 0)
+        .filter(([, g]) => Number(g.gameStatus) === 0)
         .map(([id, g]) => ({ id: Number(id), ...g }))
     },
     phaseLabel() {
       if (!this.game) return 'Demo deal'
-      return PHASE_LABELS[Number(this.game.phase)] || `phase ${this.game.phase}`
+      return PHASE_LABELS[Number(this.game.gameStatus)] || `phase ${this.game.gameStatus}`
     },
-    stakeTez() {
-      if (!this.game) return (this.stakeMutez / 1_000_000).toFixed(3)
-      return (Number(this.game.stake) / 1_000_000).toFixed(3)
+    wagerTez() {
+      if (!this.game) return (this.wagerMutez / 1_000_000).toFixed(3)
+      return (Number(this.game.wager) / 1_000_000).toFixed(3)
     },
     potTez() {
       if (!this.game) return '—'
-      return ((Number(this.game.stake) * 2) / 1_000_000).toFixed(3)
+      return ((Number(this.game.wager) * 2) / 1_000_000).toFixed(3)
     },
-    yourTotal() {
-      return this.demoYou.reduce((sum, idx, i) => sum + (this.youRevealed[i] ? rankOf(idx) : 0), 0)
+    feeTez() {
+      return (FEE_MUTEZ / 1_000_000).toFixed(2)
     },
-    oppTotal() {
-      return this.demoOpp.reduce((sum, idx, i) => sum + (this.oppRevealed[i] ? rankOf(idx) : 0), 0)
+    // For the active real game, which card belongs to me vs opponent.
+    myCard() {
+      if (!this.game) return null
+      const c = Number(this.game.card1)
+      if (this.game.player1 === this.walletAddress) return Number(this.game.card1)
+      if (this.game.player2 === this.walletAddress) return Number(this.game.card2)
+      return c
     },
-    allRevealed() {
-      return this.youRevealed.every((r) => r) && this.oppRevealed.every((r) => r)
+    oppCard() {
+      if (!this.game) return null
+      if (this.game.player1 === this.walletAddress) return Number(this.game.card2)
+      if (this.game.player2 === this.walletAddress) return Number(this.game.card1)
+      return Number(this.game.card2)
+    },
+    // Verdict for the active *real* game, once settled.
+    realVerdict() {
+      if (!this.game) return null
+      if (Number(this.game.gameStatus) !== 2) return null
+      const w = this.game.winner
+      if (!w || w === BURN_ADDR) return 'push'
+      if (w === this.walletAddress) return 'win'
+      return 'lose'
+    },
+    // The pair of cards & reveal flags to render — sourced from contract
+    // when in a real settled game, otherwise from demo state.
+    displayYouCard() {
+      if (this.game && Number(this.game.gameStatus) === 2) return this.myCard
+      return this.demoYouCard
+    },
+    displayOppCard() {
+      if (this.game && Number(this.game.gameStatus) === 2) return this.oppCard
+      return this.demoOppCard
+    },
+    displayYouRevealed() {
+      if (this.game && Number(this.game.gameStatus) === 2) return true
+      return this.youRevealed
+    },
+    displayOppRevealed() {
+      if (this.game && Number(this.game.gameStatus) === 2) return true
+      return this.oppRevealed
+    },
+    displayVerdict() {
+      return this.realVerdict || this.demoVerdict
+    },
+    canCancel() {
+      return (
+        this.game &&
+        Number(this.game.gameStatus) === 0 &&
+        this.game.player1 === this.walletAddress
+      )
+    },
+    canJoin() {
+      return (
+        this.game &&
+        Number(this.game.gameStatus) === 0 &&
+        this.game.player1 !== this.walletAddress
+      )
+    },
+    wagerOutOfBounds() {
+      return (
+        this.wagerMutez < MIN_WAGER_MUTEZ ||
+        this.wagerMutez > MAX_WAGER_MUTEZ
+      )
     },
   },
   created() {
@@ -208,36 +266,27 @@ export default {
     suitColor(idx) {
       return suitColor(idx)
     },
+    rankOf(idx) {
+      return idx == null || idx < 0 ? 0 : rankOf(idx)
+    },
     // ─── Demo: deal & reveal ────────────────────────────────────────
     dealDemo() {
-      const shuffled = shuffleDeck()
-      this.demoYou = shuffled.slice(0, 5)
-      this.demoOpp = shuffled.slice(5, 10)
-      this.youRevealed = [false, false, false, false, false]
-      this.oppRevealed = [false, false, false, false, false]
+      const [y, o] = pickPair()
+      this.demoYouCard = y
+      this.demoOppCard = o
+      this.youRevealed = false
+      this.oppRevealed = false
       this.demoVerdict = null
-      // Stagger the reveal so it reads as a deal.
-      const reveal = (which, i, delay) => {
-        setTimeout(() => {
-          if (which === 'you') {
-            this.youRevealed = this.youRevealed.map((r, idx) => (idx === i ? true : r))
-          } else {
-            this.oppRevealed = this.oppRevealed.map((r, idx) => (idx === i ? true : r))
-          }
-        }, delay)
-      }
-      for (let i = 0; i < 5; i++) {
-        reveal('you', i, 220 + i * 180)
-        reveal('opp', i, 320 + i * 180)
-      }
-      setTimeout(() => this.computeVerdict(), 220 + 5 * 180 + 200)
-    },
-    computeVerdict() {
-      const y = this.demoYou.reduce((s, idx) => s + rankOf(idx), 0)
-      const o = this.demoOpp.reduce((s, idx) => s + rankOf(idx), 0)
-      if (y > o) this.demoVerdict = 'win'
-      else if (y < o) this.demoVerdict = 'lose'
-      else this.demoVerdict = 'push'
+      // Two-beat dramatic reveal — opponent first, then yours, then verdict.
+      setTimeout(() => { this.oppRevealed = true }, 420)
+      setTimeout(() => { this.youRevealed = true }, 980)
+      setTimeout(() => {
+        const yr = rankOf(this.demoYouCard)
+        const or = rankOf(this.demoOppCard)
+        if (yr > or) this.demoVerdict = 'win'
+        else if (yr < or) this.demoVerdict = 'lose'
+        else this.demoVerdict = 'push'
+      }, 1700)
     },
     // ─── Contract calls ────────────────────────────────────────────
     async refresh() {
@@ -268,11 +317,15 @@ export default {
     async createGame() {
       try {
         if (!this.prepWallet()) return
+        if (this.wagerOutOfBounds) {
+          this.blockchainStatus = `wager must be ${MIN_WAGER_MUTEZ / 1_000_000} – ${MAX_WAGER_MUTEZ / 1_000_000} ꜩ`
+          return
+        }
         this.blockchainStatus = 'creating war game...'
-        const total = this.stakeMutez + 50000
+        const total = this.wagerMutez + FEE_MUTEZ
         const contract = await this.tezos.wallet.at(WAR_CONTRACT_ADDRESS)
         const op = await contract.methodsObject
-          .createGame({ stake: this.stakeMutez })
+          .createGame({ wager: this.wagerMutez })
           .send({ amount: total / 1_000_000 })
         await op.confirmation()
         this.blockchainStatus = 'created.'
@@ -286,28 +339,42 @@ export default {
       try {
         if (!this.prepWallet()) return
         const g = this.games[gameId]
-        const total = Number(g.stake) + 50000
+        if (!g) return
+        this.blockchainStatus = `joining #${gameId}…`
+        const total = Number(g.wager) + FEE_MUTEZ
         const contract = await this.tezos.wallet.at(WAR_CONTRACT_ADDRESS)
         const op = await contract.methodsObject
           .joinGame({ gameId })
           .send({ amount: total / 1_000_000 })
         await op.confirmation()
         this.activeGameId = gameId
+        this.blockchainStatus = 'joined — waiting for oracle deal…'
         await this.refresh()
       } catch (err) {
         console.error('war join failed:', err)
+        this.blockchainStatus = 'join failed'
       }
     },
-    async claim() {
+    async cancelGame() {
       try {
         if (!this.prepWallet()) return
+        if (!this.canCancel) return
+        this.blockchainStatus = 'cancelling…'
         const contract = await this.tezos.wallet.at(WAR_CONTRACT_ADDRESS)
-        const op = await contract.methodsObject.claim().send()
+        const op = await contract.methodsObject
+          .cancelGame({ gameId: this.activeGameId })
+          .send()
         await op.confirmation()
-        this.blockchainStatus = 'claimed.'
+        this.blockchainStatus = 'cancelled — wager refunded.'
+        await this.refresh()
       } catch (err) {
-        console.error('war claim failed:', err)
+        console.error('war cancel failed:', err)
+        this.blockchainStatus = 'cancel failed'
       }
+    },
+    selectGame(gameId) {
+      this.activeGameId = gameId
+      this.setView('play')
     },
   },
 }
@@ -315,32 +382,42 @@ export default {
 
 <template>
   <div class="gameManagement warRoot">
+    <!-- ── Parallax background (3D depth, scoped to this component) ─── -->
+    <div class="warBg" aria-hidden="true">
+      <div class="warBgStars warBgStars--far"></div>
+      <div class="warBgStars warBgStars--mid"></div>
+      <div class="warBgStars warBgStars--near"></div>
+      <div class="warBgNebula"></div>
+      <div class="warBgRing warBgRing--a"></div>
+      <div class="warBgRing warBgRing--b"></div>
+      <div class="warBgRing warBgRing--c"></div>
+      <div class="warBgCardLoop">
+        <span v-for="n in 6" :key="'bg-' + n" :class="['warBgCard', 'warBgCard--' + n]"></span>
+      </div>
+    </div>
+
     <!-- ───── Landing view ────────────────────────────────────────────── -->
     <template v-if="view === 'landing'">
       <div class="warHero">
         <div class="warHeroBrand">
-          <div class="warHeroEyebrow">WAR · 5-CARD SHOWDOWN</div>
-          <div class="warHeroTitle">Pure-luck H2H. 50/50.</div>
+          <div class="warHeroEyebrow">WAR · HIGH-CARD SHOWDOWN</div>
+          <div class="warHeroTitle">One card. One winner. 50/50.</div>
           <div class="warHeroSub">
-            Both players ante up. Oracle shuffles a deck. Five cards each, face
-            up. Higher rank-sum wins the pot. Exact tie → sudden death. No skill
-            required, no edge for either side — only the holder fee.
+            Both players ante up. The oracle draws one card per side. Higher
+            rank takes the pot, ties refund. No edge, no decisions —
+            cinematic high-card war, settled on-chain the moment the oracle deals.
           </div>
         </div>
         <div class="warHeroBoard" aria-hidden="true">
-          <svg viewBox="0 0 120 80" class="warHeroSvg">
-            <defs>
-              <linearGradient id="wBack" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#190857"/>
-                <stop offset="100%" stop-color="#2a1577"/>
-              </linearGradient>
-            </defs>
-            <!-- Two facing piles -->
-            <rect x="10" y="20" width="38" height="50" rx="3" fill="url(#wBack)" stroke="#f5c451" stroke-width="1" transform="rotate(-8, 29, 45)"/>
-            <rect x="72" y="20" width="38" height="50" rx="3" fill="url(#wBack)" stroke="#f5c451" stroke-width="1" transform="rotate(8, 91, 45)"/>
-            <text x="29" y="50" text-anchor="middle" font-size="14" font-weight="700" fill="#f5c451" transform="rotate(-8, 29, 45)">A♠</text>
-            <text x="91" y="50" text-anchor="middle" font-size="14" font-weight="700" fill="#f5c451" transform="rotate(8, 91, 45)">K♥</text>
-          </svg>
+          <div class="warHeroStage">
+            <div class="warHeroCard warHeroCard--left">
+              <div class="warHeroCardInner">A<span>♠</span></div>
+            </div>
+            <div class="warHeroCard warHeroCard--right">
+              <div class="warHeroCardInner">K<span>♥</span></div>
+            </div>
+            <div class="warHeroSpark"></div>
+          </div>
         </div>
       </div>
 
@@ -354,25 +431,24 @@ export default {
           <div class="warPillValue">{{ activeGameId == null ? '—' : '#' + activeGameId }}</div>
         </div>
         <div class="warPill">
-          <div class="warPillLabel">Stake</div>
-          <div class="warPillValue">{{ stakeTez }} ꜩ</div>
-          <div class="warPillFootnote">+ 0.05 ꜩ fee</div>
+          <div class="warPillLabel">Wager</div>
+          <div class="warPillValue">{{ wagerTez }} ꜩ</div>
+          <div class="warPillFootnote">+ {{ feeTez }} ꜩ fee</div>
         </div>
         <div class="warPill">
           <div class="warPillLabel">Pot</div>
           <div class="warPillValue">{{ potTez }} ꜩ</div>
         </div>
         <div class="warPill">
-          <div class="warPillLabel">House edge</div>
-          <div class="warPillValue">10%</div>
-          <div class="warPillFootnote">holder fee on pot</div>
+          <div class="warPillLabel">Bounds</div>
+          <div class="warPillValue">0.1 – 5 ꜩ</div>
+          <div class="warPillFootnote">contract enforced</div>
         </div>
       </div>
 
       <div class="rowFlex warPrimaryRow">
         <div class="actionButton warPrimary" @click="setView('play')">Open table</div>
-        <div class="actionButton" @click="createGame">New game ({{ (stakeMutez / 1000000).toFixed(2) }} ꜩ)</div>
-        <div class="actionButton" @click="claim">Claim winnings</div>
+        <div class="actionButton" @click="createGame">New game ({{ (wagerMutez / 1000000).toFixed(2) }} ꜩ)</div>
         <div class="actionButtonHelp" @click="toggleRules">{{ showRules ? 'Hide rules' : 'How it works' }}</div>
       </div>
 
@@ -383,7 +459,7 @@ export default {
           :key="g.id"
           class="actionButton"
           @click="joinGame(g.id)"
-        >Join #{{ g.id }} — {{ (Number(g.stake) / 1000000).toFixed(2) }} ꜩ</div>
+        >Join #{{ g.id }} — {{ (Number(g.wager) / 1000000).toFixed(2) }} ꜩ</div>
       </div>
 
       <div v-if="showRules" class="warRules">
@@ -405,83 +481,83 @@ export default {
         <div class="actionButton" @click="refresh">Refresh</div>
       </div>
 
-      <div class="warTableWrap">
-        <div :class="['warTable', demoVerdict ? `warTable--${demoVerdict}` : '']">
-          <div class="warRail" aria-hidden="true"></div>
-          <div class="warFelt">
-            <div class="warBrand">5-CARD WAR</div>
+      <div class="warStageWrap">
+        <div :class="['warStage', displayVerdict ? `warStage--${displayVerdict}` : '']">
+          <div class="warStageFloor"></div>
+          <div class="warTable">
+            <div class="warRail" aria-hidden="true"></div>
+            <div class="warFelt">
+              <div class="warBrand">HIGH-CARD WAR</div>
 
-            <!-- Opponent's hand (top, face up after reveal) -->
-            <div class="warSide warSide--opp">
-              <div class="warSideLabel">
-                Opponent
-                <span class="warTotal">{{ oppTotal || 0 }}</span>
-              </div>
-              <div class="warHand">
-                <div
-                  v-for="(idx, i) in demoOpp"
-                  :key="'opp-' + i"
-                  class="warCardSlot"
-                >
-                  <div :class="['warCard', { 'warCard--flipped': oppRevealed[i] }]">
+              <!-- Opponent's card (top) -->
+              <div class="warSide warSide--opp">
+                <div class="warSideLabel">
+                  Opponent
+                  <span class="warTotal">{{ displayOppRevealed ? rankOf(displayOppCard) : '?' }}</span>
+                </div>
+                <div class="warCardSlot warCardSlot--big">
+                  <div :class="['warCard', { 'warCard--flipped': displayOppRevealed, 'warCard--winner': displayVerdict === 'lose' && displayOppRevealed }]">
                     <div class="warCardFace warCardFace--back">
                       <div class="warBack"><div class="warBackInner"><div class="warBackMark">W</div></div></div>
                     </div>
                     <div class="warCardFace warCardFace--front">
                       <img
-                        v-if="cardFace(idx)"
-                        :src="cardFace(idx)"
-                        :alt="cardLabel(idx)"
+                        v-if="cardFace(displayOppCard)"
+                        :src="cardFace(displayOppCard)"
+                        :alt="cardLabel(displayOppCard)"
                         class="warCardImg"
                         draggable="false"
                       />
-                      <div :class="['warCardCorner', `warCardCorner--${suitColor(idx)}`]">
-                        {{ cardLabel(idx) }}
+                      <div :class="['warCardCorner', `warCardCorner--${suitColor(displayOppCard)}`]">
+                        {{ cardLabel(displayOppCard) }}
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div class="warVs">vs</div>
+              <div class="warVs">vs</div>
 
-            <!-- Your hand (bottom) -->
-            <div class="warSide warSide--you">
-              <div class="warSideLabel">
-                You
-                <span class="warTotal">{{ yourTotal || 0 }}</span>
-              </div>
-              <div class="warHand">
-                <div
-                  v-for="(idx, i) in demoYou"
-                  :key="'you-' + i"
-                  class="warCardSlot"
-                >
-                  <div :class="['warCard', { 'warCard--flipped': youRevealed[i] }]">
+              <!-- Your card (bottom) -->
+              <div class="warSide warSide--you">
+                <div class="warSideLabel">
+                  You
+                  <span class="warTotal">{{ displayYouRevealed ? rankOf(displayYouCard) : '?' }}</span>
+                </div>
+                <div class="warCardSlot warCardSlot--big">
+                  <div :class="['warCard', { 'warCard--flipped': displayYouRevealed, 'warCard--winner': displayVerdict === 'win' && displayYouRevealed }]">
                     <div class="warCardFace warCardFace--back">
                       <div class="warBack"><div class="warBackInner"><div class="warBackMark">W</div></div></div>
                     </div>
                     <div class="warCardFace warCardFace--front">
                       <img
-                        v-if="cardFace(idx)"
-                        :src="cardFace(idx)"
-                        :alt="cardLabel(idx)"
+                        v-if="cardFace(displayYouCard)"
+                        :src="cardFace(displayYouCard)"
+                        :alt="cardLabel(displayYouCard)"
                         class="warCardImg"
                         draggable="false"
                       />
-                      <div :class="['warCardCorner', `warCardCorner--${suitColor(idx)}`]">
-                        {{ cardLabel(idx) }}
+                      <div :class="['warCardCorner', `warCardCorner--${suitColor(displayYouCard)}`]">
+                        {{ cardLabel(displayYouCard) }}
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div v-if="demoVerdict === 'win'" class="warVerdict warVerdict--win">YOU WIN</div>
-            <div v-else-if="demoVerdict === 'lose'" class="warVerdict warVerdict--loss">YOU LOSE</div>
-            <div v-else-if="demoVerdict === 'push'" class="warVerdict warVerdict--push">PUSH</div>
+              <!-- Awaiting-deal overlay: real game in gameStatus=1 -->
+              <div
+                v-if="game && Number(game.gameStatus) === 1"
+                class="warAwaiting"
+              >
+                <div class="warAwaitingSpinner"></div>
+                <div class="warAwaitingLabel">Oracle is dealing…</div>
+              </div>
+
+              <div v-if="displayVerdict === 'win'" class="warVerdict warVerdict--win">YOU WIN</div>
+              <div v-else-if="displayVerdict === 'lose'" class="warVerdict warVerdict--loss">YOU LOSE</div>
+              <div v-else-if="displayVerdict === 'push'" class="warVerdict warVerdict--push">PUSH · REFUND</div>
+            </div>
           </div>
         </div>
       </div>
@@ -489,13 +565,16 @@ export default {
       <div v-if="!inRealGame" class="demoHint">
         <span class="demoHintDot"></span>
         <span class="demoHintLabel">DEMO</span>
-        <span class="demoHintBody">Random demo deal. The on-chain version uses the oracle's verifiable RNG.</span>
+        <span class="demoHintBody">Random local draw. The on-chain version uses the oracle's verifiable RNG.</span>
         <button class="demoBtn" @click="dealDemo">Deal again</button>
       </div>
 
       <div class="rowFlex">
-        <div class="actionButton" @click="createGame">New game</div>
-        <div class="actionButton" @click="claim">Claim</div>
+        <div class="actionButton" @click="createGame">New game ({{ (wagerMutez / 1000000).toFixed(2) }} ꜩ)</div>
+        <div v-if="canJoin" class="actionButton" @click="joinGame(activeGameId)">
+          Join this game ({{ wagerTez }} ꜩ)
+        </div>
+        <div v-if="canCancel" class="actionButton" @click="cancelGame">Cancel & refund</div>
         <div class="actionButton" @click="setView('landing')">Back to lobby</div>
       </div>
 
@@ -505,31 +584,226 @@ export default {
 </template>
 
 <style scoped>
-.warRoot { font-family: 'EB Garamond', serif; color: #efeae2; }
+.warRoot {
+  font-family: 'EB Garamond', serif;
+  color: #efeae2;
+  position: relative;
+  isolation: isolate; /* contain ::before stacking so bg layers don't bleed */
+}
+
+/* ────────────────────────────────────────────────────────────────────
+ * 3D parallax background — fixed inside .warRoot, behind all content.
+ * Stacking: nebula < star layers (parallax) < rotating rings < drifting
+ * card silhouettes. Each layer animates independently to fake depth.
+ * ──────────────────────────────────────────────────────────────────── */
+.warBg {
+  position: absolute; inset: -20px;
+  z-index: -1;
+  border-radius: 16px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 20% 10%, rgba(120, 60, 230, 0.18) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 90%, rgba(245, 196, 81, 0.10) 0%, transparent 60%),
+    linear-gradient(160deg, #0a0420 0%, #050211 60%, #02010a 100%);
+  perspective: 900px;
+  perspective-origin: 50% 30%;
+}
+.warBgNebula {
+  position: absolute; inset: -30%;
+  background:
+    radial-gradient(ellipse at 30% 40%, rgba(80, 30, 180, 0.45) 0%, transparent 40%),
+    radial-gradient(ellipse at 70% 60%, rgba(200, 60, 120, 0.20) 0%, transparent 45%);
+  filter: blur(40px);
+  animation: warNebula 22s ease-in-out infinite alternate;
+}
+@keyframes warNebula {
+  0%   { transform: translate3d(-2%, -1%, 0) scale(1.02); opacity: 0.85; }
+  100% { transform: translate3d(2%, 2%, 0) scale(1.08); opacity: 1; }
+}
+
+/* Three star layers — different sizes, speeds, depths. radial-gradient
+ * with tiny stops gives us a "starfield" without an image asset. */
+.warBgStars {
+  position: absolute; inset: -10%;
+  background-repeat: repeat;
+}
+.warBgStars--far {
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, rgba(255,255,255,0.7), transparent 60%),
+    radial-gradient(1px 1px at 28% 64%, rgba(255,255,255,0.55), transparent 60%),
+    radial-gradient(1px 1px at 53% 22%, rgba(255,255,255,0.6), transparent 60%),
+    radial-gradient(1px 1px at 71% 81%, rgba(255,255,255,0.5), transparent 60%),
+    radial-gradient(1px 1px at 88% 33%, rgba(255,255,255,0.6), transparent 60%),
+    radial-gradient(1px 1px at 41% 92%, rgba(255,255,255,0.55), transparent 60%),
+    radial-gradient(1px 1px at 5%  46%, rgba(255,255,255,0.5), transparent 60%);
+  background-size: 600px 600px;
+  animation: warStars 120s linear infinite;
+  opacity: 0.55;
+}
+.warBgStars--mid {
+  background-image:
+    radial-gradient(1.5px 1.5px at 14% 32%, rgba(255,225,180,0.85), transparent 60%),
+    radial-gradient(1.5px 1.5px at 36% 78%, rgba(255,255,255,0.85), transparent 60%),
+    radial-gradient(1.5px 1.5px at 62% 12%, rgba(200,200,255,0.8), transparent 60%),
+    radial-gradient(1.5px 1.5px at 80% 58%, rgba(255,255,255,0.85), transparent 60%),
+    radial-gradient(1.5px 1.5px at 23% 6%,  rgba(255,255,255,0.7), transparent 60%);
+  background-size: 450px 450px;
+  animation: warStars 80s linear infinite;
+  opacity: 0.7;
+}
+.warBgStars--near {
+  background-image:
+    radial-gradient(2px 2px at 18% 50%, rgba(245,196,81,0.85), transparent 60%),
+    radial-gradient(2px 2px at 70% 30%, rgba(255,255,255,0.95), transparent 60%),
+    radial-gradient(2px 2px at 50% 88%, rgba(255,200,200,0.85), transparent 60%);
+  background-size: 320px 320px;
+  animation: warStars 50s linear infinite;
+  opacity: 0.85;
+}
+@keyframes warStars {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-600px, -200px, 0); }
+}
+
+/* Slowly rotating concentric rings — sit at different z-depths for
+ * a real perspective parallax. */
+.warBgRing {
+  position: absolute;
+  border: 1px solid rgba(245, 196, 81, 0.10);
+  border-radius: 50%;
+  transform-style: preserve-3d;
+}
+.warBgRing--a {
+  width: 700px; height: 700px;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%) translateZ(-200px) rotateX(72deg);
+  animation: warRingSpin 36s linear infinite;
+}
+.warBgRing--b {
+  width: 900px; height: 900px;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%) translateZ(-340px) rotateX(72deg) rotateZ(40deg);
+  border-color: rgba(150, 80, 220, 0.10);
+  animation: warRingSpin 60s linear infinite reverse;
+}
+.warBgRing--c {
+  width: 1200px; height: 1200px;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%) translateZ(-520px) rotateX(72deg) rotateZ(80deg);
+  border-color: rgba(245, 196, 81, 0.06);
+  animation: warRingSpin 90s linear infinite;
+}
+@keyframes warRingSpin {
+  from { transform: translate(-50%, -50%) rotateX(72deg) rotateZ(0deg); }
+  to   { transform: translate(-50%, -50%) rotateX(72deg) rotateZ(360deg); }
+}
+
+/* Faint card silhouettes drifting deeper in the scene. */
+.warBgCardLoop {
+  position: absolute; inset: 0;
+  transform-style: preserve-3d;
+}
+.warBgCard {
+  position: absolute;
+  width: 60px; height: 90px;
+  border-radius: 5px;
+  background: linear-gradient(135deg, rgba(245,196,81,0.10), rgba(120,40,200,0.10));
+  border: 1px solid rgba(245, 196, 81, 0.18);
+  opacity: 0.55;
+  filter: blur(0.5px);
+  animation: warCardDrift 18s ease-in-out infinite;
+}
+.warBgCard--1 { top: 12%; left:  8%; animation-delay:  0s;   transform: rotate(-12deg); }
+.warBgCard--2 { top: 30%; left: 82%; animation-delay: -3s;   transform: rotate( 14deg); }
+.warBgCard--3 { top: 64%; left: 12%; animation-delay: -6s;   transform: rotate( 18deg); }
+.warBgCard--4 { top: 78%; left: 70%; animation-delay: -9s;   transform: rotate(-10deg); }
+.warBgCard--5 { top: 22%; left: 48%; animation-delay: -12s;  transform: rotate(  4deg); }
+.warBgCard--6 { top: 50%; left: 92%; animation-delay: -15s;  transform: rotate(-22deg); }
+@keyframes warCardDrift {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(var(--r, 0deg)); opacity: 0.35; }
+  50%      { transform: translate3d(8px, -14px, 60px) rotate(calc(var(--r, 0deg) + 6deg)); opacity: 0.65; }
+}
 
 /* ─── Hero ─────────────────────────────────────────────────────────── */
 .warHero {
   display: flex; flex-direction: row; gap: 18px;
-  padding: 16px 14px; margin: 8px 4px 14px;
+  padding: 18px 16px; margin: 8px 4px 14px;
   border-radius: 14px;
   background:
     radial-gradient(ellipse at 80% 20%, rgba(212, 162, 78, 0.15) 0%, transparent 60%),
-    linear-gradient(135deg, #190857 0%, #07041e 100%);
+    linear-gradient(135deg, rgba(25, 8, 87, 0.85) 0%, rgba(7, 4, 30, 0.92) 100%);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.06),
     0 8px 22px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
 }
 .warHeroBrand { flex: 1.4; min-width: 0; }
-.warHeroBoard { flex: 1; display: flex; align-items: center; justify-content: center; }
-.warHeroSvg { width: 100%; max-width: 220px; }
+.warHeroBoard {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  perspective: 800px;
+}
+.warHeroStage {
+  position: relative;
+  width: 100%; max-width: 240px; aspect-ratio: 3 / 2;
+  transform-style: preserve-3d;
+  transform: rotateX(8deg);
+}
+.warHeroCard {
+  position: absolute;
+  width: 38%; height: 80%;
+  top: 10%;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #fff 0%, #f1eadd 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: clamp(22px, 5vw, 32px); font-weight: 700;
+  box-shadow:
+    0 6px 14px rgba(0,0,0,0.55),
+    inset 0 0 0 1px rgba(0,0,0,0.06);
+  animation: warHeroFloat 4.2s ease-in-out infinite;
+}
+.warHeroCardInner { display: flex; align-items: baseline; gap: 2px; }
+.warHeroCardInner span { font-size: 0.75em; }
+.warHeroCard--left {
+  left: 6%;
+  color: #1a1a1a;
+  transform: rotate(-14deg) translateZ(20px);
+}
+.warHeroCard--right {
+  right: 6%;
+  color: #c4524f;
+  transform: rotate(12deg) translateZ(0px);
+  animation-delay: -2.1s;
+}
+@keyframes warHeroFloat {
+  0%, 100% { transform: rotate(var(--rot, -14deg)) translate3d(0, 0, 20px); }
+  50%      { transform: rotate(var(--rot, -14deg)) translate3d(0, -6px, 30px); }
+}
+.warHeroCard--left  { --rot: -14deg; }
+.warHeroCard--right { --rot:  12deg; }
+.warHeroSpark {
+  position: absolute; left: 50%; top: 50%;
+  width: 70px; height: 70px;
+  transform: translate(-50%, -50%) translateZ(40px);
+  background: radial-gradient(circle, rgba(245, 196, 81, 0.55) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: warHeroSpark 3s ease-in-out infinite;
+}
+@keyframes warHeroSpark {
+  0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) translateZ(40px) scale(0.9); }
+  50%      { opacity: 0.9; transform: translate(-50%, -50%) translateZ(40px) scale(1.15); }
+}
 .warHeroEyebrow { font-size: 10px; letter-spacing: 4px; font-weight: 700; color: rgba(245,196,81,0.75); margin-bottom: 6px; }
 .warHeroTitle { font-size: clamp(20px, 4.5vw, 30px); line-height: 1.1; font-weight: 700; color: #fff; margin-bottom: 8px; }
 .warHeroSub { font-size: 13px; line-height: 1.4; color: rgba(255, 255, 255, 0.78); }
 
 /* ─── Status pills ──────────────────────────────────────────────────── */
 .warStatusRow { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 4px 12px; }
-.warPill { flex: 1 1 110px; min-width: 110px; padding: 8px 10px; border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); }
+.warPill {
+  flex: 1 1 110px; min-width: 110px; padding: 8px 10px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(2px);
+}
 .warPillLabel { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.55); }
 .warPillValue { font-size: 16px; font-weight: 700; color: #fff; margin-top: 2px; }
 .warPillFootnote { font-size: 10px; color: rgba(255,255,255,0.55); margin-top: 2px; }
@@ -542,57 +816,93 @@ export default {
 }
 .warOpenLabel { flex: 0 0 auto; align-self: center; font-size: 12px; }
 
-.warRules { margin: 8px 4px 12px; padding: 12px 16px; border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); }
+.warRules {
+  margin: 8px 4px 12px; padding: 12px 16px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(2px);
+}
 .warRules ol { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.55; color: rgba(255,255,255,0.85); }
 
-.warStatusLine { font-size: 12px; color: #d4a24e; font-style: italic; }
+.warStatusLine { font-size: 12px; color: #d4a24e; font-style: italic; min-height: 16px; }
 
-/* ─── Play table ────────────────────────────────────────────────────── */
+/* ─── Play stage (3D perspective) ───────────────────────────────────── */
 .warPlayHeader { margin: 4px 0 8px; }
 .warBackBtn { flex: 0 0 auto; min-width: 90px; }
 
-.warTableWrap { display: flex; justify-content: center; margin: 8px 0 12px; }
+.warStageWrap {
+  display: flex; justify-content: center;
+  margin: 8px 0 12px;
+  perspective: 1400px;
+  perspective-origin: 50% 40%;
+}
+.warStage {
+  position: relative;
+  width: clamp(280px, 92vw, 640px);
+  aspect-ratio: 4 / 3;
+  transform-style: preserve-3d;
+  transform: rotateX(12deg);
+  transition: transform 0.6s ease;
+}
+.warStage--win  { transform: rotateX(10deg) scale(1.01); }
+.warStage--lose { transform: rotateX(14deg) scale(0.99); }
+.warStageFloor {
+  position: absolute;
+  left: -8%; right: -8%; bottom: -6%;
+  height: 60%;
+  background: radial-gradient(ellipse at 50% 0%, rgba(0,0,0,0.55) 0%, transparent 70%);
+  transform: rotateX(72deg) translateY(40%);
+  transform-origin: 50% 0%;
+  filter: blur(8px);
+  pointer-events: none;
+}
+
 .warTable {
   position: relative;
-  width: clamp(280px, 92vw, 620px);
-  aspect-ratio: 4 / 3;
-  border-radius: 18px;
+  width: 100%; height: 100%;
+  border-radius: 22px;
   overflow: hidden;
   box-shadow:
-    0 12px 30px rgba(0, 0, 0, 0.55),
+    0 24px 60px rgba(0, 0, 0, 0.65),
+    0 6px 18px rgba(0, 0, 0, 0.55),
     inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  transform: translateZ(0);
   transition: box-shadow 0.4s ease;
 }
-.warTable--win { box-shadow: 0 0 0 2px #f5c451, 0 0 28px 6px rgba(245, 196, 81, 0.45), 0 12px 30px rgba(0, 0, 0, 0.55); }
-.warTable--lose { box-shadow: 0 0 0 2px #c4524f, 0 0 22px 4px rgba(196, 82, 79, 0.35), 0 12px 30px rgba(0, 0, 0, 0.55); }
-.warTable--push { box-shadow: 0 0 0 2px #d4a24e, 0 0 22px 4px rgba(212, 162, 78, 0.35), 0 12px 30px rgba(0, 0, 0, 0.55); }
+.warStage--win  .warTable { box-shadow: 0 0 0 2px #f5c451, 0 0 40px 6px rgba(245, 196, 81, 0.50), 0 24px 60px rgba(0, 0, 0, 0.65); }
+.warStage--lose .warTable { box-shadow: 0 0 0 2px #c4524f, 0 0 32px 4px rgba(196, 82, 79, 0.45), 0 24px 60px rgba(0, 0, 0, 0.65); }
+.warStage--push .warTable { box-shadow: 0 0 0 2px #d4a24e, 0 0 28px 4px rgba(212, 162, 78, 0.40), 0 24px 60px rgba(0, 0, 0, 0.65); }
 
 .warRail {
   position: absolute; inset: 0;
   background:
     radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.35) 100%),
-    linear-gradient(135deg, #2a1a10 0%, #4a2c1a 40%, #2a1a10 100%);
-  border-radius: 18px;
+    linear-gradient(135deg, #3a2415 0%, #5c3823 40%, #2a1a10 100%);
+  border-radius: 22px;
 }
 .warFelt {
-  position: absolute; inset: 14px;
-  border-radius: 12px;
-  background: radial-gradient(ellipse at 50% 50%, #1f5c3a 0%, #0e3b22 65%, #07291a 100%);
+  position: absolute; inset: 16px;
+  border-radius: 14px;
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(255,255,255,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, #1f5c3a 0%, #0e3b22 60%, #07291a 100%);
   display: flex; flex-direction: column; justify-content: space-between;
   padding: 14px 12px 14px;
+  box-shadow: inset 0 0 30px rgba(0,0,0,0.45);
 }
 .warBrand {
   position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
   letter-spacing: 4px; font-size: 10px; color: rgba(245, 196, 81, 0.55); font-weight: 600;
 }
 
-.warSide { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.warSide {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
 .warSide--opp { transform: rotate(180deg); }
+/* The img and corner get the rotate back so they read upright after the side flip. */
 .warSide--opp .warSideLabel,
 .warSide--opp .warCardCorner,
 .warSide--opp .warCardImg { transform: rotate(180deg); }
-/* The img and corner get the rotate back so they read upright after the side flip. */
 .warSideLabel {
   font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
   color: rgba(255, 255, 255, 0.85);
@@ -601,44 +911,60 @@ export default {
 .warTotal {
   font-size: 14px; color: #f5c451; font-weight: 700;
   padding: 1px 8px; border-radius: 4px;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.45);
+  min-width: 22px; text-align: center;
 }
-.warHand { display: flex; flex-direction: row; gap: clamp(4px, 1.5vw, 10px); }
-.warCardSlot {
-  width: clamp(46px, 11vw, 82px);
+.warCardSlot--big {
+  width: clamp(96px, 22vw, 160px);
   aspect-ratio: 2.5 / 3.5;
-  perspective: 900px;
+  perspective: 1200px;
 }
 .warVs {
   text-align: center;
   font-size: 11px; letter-spacing: 4px; font-weight: 700;
-  color: rgba(245, 196, 81, 0.6);
+  color: rgba(245, 196, 81, 0.65);
   margin: 4px 0;
+  text-shadow: 0 0 12px rgba(245, 196, 81, 0.4);
 }
 
-/* ─── Card flip ─────────────────────────────────────────────────────── */
+/* ─── Card 3D flip & winner lift ────────────────────────────────────── */
 .warCard {
   position: relative; width: 100%; height: 100%;
   transform-style: preserve-3d;
-  transition: transform 0.7s cubic-bezier(0.65, 0, 0.35, 1);
+  transition: transform 0.9s cubic-bezier(0.65, 0, 0.35, 1);
+  animation: warCardDeal 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes warCardDeal {
+  0%   { transform: translate3d(0, -40px, -120px) rotateZ(-8deg); opacity: 0; }
+  60%  { opacity: 1; }
+  100% { transform: translate3d(0, 0, 0) rotateZ(0deg); opacity: 1; }
 }
 .warCard--flipped { transform: rotateY(180deg); }
+.warCard--winner {
+  animation: warCardWin 1.4s ease-in-out infinite alternate;
+}
+@keyframes warCardWin {
+  from { filter: drop-shadow(0 0 0 rgba(245, 196, 81, 0)); transform: rotateY(180deg) translateZ(0); }
+  to   { filter: drop-shadow(0 0 14px rgba(245, 196, 81, 0.85)); transform: rotateY(180deg) translateZ(18px); }
+}
 .warCardFace {
   position: absolute; inset: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   overflow: hidden;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.10);
 }
 .warCardFace--back { background: #fff; }
 .warCardFace--front { transform: rotateY(180deg); background: #fff; display: flex; align-items: center; justify-content: center; position: relative; }
 .warCardImg { width: 100%; height: 100%; object-fit: cover; user-select: none; -webkit-user-drag: none; }
 .warCardCorner {
-  position: absolute; top: 3px; left: 5px;
-  font-size: 10px; font-weight: 700;
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 3px; padding: 1px 3px; line-height: 1;
+  position: absolute; top: 4px; left: 6px;
+  font-size: 11px; font-weight: 700;
+  background: rgba(255, 255, 255, 0.88);
+  border-radius: 3px; padding: 1px 4px; line-height: 1;
 }
 .warCardCorner--red { color: #c4524f; }
 .warCardCorner--black { color: #1a1a1a; }
@@ -646,44 +972,72 @@ export default {
 /* ─── Custom CSS card back ──────────────────────────────────────────── */
 .warBack {
   width: 100%; height: 100%;
-  background: repeating-linear-gradient(45deg, #190857 0 6px, #2a1577 6px 12px);
+  background:
+    repeating-linear-gradient(45deg, #190857 0 6px, #2a1577 6px 12px),
+    radial-gradient(ellipse at center, #2a1577, #190857);
   display: flex; align-items: center; justify-content: center;
-  padding: 4px;
+  padding: 6px;
 }
 .warBackInner {
   width: 100%; height: 100%;
   border: 2px solid rgba(245, 196, 81, 0.85);
-  border-radius: 4px;
+  border-radius: 5px;
   display: flex; align-items: center; justify-content: center;
-  background: radial-gradient(ellipse at center, rgba(25, 8, 87, 0.6) 0%, rgba(0, 0, 0, 0.5) 100%);
+  background: radial-gradient(ellipse at center, rgba(25, 8, 87, 0.6) 0%, rgba(0, 0, 0, 0.55) 100%);
 }
-.warBackMark { font-family: 'EB Garamond', serif; font-weight: 700; font-size: clamp(18px, 4vw, 28px); color: #f5c451; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55); }
+.warBackMark {
+  font-family: 'EB Garamond', serif; font-weight: 700;
+  font-size: clamp(28px, 7vw, 48px); color: #f5c451;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), 0 0 12px rgba(245, 196, 81, 0.45);
+}
 
 /* ─── Verdict ribbon ────────────────────────────────────────────────── */
 .warVerdict {
-  position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+  position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%) translateZ(20px);
   font-size: 13px; letter-spacing: 4px; font-weight: 700;
-  padding: 4px 14px; border-radius: 4px;
+  padding: 5px 16px; border-radius: 4px;
   border: 1px solid currentColor;
   animation: warVerdictIn 0.5s ease-out both;
+  backdrop-filter: blur(2px);
 }
-.warVerdict--win { color: #f5c451; background: rgba(245, 196, 81, 0.12); }
-.warVerdict--loss { color: #c4524f; background: rgba(196, 82, 79, 0.12); }
-.warVerdict--push { color: #d4a24e; background: rgba(212, 162, 78, 0.12); }
+.warVerdict--win  { color: #f5c451; background: rgba(245, 196, 81, 0.18); text-shadow: 0 0 14px rgba(245, 196, 81, 0.55); }
+.warVerdict--loss { color: #c4524f; background: rgba(196, 82, 79, 0.18); }
+.warVerdict--push { color: #d4a24e; background: rgba(212, 162, 78, 0.16); }
 @keyframes warVerdictIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* ─── Awaiting-oracle overlay ───────────────────────────────────────── */
+.warAwaiting {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+}
+.warAwaitingSpinner {
+  width: 40px; height: 40px; border-radius: 50%;
+  border: 3px solid rgba(245, 196, 81, 0.2);
+  border-top-color: #f5c451;
+  animation: warSpin 1s linear infinite;
+}
+@keyframes warSpin { to { transform: rotate(360deg); } }
+.warAwaitingLabel {
+  font-size: 11px; letter-spacing: 3px; font-weight: 700;
+  color: rgba(245, 196, 81, 0.9);
+}
 
 /* ─── Demo hint ─────────────────────────────────────────────────────── */
 .demoHint {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 6px 10px; margin: 8px auto;
-  max-width: 620px; border-radius: 8px;
+  max-width: 640px; border-radius: 8px;
   background: rgba(245, 196, 81, 0.08);
   border: 1px dashed rgba(245, 196, 81, 0.45);
   color: rgba(255, 255, 255, 0.85);
   font-size: 12px;
 }
-.demoHintDot { width: 8px; height: 8px; border-radius: 50%; background: #f5c451;
-  box-shadow: 0 0 6px rgba(245, 196, 81, 0.8); animation: demoPulse 1.6s ease-in-out infinite; }
+.demoHintDot {
+  width: 8px; height: 8px; border-radius: 50%; background: #f5c451;
+  box-shadow: 0 0 6px rgba(245, 196, 81, 0.8); animation: demoPulse 1.6s ease-in-out infinite;
+}
 @keyframes demoPulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
 .demoHintLabel { font-size: 10px; letter-spacing: 3px; font-weight: 700; color: #f5c451; }
 .demoBtn {
@@ -696,5 +1050,15 @@ export default {
 
 @media (max-width: 480px) {
   .warHero { flex-direction: column; gap: 12px; }
+  .warBgRing--a, .warBgRing--b, .warBgRing--c { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .warBgStars--far, .warBgStars--mid, .warBgStars--near,
+  .warBgRing--a, .warBgRing--b, .warBgRing--c,
+  .warBgNebula, .warBgCard,
+  .warHeroCard, .warHeroSpark,
+  .warCard, .warCard--winner {
+    animation: none !important;
+  }
 }
 </style>

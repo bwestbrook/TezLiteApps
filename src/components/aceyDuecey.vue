@@ -34,8 +34,6 @@ export default {
       gameInfo: AD_GAME_INFO,
       showInfo: false,
       needsLastCard: false,
-      highLow: 'Ace High',
-      aceHigh: 1,
       blockChainStatus: '',
       tezosSymbol: 'ꜩ',
       gameId: 'NA',
@@ -60,6 +58,11 @@ export default {
       // secondCard / lastCard via revealCards(), with small stagger so the
       // deal feels like a deal.
       flipped: [false, false, false],
+      // Final resting tilt (degrees) per card slot. Re-randomized each
+      // time a card is dealt so cards never land at the exact same angle
+      // twice — feels like a real deal instead of a perfectly aligned
+      // grid. Indexed [low(card1), high(card2), target(card3)].
+      dealAngles: [0, 0, 0],
       verdict: null, // 'win' | 'pair' | 'loss' | null — sets table glow
       // Cache of the deck so the template can resolve face images by index.
       deck: [],
@@ -267,9 +270,9 @@ export default {
     // Three.js scene (card1 at -spacing, card3 at 0, card2 at +spacing).
     slots() {
       return [
-        { key: 'low', deckIdx: this.firstCard, flipped: this.flipped[0] },
-        { key: 'target', deckIdx: this.lastCard, flipped: this.flipped[2] },
-        { key: 'high', deckIdx: this.secondCard, flipped: this.flipped[1] },
+        { key: 'low',    deckIdx: this.firstCard,  flipped: this.flipped[0], tilt: this.dealAngles[0] },
+        { key: 'target', deckIdx: this.lastCard,   flipped: this.flipped[2], tilt: this.dealAngles[2] },
+        { key: 'high',   deckIdx: this.secondCard, flipped: this.flipped[1], tilt: this.dealAngles[1] },
       ]
     },
     // The window of ranks the player needs the third card to land inside.
@@ -278,33 +281,27 @@ export default {
       const a = rankOf(this.firstCard)
       const b = rankOf(this.secondCard)
       if (a == null || b == null) return null
-      // Acey-Deucey: ace can swing low when aceHigh = 0.
-      const norm = (r) => (r === 14 && !this.aceHigh ? 1 : r)
-      const lo = Math.min(norm(a), norm(b))
-      const hi = Math.max(norm(a), norm(b))
+      const lo = Math.min(a, b)
+      const hi = Math.max(a, b)
       const fmt = (r) => RANK_LABELS[r] || r
       if (lo === hi) return `Pair of ${fmt(lo)}s`
       return `Need: between ${fmt(lo)} and ${fmt(hi)}`
     },
     rangeWidthPct() {
-      // How wide the in-between range is, as a fraction of the 1..14 span.
-      // Used to size the highlighted segment of the range bar.
+      // How wide the in-between range is, as a fraction of the 2..14 span
+      // (Aces are always high). Drives the highlighted segment width.
       const a = rankOf(this.firstCard)
       const b = rankOf(this.secondCard)
       if (a == null || b == null) return 0
-      const norm = (r) => (r === 14 && !this.aceHigh ? 1 : r)
-      const lo = Math.min(norm(a), norm(b))
-      const hi = Math.max(norm(a), norm(b))
-      const span = Math.max(0, hi - lo - 1)
-      return Math.round((span / 12) * 100)
+      const span = Math.max(0, Math.abs(a - b) - 1)
+      return Math.round((span / 11) * 100)
     },
     rangeOffsetPct() {
       const a = rankOf(this.firstCard)
       const b = rankOf(this.secondCard)
       if (a == null || b == null) return 0
-      const norm = (r) => (r === 14 && !this.aceHigh ? 1 : r)
-      const lo = Math.min(norm(a), norm(b))
-      return Math.round(((lo - 1) / 13) * 100)
+      const lo = Math.min(a, b)
+      return Math.round(((lo - 2) / 12) * 100)
     },
     // Spread = number of ranks strictly between the two anchor cards.
     // 1..11 for non-pairs. The contract pays 12.35 / spread × finalBet
@@ -313,10 +310,7 @@ export default {
       const a = rankOf(this.firstCard)
       const b = rankOf(this.secondCard)
       if (a == null || b == null) return null
-      const norm = (r) => (r === 14 && !this.aceHigh ? 1 : r)
-      const lo = Math.min(norm(a), norm(b))
-      const hi = Math.max(norm(a), norm(b))
-      const s = hi - lo - 1
+      const s = Math.abs(a - b) - 1
       return s > 0 ? s : 0
     },
     // True-odds payout multiplier the contract will pay if card 3 lands
@@ -399,13 +393,20 @@ export default {
         // tight enough that the whole deal lands in <1 second.
         const delay = 250 + 350 * order
         setTimeout(() => {
+          // Random landing tilt (-9°..+9°) so each card looks tossed
+          // by hand rather than snapped onto a grid.
+          const tilt = Number(((Math.random() - 0.5) * 18).toFixed(2))
+          this.dealAngles = this.dealAngles.map((v, j) => (j === slotIdx ? tilt : v))
           this.flipped = this.flipped.map((v, j) => (j === slotIdx ? true : v))
         }, delay)
       })
     },
-    // Wipe any existing reveal — used when a new game starts.
+    // Wipe any existing reveal — used when a new game starts. Cards
+    // animate back off-screen toward the dealer; angles reset so the
+    // next deal starts from a clean slate.
     async resetGame() {
       this.flipped = [false, false, false]
+      this.dealAngles = [0, 0, 0]
       this.verdict = null
     },
     // Kept for the socket handler. CSS handles real sizing, so this just
@@ -441,9 +442,8 @@ export default {
       // console so it's easy to verify what Taquito is signing.
       const totalBetTez = Number(this.ante) + Number(this.fee)
       const totalBetStr = totalBetTez.toFixed(6)
-      const aceHighInt = Number(this.aceHigh)
       console.log(
-        `[AD] startGameBC: bet(${aceHighInt}) with amount ${totalBetStr} ꜩ to`,
+        `[AD] startGameBC: bet() with amount ${totalBetStr} ꜩ to`,
         AD_CONTRACT_ADDRESS,
       )
 
@@ -456,14 +456,10 @@ export default {
 
       try {
         const contract = await this.tezos.wallet.at(AD_CONTRACT_ADDRESS)
-        // Deployed AD's `bet` entrypoint takes a single `int` (aceHigh).
-        // SmartPy collapses single-field record params to bare arguments
-        // at the Michelson level, so we use .methods (positional) rather
-        // than .methodsObject. The earlier secure-AD variant took
-        // {aceHigh, playerNonce} as a record — restore that call shape
-        // if you redeploy the secure version.
+        // Deployed AD's `bet` entrypoint takes no parameters now —
+        // Aces are always high. Just send the ante + fee.
         const op = await contract.methods
-          .bet(aceHighInt)
+          .bet()
           .send({ amount: totalBetStr })
         this.blockChainStatus = `Bet broadcast — waiting for confirmation (${op.opHash.slice(0, 12)}…)`
         console.log('[AD] startGameBC: op injected', op.opHash)
@@ -620,21 +616,6 @@ export default {
         this.dealing = ''
       }
     },
-    async claimWinnings() {
-      const activeAccount = await this.wallet.client.getActiveAccount()
-      if (!activeAccount) return
-      this.useWalletProvider()
-      this.blockChainStatus = 'Claiming winnings...'
-      try {
-        const contract = await this.tezos.wallet.at(AD_CONTRACT_ADDRESS)
-        const op = await contract.methodsObject.claim().send()
-        await op.confirmation()
-        this.blockChainStatus = 'Claimed.'
-      } catch (e) {
-        console.error('claim failed:', e)
-        this.blockChainStatus = 'Nothing to claim.'
-      }
-    },
     fetchContractStorage() {
       return getContractStorage(AD_CONTRACT_ADDRESS)
     },
@@ -789,13 +770,6 @@ export default {
     async setGameId(gameId) {
       this.gameId = gameId
       this.loadGameInfo()
-    },
-    async toggleAceHigh() {
-      if (this.highLow == 'Ace High') {
-        this.aceHigh = 1
-      } else {
-        this.aceHigh = 0
-      }
     },
     async myGameHub() {
       await this.getPotBalance()
@@ -973,7 +947,10 @@ export default {
               :key="slot.key + '-' + i"
               :class="['adCardSlot', `adCardSlot--${slot.key}`]"
             >
-              <div :class="['adCard', { 'adCard--flipped': slot.flipped }]">
+              <div
+                :class="['adCard', { 'adCard--flipped': slot.flipped }]"
+                :style="{ '--ad-card-tilt': slot.tilt + 'deg' }"
+              >
                 <!-- Back face: pure-CSS card back -->
                 <div class="adCardFace adCardFace--back">
                   <div class="adBack">
@@ -1027,11 +1004,7 @@ export default {
 
     <div class="rowFlex">
       <div class="actionButton" @click="startGameBC">Ante up and play!</div>
-      <select @change="toggleAceHigh()" class="selectBox" v-model="highLow"> PICK:
-        <option v-for="key in ['Ace Low', 'Ace High']" :key="key">{{ key }}</option>
-      </select>
       <div class="actionButton" @click="continueBetBC">Bet On Acey Deucey</div>
-      <div class="actionButton" @click="claimWinnings">Claim winnings</div>
     </div>
 
     <div class="gameInfo" @click="myGameHub()">MY GAME HUB</div>
@@ -1066,80 +1039,175 @@ export default {
 </template>
 
 <style scoped>
-/* ─── Table + felt ────────────────────────────────────────────────────── */
+/* ─── Casino "scene" ──────────────────────────────────────────────────
+   The wrap is the room around the table. Layered radial + linear
+   gradients fake an overhead spotlight pooling on the felt, dark wood
+   paneling on the side walls, and a soft floor vignette. Sets up a
+   shared `perspective` so the table inside can tilt convincingly.
+
+   To drop in a real photo background, replace the `--ad-room-bg`
+   custom property below with a `url("…")`. Everything else (rail,
+   felt, lighting overlays) layers on top of it. */
 .adTableWrap {
+  --ad-room-bg:
+    /* warm overhead spotlight */
+    radial-gradient(ellipse 60% 45% at 50% -10%, rgba(255, 220, 140, 0.30) 0%, transparent 60%),
+    /* lower vignette */
+    radial-gradient(ellipse 80% 60% at 50% 110%, rgba(0, 0, 0, 0.55) 0%, transparent 65%),
+    /* wood paneling stripes — vertical planks, faint */
+    repeating-linear-gradient(90deg,
+      rgba(0, 0, 0, 0.22) 0px, rgba(0, 0, 0, 0.22) 1px,
+      transparent 1px, transparent 36px),
+    /* room base: dark walnut */
+    linear-gradient(180deg, #1a100a 0%, #2a1a10 45%, #14090a 100%);
+  position: relative;
   display: flex;
   justify-content: center;
-  margin: 8px 0 14px;
+  align-items: center;
+  margin: 8px 0 18px;
+  padding: 36px 18px 44px;
+  border-radius: 18px;
+  background: var(--ad-room-bg);
+  perspective: 1400px;
+  perspective-origin: 50% -10%;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 -40px 60px rgba(0, 0, 0, 0.55);
 }
+/* Lone overhead bulb glow — sits above the table to push the spotlit
+   look. Pure decoration, no DOM node needed. */
+.adTableWrap::before {
+  content: '';
+  position: absolute;
+  top: -20px; left: 50%;
+  width: 240px; height: 240px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(255, 220, 140, 0.22) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+/* ─── Table + felt ───────────────────────────────────────────────── */
 .adTable {
   position: relative;
   width: clamp(280px, 92vw, 600px);
   aspect-ratio: 16 / 9;
-  border-radius: 18px;
+  border-radius: 22px;
   overflow: hidden;
+  /* Strong forward tilt so we're really looking down at the table.
+     transform-origin pinned to the bottom edge keeps the front rail
+     anchored to the floor while the back of the table recedes;
+     preserve-3d lets the deal + flip transforms compose with this
+     rotation instead of being flattened. */
+  transform: rotateX(26deg);
+  transform-origin: center bottom;
+  transform-style: preserve-3d;
   box-shadow:
-    0 12px 30px rgba(0, 0, 0, 0.55),
+    /* table thickness — soft drop on the floor */
+    0 26px 44px rgba(0, 0, 0, 0.65),
+    0 10px 18px rgba(0, 0, 0, 0.55),
     inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   transition: box-shadow 0.4s ease;
 }
 .adTable--win {
   box-shadow:
     0 0 0 2px #f5c451,
-    0 0 28px 6px rgba(245, 196, 81, 0.45),
-    0 12px 30px rgba(0, 0, 0, 0.55);
+    0 0 28px 6px rgba(245, 196, 81, 0.55),
+    0 26px 44px rgba(0, 0, 0, 0.65),
+    0 10px 18px rgba(0, 0, 0, 0.55);
 }
 .adTable--pair {
   box-shadow:
     0 0 0 2px #d4a24e,
-    0 0 22px 4px rgba(212, 162, 78, 0.35),
-    0 12px 30px rgba(0, 0, 0, 0.55);
+    0 0 22px 4px rgba(212, 162, 78, 0.45),
+    0 26px 44px rgba(0, 0, 0, 0.65),
+    0 10px 18px rgba(0, 0, 0, 0.55);
 }
 .adTable--loss {
   box-shadow:
     0 0 0 2px #c4524f,
-    0 0 22px 4px rgba(196, 82, 79, 0.35),
-    0 12px 30px rgba(0, 0, 0, 0.55);
+    0 0 22px 4px rgba(196, 82, 79, 0.45),
+    0 26px 44px rgba(0, 0, 0, 0.65),
+    0 10px 18px rgba(0, 0, 0, 0.55);
 }
-/* The rail is the dark wood-tone outer ring of a poker table */
+/* Rail: lacquered wood ring around the felt. Three stacked layers —
+   coarse grain stripes, a fine cross-grain noise, and a warm-to-dark
+   diagonal gloss — sell the wood look without an actual texture file. */
 .adRail {
   position: absolute;
   inset: 0;
+  border-radius: 22px;
   background:
-    radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.35) 100%),
-    linear-gradient(135deg, #2a1a10 0%, #4a2c1a 40%, #2a1a10 100%);
-  border-radius: 18px;
+    /* corner highlight + edge shadow */
+    radial-gradient(ellipse at 50% 0%, rgba(255, 220, 160, 0.18) 0%, transparent 38%),
+    radial-gradient(ellipse at center, transparent 56%, rgba(0, 0, 0, 0.5) 100%),
+    /* fine cross-grain */
+    repeating-linear-gradient(90deg,
+      rgba(0, 0, 0, 0.18) 0px, rgba(0, 0, 0, 0.18) 1px,
+      transparent 1px, transparent 4px),
+    /* main wood grain */
+    repeating-linear-gradient(8deg,
+      #3a2214 0px, #4a2c1a 6px, #3a2214 12px, #2a1810 18px),
+    /* lacquer base */
+    linear-gradient(135deg, #2a1810 0%, #5a3620 50%, #1f120a 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 160, 0.20),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.55);
 }
 .adFelt {
   position: absolute;
-  inset: 14px;
-  border-radius: 12px;
+  inset: 18px;
+  border-radius: 14px;
+  /* Felt: rich green with a hot spot under the overhead light. */
   background:
-    radial-gradient(ellipse at 50% 35%, #1f5c3a 0%, #0e3b22 65%, #07291a 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(0, 0, 0, 0.4),
-    inset 0 6px 18px rgba(0, 0, 0, 0.35);
-  /* subtle felt texture: stippled noise via repeating tiny radial gradients */
+    radial-gradient(ellipse at 50% 30%, #2a7a4a 0%, #134a2a 55%, #07291a 100%);
   background-image:
-    radial-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    radial-gradient(ellipse at 50% 35%, #1f5c3a 0%, #0e3b22 65%, #07291a 100%);
-  background-size: 4px 4px, auto;
-  background-position: 0 0, 0 0;
+    /* fine felt nap — stippled dots */
+    radial-gradient(rgba(255, 255, 255, 0.030) 0.6px, transparent 0.6px),
+    radial-gradient(rgba(0, 0, 0, 0.10) 0.6px, transparent 0.6px),
+    radial-gradient(ellipse at 50% 30%, #2a7a4a 0%, #134a2a 55%, #07291a 100%);
+  background-size: 3px 3px, 5px 5px, auto;
+  background-position: 0 0, 1px 2px, 0 0;
+  box-shadow:
+    /* recessed felt — sunken into the wooden rail */
+    inset 0 0 0 1px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 3px rgba(245, 196, 81, 0.10),  /* gold piping */
+    inset 0 8px 22px rgba(0, 0, 0, 0.50),
+    inset 0 -4px 12px rgba(0, 0, 0, 0.35);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 10px 12px;
+  transform-style: preserve-3d;
+}
+/* Decorative house-arc on the felt — the white half-circle painted on
+   real Acey-Duecey / blackjack tables to mark the dealer's reach. */
+.adFelt::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -30%;
+  width: 120%;
+  height: 100%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.10);
+  pointer-events: none;
 }
 .adBrand {
   position: absolute;
-  top: 8px;
+  top: 10px;
   left: 50%;
   transform: translateX(-50%);
-  letter-spacing: 4px;
-  font-size: 10px;
-  color: rgba(245, 196, 81, 0.55);
-  font-weight: 600;
+  letter-spacing: 5px;
+  font-size: 11px;
+  color: rgba(245, 196, 81, 0.65);
+  font-weight: 700;
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.6),
+    0 0 12px rgba(245, 196, 81, 0.35);
 }
 
 /* ─── Card row ────────────────────────────────────────────────────────── */
@@ -1151,6 +1219,7 @@ export default {
   gap: clamp(8px, 2.5vw, 22px);
   width: 100%;
   perspective: 1200px; /* shared 3D space — flips share a vanishing point */
+  transform-style: preserve-3d;   /* compose with the table's rotateX */
 }
 .adCardSlot {
   display: flex;
@@ -1159,11 +1228,46 @@ export default {
   width: clamp(64px, 18vw, 120px);
   aspect-ratio: 2.5 / 3.5; /* real playing-card proportions */
   position: relative;
+  transform-style: preserve-3d;
 }
+/* The "spot" on the felt — a dashed white outline showing where each
+   card will land. Always visible underneath; the dealt card slides in
+   on top of it. */
+.adCardSlot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.025);
+  box-shadow:
+    inset 0 0 10px rgba(0, 0, 0, 0.35),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  pointer-events: none;
+}
+/* Soft contact shadow under each card — sells the "cards sitting on
+   felt" feel by grounding them on the green surface. Hidden until the
+   card has actually landed (the parent slot's adCard--flipped class). */
+.adCardSlot::after {
+  content: '';
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: -6px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.55) 0%, transparent 70%);
+  filter: blur(2px);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease 0.4s;
+  z-index: -1;
+}
+.adCardSlot:has(.adCard--flipped)::after { opacity: 1; }
 .adCardSlot--target {
   /* The middle card — slightly raised + spotlit so the moment of reveal
      reads as the moment of reveal. */
-  transform: translateY(-4px);
+  transform: translateY(-4px) translateZ(6px);
 }
 .adCardSlot--target::before {
   content: '';
@@ -1188,15 +1292,31 @@ export default {
   font-weight: 600;
 }
 
-/* ─── The card itself: 3D flip ────────────────────────────────────────── */
+/* ─── The card itself: dealt onto the table ───────────────────────────
+   Default state is "in the dealer's hand" — way off-screen, tilted
+   sideways, face-down, and invisible. When `.adCard--flipped` is
+   applied (chain confirms the card), the card sails in to its slot
+   while spinning to face-up; --ad-card-tilt is set per-card so each
+   one lands at a slightly different angle, like a real deal. */
 .adCard {
   position: absolute;
   inset: 0;
   transform-style: preserve-3d;
-  transition: transform 0.7s cubic-bezier(0.65, 0, 0.35, 1);
+  transform:
+    translate3d(280%, -220%, 90px)
+    rotate(-28deg);
+  opacity: 0;
+  transition:
+    transform 0.85s cubic-bezier(0.22, 0.78, 0.32, 1.08),
+    opacity 0.30s ease;
+  will-change: transform;
 }
 .adCard--flipped {
-  transform: rotateY(180deg);
+  transform:
+    translate3d(0, 0, 0)
+    rotate(var(--ad-card-tilt, 0deg))
+    rotateY(180deg);
+  opacity: 1;
 }
 .adCardFace {
   position: absolute;

@@ -199,7 +199,7 @@ export function clearStaleBeaconStorage() {
 // ── Shadownet (current testnet, primary dev target) ──
 export const ORACLE_CONTRACT_SHADOWNET             = 'KT19V1YiyPtyCbxouhyeM96SekRTVC7Gw6qq'
 export const TXL_CONTRACT_ADDRESS_SHADOWNET        = 'KT1Ro63rVDUx2x8pMChCLSySso8t6JH47oRQ'
-export const AD_CONTRACT_ADDRESS_SHADOWNET         = 'KT1KsPsFDaTbFCF2DeDnZ4CJXy7zmw3BaRiz'
+export const AD_CONTRACT_ADDRESS_SHADOWNET         = 'KT1URHCvuBz7nwgpnqK1XPFuBLywUfpL8S5S'
 export const TTT_CONTRACT_ADDRESS_SHADOWNET        = 'KT1GkvjJhHtEZfsiSJnQWCS3zZVdgfnBdqWc'
 export const OBJECT_CONTRACT_SHADOWNET             = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
 export const SQUARES_CONTRACT_ADDRESS_SHADOWNET    = 'KT1SNsuFFQ4dDuU9FNNvxUan1hqyy279WZqa'
@@ -207,7 +207,7 @@ export const RNG_ORACLE_CONTRACT_ADDRESS_SHADOWNET = 'KT1XXXXXXXXXXXXXXXXXXXXXXX
 export const REVERSI_CONTRACT_ADDRESS_SHADOWNET    = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
 export const PLINKO_CONTRACT_ADDRESS_SHADOWNET     = 'KT18z3DNXbp1cZpXJe2SkaPnCTdDJAbb7Pph'
 export const CHESS_CONTRACT_ADDRESS_SHADOWNET      = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
-export const WAR_CONTRACT_ADDRESS_SHADOWNET        = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+export const WAR_CONTRACT_ADDRESS_SHADOWNET        = 'KT1Ep2wJV4LmrM1myLYuJFfPNzU4J9uHiq1q'
 
 // ── Mainnet (last known Ghostnet leftovers; redeploy each before real use) ──
 export const ORACLE_CONTRACT_MAINNET             = 'KT1VvcCnTPCUc7YaxyMT6opDrSPi2AUHnfvx'
@@ -284,12 +284,12 @@ export const REVERSI_GAME_INFO = [
 
 export const WAR_GAME_INFO = [
   'Pure-luck H2H — both players have exactly the same odds.',
-  'Player A creates a game with a stake. Player B matches it to start.',
-  'The oracle shuffles a deck. Five cards are dealt to each side, face up.',
-  'Hand value = sum of ranks (A=14, K=13, Q=12, J=11, 2-10 face).',
-  'Higher total takes the pot minus a 10% holder fee.',
-  'Exact tie → one more card each (sudden death). Tie again → push (refund minus fee).',
-  'No skill, no edge — just a fair 50/50 coin flip with prettier cards.',
+  'Player A creates a game with a wager (0.1 – 5 ꜩ). Player B matches it to start.',
+  'The oracle draws one card per side. Higher rank wins the pot.',
+  'Rank order: A=14, K=13, Q=12, J=11, 2–10 face value. Suits are decorative.',
+  'Settles inline — winner is paid the moment the oracle calls deal(). No claim step.',
+  'Tie → both players are refunded their wager.',
+  'Each side pays a flat 0.1 ꜩ holder fee on top of their wager. Creator can cancel an open game to refund.',
 ]
 
 // XC-2 — `default()` semantics: the Plinko contract's default

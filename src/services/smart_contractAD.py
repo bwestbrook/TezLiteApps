@@ -28,7 +28,6 @@ def main():
                 handValue=sp.map[sp.nat, sp.int],
                 handHashes=sp.map[sp.nat, sp.string],
                 player=sp.address,
-                aceHigh=sp.int,
                 gameStatus=sp.nat,
                 finalBet=sp.mutez,
             )])
@@ -87,18 +86,18 @@ def main():
             del self.data.games[params.gameId]
 
         @sp.entrypoint()
-        def bet(self, params):
+        def bet(self):
             '''
-            Player creates a game by paying ante + fee.
+            Player creates a game by paying ante + fee. Aces are always
+            high (rank 14) — there is no low-Ace mode.
             '''
             # SECURITY: §2.1 — the old `assert sp.amount == sp.amount` was a
             # tautology (AD-1). Enforce the exact price so a caller can't
             # underpay the ante and still open a game.
-            sp.cast(params.aceHigh, sp.int_or_nat)
             sp.cast(sp.sender, sp.address)
             sp.cast(sp.amount, sp.mutez)
             assert sp.amount == self.data.ante + self.data.fee, "must send ante + fee"
-            hand = {1: -1, 2: -1, 3: -1} 
+            hand = {1: -1, 2: -1, 3: -1}
             handValue = {1: -1, 2: -1, 3: -1}
             handHashes = {1: '', 2: '', 3: ''}
             new_game = sp.record(
@@ -106,7 +105,6 @@ def main():
                 handValue = handValue,
                 handHashes = handHashes,
                 player = sp.sender,
-                aceHigh = params.aceHigh,
                 gameStatus = 0,
                 finalBet = sp.mutez(0)
             )
@@ -296,9 +294,8 @@ def test():
     s.show(a.balance)
     a.default(_amount=sp.tez(1))
     a.bet(
-        _sender=player1, 
+        _sender=player1,
         _amount=tzMutezBet,
-        aceHigh=sp.int_or_nat(1)
     )
     a.firstCard(
         _sender=oracle, 
@@ -325,9 +322,8 @@ def test():
     )   
     s.show(a.balance)
     a.bet(
-        _sender=player1, 
+        _sender=player1,
         _amount=tzMutezBet,
-        aceHigh=sp.int_or_nat(1)
     )
 
     
