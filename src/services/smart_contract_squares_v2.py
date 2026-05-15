@@ -129,21 +129,29 @@ def main():
                 name=sp.string,
                 ticketPrice=sp.mutez,
                 holderFee=sp.mutez,
+                # Number of scoring periods for the underlying sport:
+                #   2 = soccer halves         (EPL, MLS, ...)
+                #   3 = hockey periods        (NHL)
+                #   4 = basketball quarters / football quarters (NBA, NFL)
+                #   9 = baseball innings      (MLB)
+                # numPeriods bounds the entries reportQuarter accepts and
+                # the count of weights required.
+                numPeriods=sp.nat,
+                # Map keyed 0..numPeriods-1, values summing to 100.
                 quarterWeights=sp.map[sp.int, sp.nat],
             ))
             assert not self.data.paused, "Paused"
             assert params.ticketPrice > sp.mutez(0), "ZeroTicket"
-            # Weights map: exactly four entries (keys 0..3) summing to 100.
-            assert 0 in params.quarterWeights, "MissingQ1"
-            assert 1 in params.quarterWeights, "MissingQ2"
-            assert 2 in params.quarterWeights, "MissingQ3"
-            assert 3 in params.quarterWeights, "MissingQ4"
-            sumW = (
-                params.quarterWeights[0]
-                + params.quarterWeights[1]
-                + params.quarterWeights[2]
-                + params.quarterWeights[3]
-            )
+            assert params.numPeriods >= sp.nat(1), "BadNumPeriods"
+            assert params.numPeriods <= sp.nat(9), "BadNumPeriods"
+            # Validate that the weights map has exactly numPeriods entries
+            # (keys 0..numPeriods-1) and sums to 100. The loop unrolls at
+            # compile-time; the `if` is run-time SmartPy.
+            sumW = sp.nat(0)
+            for i in range(9):
+                if sp.nat(i) < params.numPeriods:
+                    assert i in params.quarterWeights, "MissingPeriod"
+                    sumW = sumW + params.quarterWeights[i]
             assert sumW == sp.nat(100), "WeightsMustSumTo100"
 
             gid = self.data.currentGameId
@@ -161,8 +169,16 @@ def main():
                 axisHome={},
                 axisAway={},
                 axesAssigned=False,
+                numPeriods=params.numPeriods,
                 quarterWeights=params.quarterWeights,
-                quarterReported={0: False, 1: False, 2: False, 3: False},
+                # Always-init all 9 slots — reportQuarter only consults
+                # the first numPeriods entries, so the unused trailing
+                # entries are inert. Keeps the storage type uniform
+                # across games with different period counts.
+                quarterReported={
+                    0: False, 1: False, 2: False, 3: False, 4: False,
+                    5: False, 6: False, 7: False, 8: False,
+                },
                 quartersDone=sp.int(0),
                 pot=sp.mutez(0),
             )
@@ -264,7 +280,9 @@ def main():
             game = self.data.games[params.gameId]
             assert game.phase == PHASE_AXES_SET, "NotPlayable"
             assert params.quarter >= 0, "BadQuarter"
-            assert params.quarter < 4, "BadQuarter"
+            # Period index must fit the game's configured period count
+            # (2 for soccer halves, 4 for quarters, etc.).
+            assert params.quarter < sp.to_int(game.numPeriods), "BadQuarter"
             assert params.quarter in game.quarterReported, "UnknownQ"
             assert not game.quarterReported[params.quarter], "QAlreadyReported"
 
@@ -324,7 +342,8 @@ def main():
 
             game.quarterReported[params.quarter] = True
             game.quartersDone += 1
-            if game.quartersDone == sp.int(4):
+            # Game completes once every configured period has been reported.
+            if game.quartersDone == sp.to_int(game.numPeriods):
                 game.phase = PHASE_COMPLETE
                 sp.emit(params.gameId, tag="gameComplete")
 
@@ -413,6 +432,7 @@ def full_game_flow():
         name="SIM:ESPN:401871337 - CLE @ DET",
         ticketPrice=sp.tez(1),
         holderFee=sp.tez(0),  # zero holder fee → pot math stays clean
+        numPeriods=4,         # NBA quarters
         quarterWeights={0: 15, 1: 15, 2: 15, 3: 55},
         _sender=alice.address,
     )
@@ -467,3 +487,76 @@ def full_game_flow():
     c.claim(_sender=carol)
     # Intruder has nothing pending.
     c.claim(_sender=intruder, _valid=False, _exception="NothingToClaim")
+
+
+# ─── Soccer 2-half simulation ───────────────────────────────────────────
+# Exercises the variable-period support: a 2-period game with weights
+# 30/70 (halftime / full-time). Verifies that reportQuarter rejects
+# quarter >= 2 for this game, and that quartersDone == 2 flips the
+# phase to COMPLETE (not waiting for "quarters" 3 and 4).
+@sp.add_test()
+def soccer_halves_flow():
+    s = sp.test_scenario("squares soccer halves flow", main)
+
+    admin = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
+    rng = sp.test_account("rng")
+    txl = sp.test_account("txl")
+    alice = sp.test_account("alice")
+    bob = sp.test_account("bob")
+
+    c = main.Squares(admin, rng.address, txl.address)
+    s += c
+
+    s.h1("Create EPL-style game — numPeriods=2, weights 30/70")
+    c.createGame(
+        name="SIM:ESPN:soccer-123 - ARS @ MCI",
+        ticketPrice=sp.tez(1),
+        holderFee=sp.tez(0),
+        numPeriods=2,
+        quarterWeights={0: 30, 1: 70},
+        _sender=alice.address,
+    )
+
+    s.h1("Bad numPeriods (0 / 10) rejected")
+    c.createGame(
+        name="bad-0", ticketPrice=sp.tez(1), holderFee=sp.tez(0),
+        numPeriods=0, quarterWeights={0: 100},
+        _sender=alice.address, _valid=False, _exception="BadNumPeriods",
+    )
+    c.createGame(
+        name="bad-10", ticketPrice=sp.tez(1), holderFee=sp.tez(0),
+        numPeriods=10, quarterWeights={0: 100},
+        _sender=alice.address, _valid=False, _exception="BadNumPeriods",
+    )
+
+    s.h1("Missing period weight rejected (numPeriods=2 needs keys 0 + 1)")
+    c.createGame(
+        name="bad-weights", ticketPrice=sp.tez(1), holderFee=sp.tez(0),
+        numPeriods=2, quarterWeights={0: 100},
+        _sender=alice.address, _valid=False, _exception="MissingPeriod",
+    )
+
+    s.h1("Buys: alice 47, bob 58")
+    c.buySquare(gameId=0, squareIdx=47, _sender=alice, _amount=sp.tez(1))
+    c.buySquare(gameId=0, squareIdx=58, _sender=bob,   _amount=sp.tez(1))
+
+    s.h1("Close + identity axes")
+    c.closeSales(gameId=0, _sender=admin)
+    identity = sp.cast({i: i for i in range(10)}, sp.map[sp.int, sp.int])
+    c.setAxes(gameId=0, axisHome=identity, axisAway=identity, _sender=admin)
+
+    s.h1("Half 1 — 24-17 → idx 47 (alice, 30%)")
+    c.reportQuarter(gameId=0, quarter=0, homeScore=24, awayScore=17, _sender=admin)
+
+    s.h1("Quarter index >= numPeriods is rejected (2, 3 invalid here)")
+    c.reportQuarter(
+        gameId=0, quarter=2, homeScore=0, awayScore=0,
+        _sender=admin, _valid=False, _exception="BadQuarter",
+    )
+
+    s.h1("Half 2 (final) — 35-28 → idx 58 (bob, 70% of remainder)")
+    c.reportQuarter(gameId=0, quarter=1, homeScore=35, awayScore=28, _sender=admin)
+
+    s.h1("Game completes after 2 halves (not 4) — phase = COMPLETE")
+    c.claim(_sender=alice)
+    c.claim(_sender=bob)

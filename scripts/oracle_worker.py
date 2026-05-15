@@ -360,8 +360,9 @@ class PlinkoHandler(GameHandler):
 
 
 class WarHandler(GameHandler):
-    """Two-card showdown. Each game with gameStatus == 1 (joined, awaiting
-    deal) gets a single call to deal(gameId, card1, card2, seed)."""
+    """Best-of-3 speed war. Each game with gameStatus == 1 (joined,
+    awaiting deal) gets a single call to deal(gameId, cards1, cards2,
+    seed) where cards1/cards2 are 3-entry maps (round_idx → deck_idx)."""
     name = "war"
 
     @classmethod
@@ -378,13 +379,22 @@ class WarHandler(GameHandler):
                 continue
             if int(_field(g, "gameStatus", 0)) != 1:
                 continue
-            c1 = secrets.randbelow(52)
-            c2 = secrets.randbelow(52)
+            # Six distinct deck indices: three for each player, one per
+            # round. Sampled without replacement so no card appears twice
+            # across the whole match (mirrors a single physical deck).
+            deck = list(range(52))
+            secrets.SystemRandom().shuffle(deck)
+            six = deck[:6]
+            cards1 = {0: six[0], 1: six[1], 2: six[2]}
+            cards2 = {0: six[3], 1: six[4], 2: six[5]}
             seed = f"war-{gid}-{secrets.token_hex(6)}"
-            label = f"game {gid:>3} → deal(c1={c1}, c2={c2})"
-            def submit(contract: Any, gid=gid, c1=c1, c2=c2, seed=seed) -> str:
+            label = (
+                f"game {gid:>3} → deal(p1={list(cards1.values())} "
+                f"p2={list(cards2.values())})"
+            )
+            def submit(contract: Any, gid=gid, c1=cards1, c2=cards2, seed=seed) -> str:
                 op = contract.deal(
-                    gameId=gid, card1=c1, card2=c2, seed=seed,
+                    gameId=gid, cards1=c1, cards2=c2, seed=seed,
                 ).send(min_confirmations=1)
                 return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
             return [HandlerAction(label=label, submit=submit)]

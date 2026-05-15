@@ -1,17 +1,29 @@
 import smartpy as sp
 
-# ─── War (card showdown) ─────────────────────────────────────────────────
+# ─── Speed-War (best-of-3 card showdown) ─────────────────────────────────
 #
-# 1-card-each pure-luck H2H. Players each stake the wager, oracle deals
-# one card per side, higher card wins the full pot. Ties refund.
+# 3-round H2H. Both players stake the same wager, the oracle deals six
+# distinct cards (3 per side) in one tx, the contract settles inline by
+# round-win count.
 #
 # Flow:
-#   1. createGame(wager)         — first player; contract holds wager
-#   2. joinGame(gameId)          — second player; contract holds 2× wager
-#   3. deal(gameId, card1, card2, seed)  — oracle picks two card indices
-#   4. Settles inline: winner gets 2× wager minus fee, or both refunded.
+#   1. createGame(wager)       — player1; contract holds wager + fee
+#   2. joinGame(gameId)        — player2 matches; contract holds 2× wager
+#   3. deal(gameId, cards1, cards2, seed)
+#                              — oracle supplies two 3-entry maps
+#                                (round_idx 0..2 → deck_idx 0..51)
+#   4. Settles inline. p1Wins / p2Wins counted across the three rounds:
+#        higher score takes the pot,
+#        equal scores (including 0–0 or 1–1 with a tied round) refund both.
 #
-# Card indices: 0..51, rank = idx // 4 + 2 (so 2..14, 14 = Ace).
+# Card indices: 0..51, rank = idx // 4 + 2 (2..14, 14 = Ace). Suits don't
+# affect outcome — only rank matters per round.
+#
+# Why best-of-3 instead of N-card sum-of-ranks:
+#   - More dramatic UI reveal (round-by-round flips).
+#   - Cleaner tie semantics (round wins are integers, no rounding).
+#   - 2-0 sweeps let the UI short-circuit the third reveal for "speed."
+#   - On-chain it's still one deal() call — no extra ops.
 
 @sp.module
 def main():
@@ -24,20 +36,24 @@ def main():
             self.data.minWager = sp.mutez(100000)
             self.data.maxWager = sp.mutez(5000000)
             self.data.currentGameId = sp.nat(0)
+            # Game record: per-round cards stored as maps so the slot for an
+            # un-dealt round is simply absent (vs sentinel -1 across N fields).
             self.data.games = sp.cast({}, sp.map[sp.nat, sp.record(
                 player1=sp.address,
                 player2=sp.address,
                 wager=sp.mutez,
-                card1=sp.int,
-                card2=sp.int,
-                gameStatus=sp.nat,        # 0=open, 1=joined/awaiting deal, 2=settled, 3=cancelled
+                cards1=sp.map[sp.nat, sp.int],   # round_idx (0,1,2) → deck_idx
+                cards2=sp.map[sp.nat, sp.int],
+                p1Wins=sp.nat,                   # rounds won by player1
+                p2Wins=sp.nat,                   # rounds won by player2
+                gameStatus=sp.nat,               # 0=open, 1=joined/awaiting deal, 2=settled, 3=cancelled
                 winner=sp.address,
                 seed=sp.string,
             )])
 
         @sp.entrypoint
         def default(self):
-            '''Anonymous top-up — funds future ties' refunds.'''
+            '''Anonymous top-up — funds future ties\' refunds.'''
             pass
 
         @sp.entrypoint()
@@ -52,8 +68,10 @@ def main():
                 player1=sp.sender,
                 player2=sp.address("tz1burnburnburnburnburnburnburjAYjjX"),
                 wager=params.wager,
-                card1=-1,
-                card2=-1,
+                cards1={},
+                cards2={},
+                p1Wins=sp.nat(0),
+                p2Wins=sp.nat(0),
                 gameStatus=0,
                 winner=sp.address("tz1burnburnburnburnburnburnburjAYjjX"),
                 seed='',
@@ -85,35 +103,66 @@ def main():
 
         @sp.entrypoint()
         def deal(self, params):
-            sp.cast(params.gameId, sp.nat)
-            sp.cast(params.card1, sp.int)
-            sp.cast(params.card2, sp.int)
-            sp.cast(params.seed, sp.string)
+            sp.cast(params, sp.record(
+                gameId=sp.nat,
+                cards1=sp.map[sp.nat, sp.int],
+                cards2=sp.map[sp.nat, sp.int],
+                seed=sp.string,
+            ))
             assert sp.sender == self.data.oracle, "not oracle"
             g = self.data.games[params.gameId]
             assert g.gameStatus == 1, "game not awaiting deal"
-            assert params.card1 >= 0 and params.card1 < 52, "card1 out of range"
-            assert params.card2 >= 0 and params.card2 < 52, "card2 out of range"
-            rank1 = params.card1 / 4
-            rank2 = params.card2 / 4
+
+            # Each map must contain entries for rounds 0, 1, 2 — and only
+            # those — so we get exactly 3 cards per side. The range
+            # assertions below guard against out-of-deck indices.
+            assert 0 in params.cards1, "missing round 0 (player1)"
+            assert 1 in params.cards1, "missing round 1 (player1)"
+            assert 2 in params.cards1, "missing round 2 (player1)"
+            assert 0 in params.cards2, "missing round 0 (player2)"
+            assert 1 in params.cards2, "missing round 1 (player2)"
+            assert 2 in params.cards2, "missing round 2 (player2)"
+
+            # Tally round wins. The Python list loop is unrolled at compile
+            # time — each iteration emits straight-line Michelson.
+            p1Wins = sp.nat(0)
+            p2Wins = sp.nat(0)
+            for r in [0, 1, 2]:
+                c1 = params.cards1[r]
+                c2 = params.cards2[r]
+                assert c1 >= 0 and c1 < 52, "cards1 entry out of range"
+                assert c2 >= 0 and c2 < 52, "cards2 entry out of range"
+                rank1 = c1 / 4
+                rank2 = c2 / 4
+                if rank1 > rank2:
+                    p1Wins += 1
+                if rank2 > rank1:
+                    p2Wins += 1
+                # Equal ranks in a round → no one scores; the round is a wash.
+
             pot = sp.split_tokens(g.wager, 2, 1)
             winnerAddr = g.player1
-            if rank1 > rank2:
+            if p1Wins > p2Wins:
                 sp.send(g.player1, pot)
                 winnerAddr = g.player1
-            if rank2 > rank1:
+            if p2Wins > p1Wins:
                 sp.send(g.player2, pot)
                 winnerAddr = g.player2
-            if rank1 == rank2:
-                # Tie — split refund
+            if p1Wins == p2Wins:
+                # Series tie — refund each wager. Burn address signals "no
+                # winner" in storage so the UI can paint a push verdict.
                 sp.send(g.player1, g.wager)
                 sp.send(g.player2, g.wager)
+                winnerAddr = sp.address("tz1burnburnburnburnburnburnburjAYjjX")
+
             self.data.games[params.gameId] = sp.record(
                 player1=g.player1,
                 player2=g.player2,
                 wager=g.wager,
-                card1=params.card1,
-                card2=params.card2,
+                cards1=params.cards1,
+                cards2=params.cards2,
+                p1Wins=p1Wins,
+                p2Wins=p2Wins,
                 gameStatus=2,
                 winner=winnerAddr,
                 seed=params.seed,
@@ -121,8 +170,8 @@ def main():
             sp.emit(
                 sp.record(
                     gameId=params.gameId,
-                    card1=params.card1,
-                    card2=params.card2,
+                    p1Wins=p1Wins,
+                    p2Wins=p2Wins,
                     winner=winnerAddr,
                 ),
                 tag='gameSettled',

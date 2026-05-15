@@ -874,9 +874,12 @@ export default {
       const ticketTez = Math.max(0.001, Number(this.newGameTicketTez) || 1)
       const ticketMutez = Math.round(ticketTez * 1_000_000)
       const holderFeeMutez = 50_000 // 0.05 ꜩ — matches AD / Plinko convention
-      // 15/15/15/55 is the standard Super-Bowl-Squares split. Sum is
-      // validated on-chain to equal 100.
-      const quarterWeights = { 0: 15, 1: 15, 2: 15, 3: 55 }
+      // Period count + weights are sport-specific (2 halves for soccer,
+      // 3 periods for hockey, 4 quarters for NBA/NFL, 9 innings for MLB).
+      // periodSpecForLeague derives both from the staged league.
+      const { numPeriods, quarterWeights } = this.periodSpecForLeague(
+        this.leagueForCreate(),
+      )
       // Michelson strings are ASCII-only — strip anything outside printable
       // ASCII so a stray "·" / em-dash / emoji can't revert the tx with an
       // opaque "unicode symbols are not allowed" error.
@@ -894,6 +897,7 @@ export default {
             name,
             ticketPrice: ticketMutez,
             holderFee: holderFeeMutez,
+            numPeriods,
             quarterWeights,
           })
           .send()
@@ -935,7 +939,11 @@ export default {
       const ticketTez = Math.max(0.001, Number(this.newGameTicketTez) || 1)
       const ticketMutez = Math.round(ticketTez * 1_000_000)
       const holderFeeMutez = 50_000 // 0.05 ꜩ — matches createGame()
-      const quarterWeights = { 0: 15, 1: 15, 2: 15, 3: 55 }
+      // Period model from the source game's league. Same path createGame
+      // uses, so a card always inherits the right scoring model.
+      const { numPeriods, quarterWeights } = this.periodSpecForLeague(
+        this.leagueForCreate(),
+      )
       // Same ASCII-only guard as createGame() — Michelson rejects unicode.
       // eslint-disable-next-line no-control-regex
       const name = sourceName
@@ -951,6 +959,7 @@ export default {
             name,
             ticketPrice: ticketMutez,
             holderFee: holderFeeMutez,
+            numPeriods,
             quarterWeights,
           })
           .send()
@@ -1028,6 +1037,56 @@ export default {
     // those cells as "TXL" and to skip them in the random-buy pool.
     isHouse(idx) {
       return HOUSE_SQUARES.has(idx)
+    },
+    // Period model (numPeriods + quarterWeights) for a given league.
+    // Sport-specific so contract reportQuarter accepts the right number
+    // of reports and the pool's weight distribution mirrors how the
+    // sport actually scores. Defaults to NBA/NFL quarters when the
+    // league is unknown.
+    //   - Soccer (EPL, MLS): 2 halves, weights 30/70 (halftime / final)
+    //   - Hockey (NHL):      3 periods, 20/30/50
+    //   - Basketball/NFL:    4 quarters, 15/15/15/55
+    //   - Baseball (MLB):    9 innings, ~equal split with a final lift
+    periodSpecForLeague(league) {
+      if (league === 'EPL' || league === 'MLS') {
+        return { numPeriods: 2, quarterWeights: { 0: 30, 1: 70 } }
+      }
+      if (league === 'NHL') {
+        return { numPeriods: 3, quarterWeights: { 0: 20, 1: 30, 2: 50 } }
+      }
+      if (league === 'MLB') {
+        // 9 innings, last frame weighted heaviest. Sums to 100.
+        return {
+          numPeriods: 9,
+          quarterWeights: {
+            0: 8, 1: 8, 2: 8, 3: 8, 4: 8, 5: 8, 6: 10, 7: 10, 8: 32,
+          },
+        }
+      }
+      // Default: NBA/NFL/NCAAM/WNBA — four quarters, 15/15/15/55.
+      return {
+        numPeriods: 4,
+        quarterWeights: { 0: 15, 1: 15, 2: 15, 3: 55 },
+      }
+    },
+    // Resolve the league for whatever game the create-card form is
+    // about to bind to. Falls back to '' (unknown) → 4-quarter default.
+    leagueForCreate() {
+      // If the user staged an ESPN selection, that's the truth.
+      if (this.selectedEspnId) {
+        const g = this.espnGames.find((x) => x.id === this.selectedEspnId)
+        if (g?.league) return g.league
+      }
+      // Otherwise parse the active pool's name for its ESPN tag and
+      // look it up in the picker slate. Pools whose game isn't in the
+      // current 3-day window won't resolve — that's fine, we default.
+      const name = this.game?.name || this.newGameName || ''
+      const m = /\bESPN:(\d{6,})\b/.exec(name)
+      if (m) {
+        const ev = this.espnGames.find((x) => x.id === m[1])
+        if (ev?.league) return ev.league
+      }
+      return ''
     },
     // True when the connected wallet owns at least one square in this
     // pool — drives the "BETTING" badge on the lobby tile so the user

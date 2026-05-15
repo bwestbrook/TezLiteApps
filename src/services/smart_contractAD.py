@@ -169,29 +169,53 @@ def main():
 
         @sp.entrypoint()
         def continueBet(self, params):
+            '''Player commits an Acey-Duecey bet on the dealt anchors.
+
+            The bet is added to the pot and the holder fee is paid out.
+            The contract enforces a SPREAD-AWARE ceiling: the worst-case
+            payout for this game's actual spread (bet * 1235 / (spread
+            * 100)) must still fit in the pot+bet available at
+            lastCard. Without this guard a tight-spread game (e.g.
+            spread=1 with a 12.35x payout) could request more than the
+            pot can pay and revert the lastCard SUB_MUTEZ, freezing
+            the game forever at status 2.
             '''
-            '''
-            # Need a lock on contract during final bet
             sp.cast(sp.sender, sp.address)
             if self.data.games[params.gameId].player == sp.sender:
-                if sp.amount - self.data.fee <= self.data.pot:                
-                    if self.data.games[params.gameId].gameStatus == 1:                        
+                if self.data.games[params.gameId].gameStatus == 1:
+                    bet = sp.amount - self.data.fee
+                    # Spread for THIS game — both anchors are guaranteed
+                    # to be set when gameStatus == 1 (secondCard advances
+                    # to 1 only after writing handValue[2]).
+                    lowCard = self.data.games[params.gameId].handValue[1]
+                    highCard = self.data.games[params.gameId].handValue[2]
+                    if highCard < lowCard:
+                        lowCard = self.data.games[params.gameId].handValue[2]
+                        highCard = self.data.games[params.gameId].handValue[1]
+                    spread = sp.as_nat(highCard - lowCard - 1)
+                    # max payout = bet * 1235 / (spread * 100). pot grows
+                    # by `bet` in this entrypoint, so the lastCard pool
+                    # is (pot + bet); the worst-case payout must fit in
+                    # that. Spread-aware: tight spreads cap the bet
+                    # MUCH lower than the old `bet <= pot` rule did.
+                    maxPayout = sp.split_tokens(bet, 1235, spread * 100)
+                    if maxPayout <= self.data.pot + bet:
                         self.data.games[params.gameId].gameStatus = 2
                         sp.cast(params.gameId, sp.int_or_nat)
                         sp.cast(sp.amount, sp.mutez)
                         sp.cast(sp.sender, sp.address)
-                        self.data.games[params.gameId].finalBet = sp.amount - self.data.fee
-                        self.data.pot += sp.amount - self.data.fee
+                        self.data.games[params.gameId].finalBet = bet
+                        self.data.pot += bet
                         sp.send(self.data.txlContract, self.data.fee)
                         sp.emit(self.data.pot, tag='pot')
                         if self.data.pot > sp.tez(2):
                             self.data.pot -= self.data.fee
-                            self.data.potReserve += self.data.fee                            
+                            self.data.potReserve += self.data.fee
                     else:
-                        sp.emit('bad game Status', tag='badGameStatus')
+                        sp.emit('Bet Too Big', tag='betTooBigError')
                         sp.send(sp.sender, sp.amount)
                 else:
-                    sp.emit('Bet Too Big', tag='betTooBigError')
+                    sp.emit('bad game Status', tag='badGameStatus')
                     sp.send(sp.sender, sp.amount)
             else:
                 sp.emit('not Player', tag='notPlayer')
@@ -246,6 +270,16 @@ def main():
                             1235,
                             spread * 100,
                         )
+                        # Defense in depth: clamp to pot so the SUB_MUTEZ
+                        # below never reverts. continueBet's spread-aware
+                        # ceiling already guarantees this, but if that
+                        # guard is ever bypassed (admin upgrade, parameter
+                        # tweak, off-by-one), without this clamp the game
+                        # would freeze at status 2 forever. Player gets a
+                        # short payout in the rare bypass case, but they
+                        # always get something and the game settles.
+                        if winAmount > self.data.pot:
+                            winAmount = self.data.pot
                         sp.send(self.data.games[params.gameId].player, winAmount)
                         self.data.games[params.gameId].gameStatus = 3
                         self.data.pot -= winAmount
