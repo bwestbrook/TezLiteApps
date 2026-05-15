@@ -1,3 +1,9 @@
+# ⚠️ DEPRECATED — historical reference only. Hardcodes ghostnet endpoints
+# (`rpc.tzkt.io/ghostnet`, better-call-dev's ghostnet API). Ghostnet was
+# decommissioned in 2026; this watcher's HTTP calls all 404/timeout. The
+# live RNG flow runs through `scripts/oracle_worker.py` (RngHandler) on
+# shadownet. Kept here so the original logic isn't lost if/when a port
+# is needed.
 import time
 import os
 import requests

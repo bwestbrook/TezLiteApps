@@ -1,3 +1,12 @@
+# ⚠️ DEPRECATED — historical reference only.
+#
+# This watcher hardcodes `api.ghostnet.tzkt.io` and the ghostnet TXL
+# manager `KT1HD71gj4ZdehpS4Ri8nasjpDTPDQ574Sxy`. Ghostnet was
+# decommissioned in 2026 along with Baking Bad's TzKT Ghostnet API, so
+# every HTTP call below now fails DNS. The live TXL manager + snapshot
+# oracle path needs to be re-implemented against shadownet (or whichever
+# network the redeployed manager lives on) before this script is useful
+# again. See src/services/TXL_OWNERS_DATA.md for the current state.
 import requests
 import time
 import random

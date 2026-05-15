@@ -1,11 +1,18 @@
 """
 reconcile_txl_owners.py
 
+⚠️ DEPRECATED — historical reference only. Reads from
+`api.ghostnet.tzkt.io` + `ghostnet.smartpy.io`, both decommissioned in
+2026. Needs porting to shadownet (or the live network of the
+redeployed TXL manager) before it can run. See
+src/services/TXL_OWNERS_DATA.md for the current state.
+
 One-shot reconciliation of the TXL manager contract's idLookUp big_map against
 the Kalamint FA2 ledger on mainnet.
 
 Flow:
-  1. Pull TXL ghostnet contract storage  -> stored owner per token_id
+  1. Pull TXL (ghostnet historically; needs shadownet wiring) contract
+     storage -> stored owner per token_id
   2. For each token_id, query Kalamint big_map 857 on mainnet (value=1, active)
      -> current on-chain owner
   3. Diff stored vs current

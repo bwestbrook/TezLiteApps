@@ -73,11 +73,19 @@ owner address against it to flip the label to `'PRIMARY - OBJKT.COM'`.
 `browseNFTs.vue` does this in `labelForOwner()`; new views (lists,
 leaderboards) should use the same constant and label conventionally.
 
-## Mainnet vs ghostnet reminder
+## Mainnet vs testnet reminder
 
-The TXL manager contract (the one with `idLookUp` / `updateOwner`) is on
-**ghostnet**: `KT1HD71gj4ZdehpS4Ri8nasjpDTPDQ574Sxy`. Ownership of the
-underlying Kalamint NFTs lives on **mainnet** (Kalamint FA2
-`KT1EpGgjQs73QfFJs9z7m1Mxm5MTnpC2tqse`, big_map 857). The explorer reads
-ownership from mainnet directly — `tzkt.js` accepts a `{ network }` override
-for exactly this reason, and `txlOwners.js` always passes `'mainnet'`.
+> ⚠️ Ghostnet was decommissioned in 2026 (along with Baking Bad's
+> TzKT Ghostnet API). The TXL manager + the snapshot oracle that used
+> to live there are stale. The shadownet equivalent is what
+> `TXL_CONTRACT_ADDRESS_SHADOWNET` points at in `src/constants.js`,
+> read live by `src/components/mainBody.vue` for the holder pool /
+> Unclaimed / Your Share chips. Anything in this folder still
+> referencing `api.ghostnet.tzkt.io` (e.g. `oracle_TXL.py`,
+> `reconcile_txl_owners.py`) is dead historical code until ported.
+
+Ownership of the underlying Kalamint NFTs lives on **mainnet** (Kalamint
+FA2 `KT1EpGgjQs73QfFJs9z7m1Mxm5MTnpC2tqse`, big_map 857). The browse-NFTs
+explorer reads ownership from mainnet directly — `tzkt.js` accepts a
+`{ network }` override for exactly this reason, and `txlOwners.js`
+always passes `'mainnet'`.

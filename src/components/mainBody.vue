@@ -349,7 +349,7 @@ export default {
     </div>
     <div class="label">
       Made with love by @jamin_b on telegram/discord and @jaminb12 on X... shhh all games on
-      ghostnet
+      shadownet
     </div>
   </div>
 </template>

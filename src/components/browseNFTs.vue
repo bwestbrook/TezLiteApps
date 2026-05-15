@@ -4,7 +4,7 @@ import { NFT_INFO } from '../constants'
 import { getBigmapKey } from '../services/tzkt'
 import { loadOwners, OBJKT_MARKETPLACE } from '../services/txlOwners'
 
-// TXL collection lives on mainnet, even when the rest of the app is on ghostnet.
+// TXL collection lives on mainnet, even when the rest of the app is on shadownet.
 const TXL_NETWORK = 'mainnet'
 
 // TzKT bigmap ids the TXL collection uses.

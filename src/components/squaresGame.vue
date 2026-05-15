@@ -166,7 +166,6 @@ export default {
       walletAddress: '',
       pollInterval: null,
       blockchainStatus: 'idle',
-      selectedSquare: null,
       buyCount: 1,
       myAddress: '',
       // Pool id of the most recently created card. Drives the "✓ Card
@@ -191,11 +190,6 @@ export default {
       espnGames: [],
       espnLoading: false,
       selectedEspnId: null,
-      // ─── ESPN-derived live scoreboard for the active grid ───────
-      // Populated by refreshSports() when the active game.name carries
-      // an "ESPN:<event_id>" tag. Stays null otherwise.
-      sports: null,
-      sportsLastFetched: 0,
     }
   },
   computed: {
@@ -342,23 +336,11 @@ export default {
       const per = Number(this.game.ticketPrice) + Number(this.game.holderFee)
       return ((per * this.clampedBuyCount) / 1_000_000).toFixed(3)
     },
-    // Match the Python-side parse_espn_id() regex. Pulls the ESPN event
-    // id out of a grid name like "ESPN:401871337  ·  Cavs vs Pistons G6".
-    espnEventId() {
-      const m = /\bESPN:(\d{6,})\b/.exec(this.game?.name || '')
-      return m ? m[1] : null
-    },
     // Human label for the grid name with the ESPN tag stripped. Falls
     // back to the raw name when there's no tag.
     gridDisplayName() {
       const name = this.game?.name || ''
       return name.replace(/\bESPN:\d{6,}\b/, '').replace(/^\s*[·•|\-—]\s*/, '').trim() || name
-    },
-    sportsStatusLabel() {
-      if (!this.sports) return ''
-      const t = this.sports.statusType || {}
-      // ESPN's `detail` is nicely human ('Final/OT', 'End 3rd Quarter', etc).
-      return t.detail || t.shortDetail || t.description || ''
     },
     // A pool must be bound to a real NBA game before it can be created —
     // the squares contract is only meaningful when an ESPN event drives
@@ -507,8 +489,6 @@ export default {
         } catch (_e) {
           this.myAddress = ''
         }
-        // Refresh ESPN scoreboard for the active grid, if any.
-        this.refreshSports()
       } catch (e) {
         console.warn('squares storage refresh failed:', e?.message)
       }
@@ -531,8 +511,6 @@ export default {
       this.activeGameId = Number(id)
       this.gameSelected = true
       this.game = this.allGames?.[this.activeGameId] || null
-      this.selectedSquare = null
-      this.refreshSports()
     },
     // Click handler for the top lobby. The create form is never hidden
     // by tile clicks — it just updates which game it targets.
@@ -580,82 +558,6 @@ export default {
       if (m && m[2] === 'CLE') return `Cavs Vs. ${m[1]}`
       return matchup
     },
-    async refreshSports() {
-      // Read the ESPN event id from the active grid's name. If there
-      // isn't one, clear any stale scoreboard data and bail.
-      const eid = this.espnEventId
-      if (!eid) {
-        if (this.sports) this.sports = null
-        return
-      }
-      // Cap fetch frequency at ~12/min so the chain poll doesn't drag
-      // ESPN with it. Storage refresh runs every 8s; gating here at 5s
-      // means we'll skip every other tick.
-      const now = Date.now()
-      if (now - this.sportsLastFetched < 5000) return
-      this.sportsLastFetched = now
-      try {
-        const url = `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=${eid}`
-        const res = await fetch(url, { headers: { Accept: 'application/json' } })
-        if (!res.ok) return
-        const json = await res.json()
-        const header = json.header || {}
-        const comp = (header.competitions || [])[0] || {}
-        const competitors = comp.competitors || []
-        const home = competitors.find((c) => c.homeAway === 'home') || competitors[0] || {}
-        const away = competitors.find((c) => c.homeAway === 'away') || competitors[1] || {}
-        const readLines = (c) =>
-          (c.linescores || []).map((ls) => Number(ls.value ?? ls.displayValue ?? 0))
-        this.sports = {
-          eventId: eid,
-          shortName: header.shortName || header.name || '',
-          statusType: (comp.status || header.status || {}).type || {},
-          home: {
-            abbr: home.team?.abbreviation || '?',
-            name: home.team?.displayName || home.team?.name || '?',
-            score: Number(home.score || 0),
-            quarters: readLines(home),
-            logo: home.team?.logo || home.team?.logos?.[0]?.href || '',
-          },
-          away: {
-            abbr: away.team?.abbreviation || '?',
-            name: away.team?.displayName || away.team?.name || '?',
-            score: Number(away.score || 0),
-            quarters: readLines(away),
-            logo: away.team?.logo || away.team?.logos?.[0]?.href || '',
-          },
-        }
-      } catch (e) {
-        // Best-effort. Next tick retries; don't spam the console.
-      }
-    },
-    selectSquare(idx) {
-      if (!this.canBuy) return
-      if (this.game?.squares?.[idx]) return
-      this.selectedSquare = idx
-    },
-    async buySelected() {
-      if (this.selectedSquare == null) return
-      const activeAccount = await this.wallet.client.getActiveAccount()
-      if (!activeAccount) return
-      this.tezos.setWalletProvider(this.wallet)
-      this.blockchainStatus = `Buying square ${this.selectedSquare}...`
-      const total = Number(this.game.ticketPrice) + Number(this.game.holderFee)
-      try {
-        const contract = await this.tezos.wallet.at(SQUARES_CONTRACT_ADDRESS)
-        const op = await contract.methodsObject
-          .buySquare({ gameId: this.activeGameId, squareIdx: this.selectedSquare })
-          .send({ amount: total / 1_000_000 })
-        this.blockchainStatus = `Submitted (${op.opHash}) — waiting for confirmation`
-        await op.confirmation()
-        this.blockchainStatus = `Bought square ${this.selectedSquare}.`
-        this.selectedSquare = null
-        await this.refreshState()
-      } catch (err) {
-        console.error('buySquare failed:', err)
-        this.blockchainStatus = 'buy failed — see console'
-      }
-    },
     pickRandomOpenSquares(n) {
       // Fisher-Yates partial shuffle of the open-square index pool.
       const pool = this.openSquareIdxs.slice()
@@ -699,7 +601,6 @@ export default {
         this.blockchainStatus = `Submitted (${op.opHash}) — waiting for confirmation`
         await op.confirmation()
         this.blockchainStatus = `Bought ${picks.length} square${picks.length === 1 ? '' : 's'}: ${picks.join(', ')}`
-        this.selectedSquare = null
         await this.refreshState()
       } catch (err) {
         console.error('buyRandomMany failed:', err)
@@ -1462,108 +1363,6 @@ export default {
   color: #efeae2;
 }
 
-/* ─── ESPN scoreboard ────────────────────────────────────────────────
-   Renders above the status-pill row when the active grid name carries
-   an `ESPN:<event_id>` tag and refreshSports() has data. Mirrors the
-   ESPN classic side-by-side scorebar: away team left, home right,
-   status + per-quarter breakdown in the middle. */
-.sqScoreboard {
-  display: flex;
-  align-items: stretch;
-  gap: 10px;
-  margin: 6px 4px 12px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background:
-    radial-gradient(ellipse at 50% 0%, rgba(245, 196, 81, 0.10) 0%, transparent 70%),
-    linear-gradient(135deg, rgba(25, 8, 87, 0.65) 0%, rgba(7, 4, 30, 0.85) 100%);
-  border: 1px solid rgba(245, 196, 81, 0.25);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 4px 12px rgba(0, 0, 0, 0.35);
-}
-.sqScoreSide {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.sqScoreSide--right { justify-content: flex-end; }
-.sqScoreLogo {
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
-}
-.sqScoreText { min-width: 0; }
-.sqScoreText--right { text-align: right; }
-.sqScoreTeam {
-  font-size: 13px;
-  font-weight: 700;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 120px;
-}
-.sqScoreAbbr {
-  font-size: 10px;
-  letter-spacing: 2px;
-  color: rgba(255, 255, 255, 0.55);
-}
-.sqScorePts {
-  font-size: 28px;
-  font-weight: 800;
-  color: #f5c451;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  min-width: 44px;
-  text-align: center;
-}
-.sqScoreMid {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: 0;
-  text-align: center;
-}
-.sqScoreStatus {
-  font-size: 11px;
-  letter-spacing: 2px;
-  font-weight: 700;
-  color: rgba(245, 196, 81, 0.85);
-  text-transform: uppercase;
-}
-.sqScoreQuarters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  justify-content: center;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.75);
-  font-variant-numeric: tabular-nums;
-}
-.sqScoreQ {
-  white-space: nowrap;
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.05);
-}
-.sqScoreSubtitle {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
-  font-style: italic;
-}
-@media (max-width: 480px) {
-  .sqScoreboard { flex-direction: column; gap: 8px; padding: 10px; }
-  .sqScoreSide,
-  .sqScoreSide--right { justify-content: space-between; width: 100%; }
-}
-
 /* ─── Primary CTAs ───────────────────────────────────────────────────── */
 .sqPrimary {
   background: linear-gradient(135deg, #1f5c3a 0%, #0e3b22 100%);
@@ -1701,7 +1500,6 @@ export default {
   gap: 8px;
   margin-bottom: 6px;
 }
-.sqEspnDate { flex: 0 0 auto; }
 .sqEspnRefresh { flex: 0 0 auto; }
 /* ─── DraftKings/FanDuel-style game lobby ────────────────────────────
    Each NBA matchup is a tappable card: matchup title + status pill up
