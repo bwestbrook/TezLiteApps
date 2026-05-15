@@ -16,7 +16,7 @@
 // Demo mode runs entirely client-side: redeal random shuffles to preview the
 // visuals before any contract is deployed or any wallet is connected.
 
-import { getContractStorage } from '../services/tzkt'
+import { getContractStorage, isPlaceholderAddress } from '../services/tzkt'
 import {
   BLOCKCHAIN_ENABLED,
   WAR_CONTRACT_ADDRESS,
@@ -253,9 +253,21 @@ export default {
         console.warn('war refresh failed:', e?.message)
       }
     },
+    // Returns false (and sets a friendly status) when WAR_CONTRACT_ADDRESS
+    // is still a KT1XXX… placeholder for the active network — feeding one to
+    // tezos.wallet.at() throws an uncaught InvalidContractAddressError.
+    // Every write path checks this first: `if (!this.prepWallet()) return`.
+    prepWallet() {
+      if (isPlaceholderAddress(WAR_CONTRACT_ADDRESS)) {
+        this.blockchainStatus = 'War is not deployed on this network yet.'
+        return false
+      }
+      this.tezos.setWalletProvider(this.wallet)
+      return true
+    },
     async createGame() {
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         this.blockchainStatus = 'creating war game...'
         const total = this.stakeMutez + 50000
         const contract = await this.tezos.wallet.at(WAR_CONTRACT_ADDRESS)
@@ -272,7 +284,7 @@ export default {
     },
     async joinGame(gameId) {
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         const g = this.games[gameId]
         const total = Number(g.stake) + 50000
         const contract = await this.tezos.wallet.at(WAR_CONTRACT_ADDRESS)
@@ -288,7 +300,7 @@ export default {
     },
     async claim() {
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         const contract = await this.tezos.wallet.at(WAR_CONTRACT_ADDRESS)
         const op = await contract.methodsObject.claim().send()
         await op.confirmation()

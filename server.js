@@ -89,6 +89,28 @@ io.on('connection', (socket) => {
     io.to(gameId).emit('updatePlayerTurn', playerTurn, gameId)
   })
 
+  // Board orientation sync: the active player's rotate/zoom mirrors to
+  // the watcher so both see the same view. Relayed to the game room but
+  // NOT echoed back to the sender (the sender already moved its own
+  // board locally — re-applying would fight the in-progress drag).
+  socket.on('updateGridView', (view, gameId) => {
+    socket.to(gameId).emit('updateGridView', view)
+  })
+
+  // A move is being written to the chain. Relayed to the whole game room
+  // (both players) so neither side can act until it's confirmed — the
+  // turn must not switch on an optimistic, unconfirmed move.
+  socket.on('updateMovePending', (pending, gameId) => {
+    io.to(gameId).emit('updateMovePending', pending)
+  })
+
+  // Nudge both players in a game room to re-read on-chain state. Fired
+  // after a move confirms so the opponent unlocks immediately rather
+  // than waiting for the next poll tick.
+  socket.on('refreshGameState', (gameId) => {
+    io.to(gameId).emit('refreshGameState')
+  })
+
   socket.on('selectGame', (game) => {
     io.to(socket.id).emit('selectGame', game)
   })
@@ -154,7 +176,12 @@ io.on('connection', (socket) => {
   })
 
   socket.on('updateGames', () => {
-    io.to(socket.id).emit('updateGames')
+    // Broadcast to EVERY connected client, not just the sender. When one
+    // player creates/joins/leaves a game on chain, all other players
+    // need to re-fetch the contract's game list so the new game shows
+    // up in their hub. Echoing only to socket.id left other players
+    // blind to freshly-created games.
+    io.emit('updateGames')
   })
 
   socket.on('loadGame', (gameId, updateGrid) => {

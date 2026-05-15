@@ -1,11 +1,8 @@
 <script>
 import { getRandomIntInclusive, reduceAddress } from '@/utilities'
-import { NFT_INFO, TXL_CONTRACT_ADDRESS } from '../constants'
+import { NFT_INFO } from '../constants'
 import { getBigmapKey } from '../services/tzkt'
-
-// The TXL primary-sale source on objkt — when this account holds an NFT it
-// hasn't been bought yet on the secondary market.
-const PRIMARY_OWNER_TAG = 't.Upyq'
+import { loadOwners, OBJKT_MARKETPLACE } from '../services/txlOwners'
 
 // TXL collection lives on mainnet, even when the rest of the app is on ghostnet.
 const TXL_NETWORK = 'mainnet'
@@ -26,6 +23,13 @@ export default {
       txlRanking: 1,
       txlData: {},
       owner: '',
+      // Collection-wide ownership metadata, loaded once via the txlOwners
+      // service (snapshot for instant paint, live tzkt refresh in the
+      // background). getOwner() reads `owners` instead of a per-card lookup.
+      owners: {},
+      topHolders: [],
+      distinctHolders: 0,
+      onMarketplace: 0,
       tezosSymbol: 'ꜩ',
       intervalId: null,
       countDownSeconds: 5,
@@ -40,7 +44,16 @@ export default {
       currentNftSrc: require('../assets/nftExample.jpeg'),
     }
   },
- 
+
+  computed: {
+    // Largest single holder, ignoring the objkt.com marketplace contract
+    // (tokens parked there are listed for sale, not held by a collector).
+    topHolderLabel() {
+      const entry = this.topHolders.find(([addr]) => addr !== OBJKT_MARKETPLACE)
+      return entry ? `${reduceAddress(entry[0])} (${entry[1]})` : ''
+    },
+  },
+
   created () {
     // API and Static
     this.idLookUp = {
@@ -877,6 +890,19 @@ export default {
     this.socket.on('resizeGame', (width) => {
       this.resizeGameRender(width)
     })
+
+    // Pull the whole {kalaId → owner} map plus holder stats in one shot.
+    // The snapshot paints instantly; the live tzkt refresh updates in the
+    // background. getOwner() then reads this map — no per-card network call.
+    loadOwners({
+      onUpdate: ({ owners, topHolders, distinctHolders, onMarketplace }) => {
+        this.owners = owners
+        this.topHolders = topHolders
+        this.distinctHolders = distinctHolders
+        this.onMarketplace = onMarketplace
+        this.refreshOwnerLabel()
+      },
+    })
   },
   mounted() {
     // Single 1-second tick drives both the visible countdown and the actual
@@ -935,25 +961,37 @@ export default {
       const data = await getBigmapKey(TXL_METADATA_BIGMAP, kalaId, {}, { network: TXL_NETWORK })
       return data?.[0]?.value?.ipfs_hash ?? null
     },
+    // Turn a raw owner address into the label shown on the card. Tokens held
+    // by the objkt.com marketplace contract are listed for sale, not owned by
+    // a collector — surface that instead of a meaningless KT1.
+    labelForOwner(address) {
+      if (!address) return 'unknown'
+      if (address === OBJKT_MARKETPLACE) return 'FOR SALE'
+      return reduceAddress(address)
+    },
+    // Recompute the owner label for the NFT currently on screen from the
+    // in-memory owners map — called when loadOwners() delivers fresh data.
+    refreshOwnerLabel() {
+      const address = this.owners[this.idLookUp[this.txlId]]
+      if (address) this.owner = this.labelForOwner(address)
+    },
     async getOwner() {
       const kalaId = this.idLookUp[this.txlId]
-      // Owner lookup: in this bigmap, key = { address, nat }, value = balance.
-      // Filter to active rows where balance == 1, then read the key.address.
-      const data = await getBigmapKey(
-        TXL_OWNER_BIGMAP,
-        kalaId,
-        { active: 'true', 'value.eq': '1', select: 'key', 'key.nat.eq': String(kalaId) },
-        { network: TXL_NETWORK }
-      )
-      const address = data?.[0]?.address ?? data?.[0]?.key?.address
+      // Prefer the collection-wide owners map — no network call per card.
+      let address = this.owners[kalaId]
       if (!address) {
-        this.owner = 'unknown'
-        return
+        // Map hasn't loaded yet (first paint): fall back to a direct bigmap
+        // lookup for just this token. key = { address, nat }, value = balance;
+        // filter to active rows where balance == 1, then read key.address.
+        const data = await getBigmapKey(
+          TXL_OWNER_BIGMAP,
+          kalaId,
+          { active: 'true', 'value.eq': '1', select: 'key', 'key.nat.eq': String(kalaId) },
+          { network: TXL_NETWORK }
+        )
+        address = data?.[0]?.address ?? data?.[0]?.key?.address
       }
-      this.owner =
-        reduceAddress(address) === PRIMARY_OWNER_TAG
-          ? 'PRIMARY - OBJKT.COM'
-          : reduceAddress(address)
+      this.owner = this.labelForOwner(address)
     },
     async setNewNftImage() {
       const ipfsHash = await this.getIpfsHash()
@@ -1023,26 +1061,6 @@ export default {
         this.countDownSeconds = 5
       }
     },
-    async payNftHolderBC() {
-      const activeAccount = await this.wallet.client.getActiveAccount()
-      if (!activeAccount) return
-      const address = reduceAddress(activeAccount.address)
-      this.blockchainStatus = 'Paying out NFT earnings'
-      this.useWalletProvider()
-      await this.tezos.wallet
-        .at(TXL_CONTRACT_ADDRESS)
-        .then((contract) => contract.methodsObject.payTxlHolder().send())
-        .then((op) => op.confirmation().then(() => op.opHash))
-        .then(() => {
-          this.blockchainStatus = `Paid out ${address}`
-        })
-        .catch((error) => console.error('payNftHolderBC failed:', error))
-    },
-    // The connected Beacon wallet IS the signer — Beacon proxies signing
-    // requests to the user's wallet. RemoteSigner is for remote signing servers.
-    useWalletProvider() {
-      this.tezos.setWalletProvider(this.wallet)
-    },
   },
   beforeUnmount() {
     if (this.tickInterval) clearInterval(this.tickInterval)
@@ -1053,9 +1071,9 @@ export default {
 <template>
  
   <div class="centerBody">
-    <div class="gameManagement" > 
+    <div class="gameManagement" >
         <div class="rowFlex">
-          <div class="gameManagement"> 
+          <div class="gameManagement">
             <div class="actionButton" @click="prevRank()" > &larr;  Prev Rank </div>
             <div class="actionButton" @click="prevTxl()" >  &larr;  Prev ID </div>
           </div>   
@@ -1081,53 +1099,80 @@ export default {
           <div class="actionButton" @click="selectRandom"> Select Random TXL </div>
           <div class="actionButton" @click="checkThisOnObjkt(txlId)"> Buy {{ txlId.toString() }} On All Objkt.com </div>
           <div class="actionButton" @click="browseAllOnObjkt"> Browse On All Objkt.com </div>
-          <div class="actionButtonHelp" @click="showLearnMore"> Learn More About 2.725K</div>
-        </div>        
-        <div v-if="showInfo" @click="showLearnMore" class="infoPopup"> 
+          <div class="actionButtonHelp" @click="showLearnMore"> How 2.725K NFT holders earn a share of every game on thextz.life</div>
+        </div>
+        <div v-if="showInfo" @click="showLearnMore" class="infoPopup">
           <div>
             <ul >
               <li class="listItem" v-for="(key, value) in nftInfo" :key="key" :value="value">{{ key }}</li>
             </ul>
           </div>
         </div>
-        <div class="nftCardStage">
-          <div :class="['nftCard', pauseAnimation ? 'nftCard--paused' : '']">
-            <div class="nftCardFace nftCardFace--front">
-              <img
-                :src="currentNftSrc"
-                :alt="'TXL #' + txlId"
-                class="nftCardImg"
-                draggable="false"
-              />
+        <div class="cardArea">
+          <div class="ownerBadge" v-if="owner"> Owner: {{ owner }} </div>
+          <div class="nftCardStage">
+            <div :class="['nftCard', pauseAnimation ? 'nftCard--paused' : '']">
+              <div class="nftCardFace nftCardFace--front">
+                <img
+                  :src="currentNftSrc"
+                  :alt="'TXL #' + txlId"
+                  class="nftCardImg"
+                  draggable="false"
+                />
+              </div>
+              <div class="nftCardFace nftCardFace--back">
+                <img
+                  :src="currentNftSrc"
+                  :alt="'TXL #' + txlId"
+                  class="nftCardImg"
+                  draggable="false"
+                />
+              </div>
             </div>
-            <div class="nftCardFace nftCardFace--back">
-              <img
-                :src="currentNftSrc"
-                :alt="'TXL #' + txlId"
-                class="nftCardImg"
-                draggable="false"
-              />
-            </div>
+            <div class="nftCardShadow" aria-hidden="true"></div>
           </div>
-          <div class="nftCardShadow" aria-hidden="true"></div>
         </div>
         <div class="rowFlex">
           <div class="actionButton" @click="toggleAnimation"> {{pauseAnimationState}}  </div>
-          <div class="gameInfo"> Random TXL in {{ countDownSeconds }} </div> 
+          <div class="gameInfo"> Random TXL in {{ countDownSeconds }} </div>
           <div class="actionButton" @click="togglePauseRandom"> {{pauseState}} Random </div>
-          <div class="actionButton" @click="payNftHolderBC"> Cash out TXL Earning! </div>
-        </div>     
-        <div class="rowFlex">       
+        </div>
+        <div class="rowFlex">
           <div class="txlRank"> Rank: {{ txlRanking }}</div>
           <div class="txlRank"> ID: {{ txlId }}</div>
-          <div class="txlRank"> Owner: {{ owner }}</div>           
-          <div class="txlRank" v-for="(key, value) in txlData" :key="key" :value="value"> {{ value }}: {{ key }} </div>           
-        </div> 
+          <div class="txlRank" v-for="(key, value) in txlData" :key="key" :value="value"> {{ value }}: {{ key }} </div>
+        </div>
+        <div class="rowFlex" v-if="distinctHolders">
+          <div class="txlRank"> Holders: {{ distinctHolders }}</div>
+          <div class="txlRank"> Listed on objkt: {{ onMarketplace }}</div>
+          <div class="txlRank" v-if="topHolderLabel"> Top holder: {{ topHolderLabel }}</div>
+        </div>
       </div>
     
 </template>
 
 <style scoped>
+/* Full-width band around the spinning card — anchors the owner badge to the
+   right edge of the content, not the narrow centered card. */
+.cardArea {
+  position: relative;
+  width: 100%;
+}
+/* Current NFT's owner, pinned to the top-right of the content, just below
+   the how-to button — white text on a transparent background. */
+.ownerBadge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  color: #fff;
+  background: transparent;
+  /* Keeps the white text legible over the NFT image behind it. */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
 /* CSS 3D NFT card. Replaces the Three.js WebGLRenderer + rotating box. */
 .nftCardStage {
   display: flex;

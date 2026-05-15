@@ -5,16 +5,18 @@
 // Each entry:
 //   id          string, unique. Used as the activeView key.
 //   name        short tab label (≤16 chars renders nicely in the nav row)
-//   blurb       one-liner shown on the welcome page tile
+//   blurb       one-liner shown on a tile
 //   tag         category for grouping in the nav: 'game' | 'collection' | 'tools'
-//   image       (optional) RESOLVED webpack URL for the welcome tile —
+//   pinnedAsHome  (optional) renders first in the nav row, is excluded from
+//                 NAV_APPS, and is the view mounted on app load. Exactly
+//                 one entry should set this.
+//   image       (optional) RESOLVED webpack URL for the tile image —
 //               we use static require() per asset rather than a dynamic
 //               require(`../assets/${name}`) because the latter makes
 //               webpack scan the whole assets folder and fail on
 //               non-loadable files like newteztac.html.
 //   component   Vue component to mount when the app is active
 
-import welcomeIn from '../components/welcomeIn.vue'
 import oracleInfo from '../components/oracleInfo.vue'
 import browseNFTs from '../components/browseNFTs.vue'
 import aceyDuecey from '../components/aceyDuecey.vue'
@@ -40,15 +42,10 @@ const IMG = {
   war:         require('../assets/warTile.svg'),
 }
 
+// Nav order is the array order: the pinnedAsHome entry renders first,
+// then the rest left-to-right. Games are listed by maturity (most
+// shipped-ready first); the two 'tools' entries trail at the end.
 export const APPS = [
-  {
-    id: 'welcome',
-    name: 'TXL Manager',
-    blurb: 'The lobby — pick a game or browse the collection.',
-    tag: 'home',
-    component: welcomeIn,
-    pinnedAsHome: true,
-  },
   {
     id: 'browseNFTs',
     name: 'Browse 2.725K',
@@ -56,22 +53,7 @@ export const APPS = [
     tag: 'collection',
     image: IMG.nftExample,
     component: browseNFTs,
-  },
-  {
-    id: 'oracleInfo',
-    name: 'Oracle',
-    blurb: 'How the random-number oracle drives every TXL game.',
-    tag: 'tools',
-    image: IMG.oracleLogo,
-    component: oracleInfo,
-  },
-  {
-    id: 'aceyDuecey',
-    name: 'Acey Duecey',
-    blurb: 'Will the third card land between the two? Bet the pot.',
-    tag: 'game',
-    image: IMG.aceyDuecey,
-    component: aceyDuecey,
+    pinnedAsHome: true,
   },
   {
     id: 'tezTacToe',
@@ -90,20 +72,28 @@ export const APPS = [
     component: squaresGame,
   },
   {
-    id: 'reversi',
-    name: 'Reversi',
-    blurb: 'H2H pure-skill 8×8 strategy. Stake against an opponent.',
-    tag: 'game',
-    image: IMG.reversi,
-    component: reversiGame,
-  },
-  {
     id: 'plinko',
     name: 'Plinko',
     blurb: 'Drop a ball, hope it bounces to the edges. Up to 29× payout.',
     tag: 'game',
     image: IMG.plinko,
     component: plinkoGame,
+  },
+  {
+    id: 'aceyDuecey',
+    name: 'Acey Duecey',
+    blurb: 'Will the third card land between the two? Bet the pot.',
+    tag: 'game',
+    image: IMG.aceyDuecey,
+    component: aceyDuecey,
+  },
+  {
+    id: 'reversi',
+    name: 'Reversi',
+    blurb: 'H2H pure-skill 8×8 strategy. Stake against an opponent.',
+    tag: 'game',
+    image: IMG.reversi,
+    component: reversiGame,
   },
   {
     id: 'chess',
@@ -122,6 +112,14 @@ export const APPS = [
     component: warGame,
   },
   {
+    id: 'oracleInfo',
+    name: 'Oracle',
+    blurb: 'How the random-number oracle drives every TXL game.',
+    tag: 'tools',
+    image: IMG.oracleLogo,
+    component: oracleInfo,
+  },
+  {
     id: 'ecosystem',
     name: 'Tezos Links',
     blurb: 'Explorers, docs, faucets, wallets, dApps — the rest of the Tezos world.',
@@ -131,7 +129,7 @@ export const APPS = [
   },
 ]
 
-/** Lookup helpers used by the nav + welcome screens. */
+/** Lookup helpers used by the nav. */
 export const APP_BY_ID = Object.fromEntries(APPS.map((a) => [a.id, a]))
 export const HOME_APP = APPS.find((a) => a.pinnedAsHome) || APPS[0]
 export const NAV_APPS = APPS.filter((a) => !a.pinnedAsHome)

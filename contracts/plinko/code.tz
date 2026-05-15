@@ -1,736 +1,835 @@
-{
-    storage
-        (pair
-            (address %admin)
-            (pair
-                (nat %currentRoundId)
-                (pair
-                    (mutez %fee)
-                    (pair
-                        (mutez %maxBet)
-                        (pair
-                            (mutez %minBet)
-                            (pair
-                                (map %multipliers nat nat)
-                                (pair
-                                    (address %oracle)
-                                    (pair
-                                        (mutez %pot)
-                                        (pair
-                                            (mutez %potReserve)
-                                            (pair
-                                                (map %rounds
-                                                    nat
-                                                    (pair
-                                                        (mutez %bet)
-                                                        (pair
-                                                            (nat %finalSlot)
-                                                            (pair
-                                                                (map %path nat nat)
-                                                                (pair
-                                                                    (mutez %payout)
-                                                                    (pair
-                                                                        (address %player)
-                                                                        (pair
-                                                                            (nat %risk)
-                                                                            (pair
-                                                                                (nat %roundStatus)
-                                                                                (pair
-                                                                                    (nat %rows)
-                                                                                    (string %seed))))))))))
-                                                (address %txlContract)))))))))));
-    parameter
-        (or
-            (or
-                (or
-                    (unit %default)
-                    (pair %play
-                        (nat %risk)
-                        (nat %rows)))
-                (or
-                    (pair %resolve
-                        (map %bits nat nat)
-                        (pair
-                            (nat %roundId)
-                            (string %seed)))
-                    (or
-                        (pair %setMultiplier
-                            (nat %key)
-                            (nat %value))
-                        (pair %setMultiplierRow
-                            (nat %risk)
-                            (pair
-                                (nat %rows)
-                                (map %values nat nat))))))
-            (or
-                (or
-                    (mutez %topUpPot)
-                    (pair %updateBetBounds
-                        (mutez %maxBet)
-                        (mutez %minBet)))
-                (or
-                    (mutez %updateFee)
-                    (or
-                        (address %updateOracle)
-                        (address %updateTxlContract)))));
-    code
-        {
-            UNPAIR;
+parameter (or (or (or (unit %default) (pair %play (nat %risk) (nat %rows))) (or (pair %resolve (nat %roundId) (pair (string %seed) (pair (map %xBits nat nat) (map %zBits nat nat)))) (or (pair %setMultiplier (nat %key) (nat %value)) (pair %setMultiplierRow (nat %risk) (pair (nat %rows) (map %values nat nat)))))) (or (or (mutez %topUpPot) (pair %updateBetBounds (mutez %maxBet) (mutez %minBet))) (or (mutez %updateFee) (or (address %updateOracle) (address %updateTxlContract)))));
+storage   (pair (address %admin) (pair (nat %currentRoundId) (pair (mutez %fee) (pair (mutez %maxBet) (pair (mutez %minBet) (pair (map %multipliers nat nat) (pair (address %oracle) (pair (mutez %pot) (pair (mutez %potReserve) (pair (map %rounds nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat))))))))))))) (address %txlContract)))))))))));
+code
+  {
+    UNPAIR;     # @parameter : @storage
+    IF_LEFT
+      {
+        IF_LEFT
+          {
             IF_LEFT
-                {
-                    IF_LEFT
-                        {
-                            IF_LEFT
-                                {
-                                    DROP;
-                                    DUP;
-                                    GET 17;
-                                    AMOUNT;
-                                    ADD;
-                                    UPDATE 17;
-                                    NIL operation
-                                }
-                                {
-                                    PUSH nat 8;
-                                    DUP 2;
-                                    CDR;
-                                    COMPARE;
-                                    EQ;
-                                    IF
-                                        {
-                                            PUSH bool True
-                                        }
-                                        {
-                                            PUSH nat 12;
-                                            DUP 2;
-                                            CDR;
-                                            COMPARE;
-                                            EQ
-                                        };
-                                    IF
-                                        {
-                                            PUSH bool True
-                                        }
-                                        {
-                                            PUSH nat 16;
-                                            DUP 2;
-                                            CDR;
-                                            COMPARE;
-                                            EQ
-                                        };
-                                    IF
-                                        {
-                                        }
-                                        {
-                                            PUSH string "rows must be 8, 12, or 16";
-                                            FAILWITH
-                                        };
-                                    PUSH nat 3;
-                                    DUP 2;
-                                    CAR;
-                                    COMPARE;
-                                    LT;
-                                    IF
-                                        {
-                                        }
-                                        {
-                                            PUSH string "risk must be 0..2";
-                                            FAILWITH
-                                        };
-                                    DUP 2;
-                                    GET 9;
-                                    AMOUNT;
-                                    COMPARE;
-                                    GE;
-                                    IF
-                                        {
-                                        }
-                                        {
-                                            PUSH string "bet too small";
-                                            FAILWITH
-                                        };
-                                    DUP 2;
-                                    GET 7;
-                                    AMOUNT;
-                                    COMPARE;
-                                    LE;
-                                    IF
-                                        {
-                                        }
-                                        {
-                                            PUSH string "bet too big";
-                                            FAILWITH
-                                        };
-                                    DUP 2;
-                                    GET 5;
-                                    AMOUNT;
-                                    SUB_MUTEZ;
-                                    IF_NONE
-                                        {
-                                            PUSH int 139;
-                                            FAILWITH
-                                        }
-                                        {
-                                        };
-                                    DIG 2;
-                                    DUP;
-                                    GET 15;
-                                    DUP 3;
-                                    ADD;
-                                    UPDATE 15;
-                                    DUG 2;
-                                    NIL operation;
-                                    DUP 4;
-                                    GET 20;
-                                    CONTRACT unit;
-                                    IF_NONE
-                                        {
-                                            PUSH int 141;
-                                            FAILWITH
-                                        }
-                                        {
-                                        };
-                                    DUP 5;
-                                    GET 5;
-                                    UNIT;
-                                    TRANSFER_TOKENS;
-                                    CONS;
-                                    EMPTY_MAP nat nat;
-                                    DUP 5;
-                                    DUP;
-                                    GET 19;
-                                    PUSH string "";
-                                    DUP 7;
-                                    CDR;
-                                    PUSH nat 0;
-                                    DUP 9;
-                                    CAR;
-                                    SENDER;
-                                    PUSH mutez 0;
-                                    DUP 9;
-                                    PUSH nat 0;
-                                    DUP 13;
-                                    PAIR 9;
-                                    DIG 3;
-                                    DROP;
-                                    DIG 4;
-                                    DROP;
-                                    SOME;
-                                    DIG 5;
-                                    GET 3;
-                                    UPDATE;
-                                    UPDATE 19;
-                                    DUG 2;
-                                    NIL nat;
-                                    DUP 3;
-                                    CAR;
-                                    CONS;
-                                    DIG 2;
-                                    CDR;
-                                    CONS;
-                                    DUP 3;
-                                    GET 3;
-                                    CONS;
-                                    EMIT %playRequested
-                                        (list nat);
-                                    CONS;
-                                    SWAP;
-                                    DUP;
-                                    GET 3;
-                                    PUSH nat 1;
-                                    ADD;
-                                    UPDATE 3;
-                                    SWAP
-                                }
-                        }
-                        {
-                            IF_LEFT
-                                {
-                                    DUP 2;
-                                    GET 13;
-                                    SENDER;
-                                    COMPARE;
-                                    EQ;
-                                    IF
-                                        {
-                                        }
-                                        {
-                                            PUSH string "not oracle";
-                                            FAILWITH
-                                        };
-                                    DUP 2;
-                                    GET 19;
-                                    DUP 2;
-                                    GET 3;
-                                    GET;
-                                    IF_NONE
-                                        {
-                                            PUSH int 174;
-                                            FAILWITH
-                                        }
-                                        {
-                                        };
-                                    PUSH nat 0;
-                                    DUP 2;
-                                    GET 13;
-                                    COMPARE;
-                                    EQ;
-                                    IF
-                                        {
-                                        }
-                                        {
-                                            PUSH string "already resolved";
-                                            FAILWITH
-                                        };
-                                    PUSH nat 0;
-                                    PUSH nat 0;
-                                    DUP 4;
-                                    CAR;
-                                    ITER
-                                        {
-                                            CAR;
-                                            DUP 5;
-                                            CAR;
-                                            SWAP;
-                                            GET;
-                                            IF_NONE
-                                                {
-                                                    PUSH int 181;
-                                                    FAILWITH
-                                                }
-                                                {
-                                                };
-                                            PUSH nat 2;
-                                            DUP 2;
-                                            COMPARE;
-                                            LT;
-                                            IF
-                                                {
-                                                }
-                                                {
-                                                    PUSH string "bit must be 0 or 1";
-                                                    FAILWITH
-                                                };
-                                            DIG 2;
-                                            ADD;
-                                            SWAP;
-                                            PUSH nat 1;
-                                            ADD
-                                        };
-                                    DUP 3;
-                                    GET 15;
-                                    DUP 2;
-                                    COMPARE;
-                                    EQ;
-                                    IF
-                                        {
-                                        }
-                                        {
-                                            PUSH string "bits length must equal rows";
-                                            FAILWITH
-                                        };
-                                    DUP 2;
-                                    PUSH nat 100;
-                                    DUP 5;
-                                    GET 11;
-                                    MUL;
-                                    PUSH nat 1000;
-                                    DUP 6;
-                                    GET 15;
-                                    MUL;
-                                    ADD;
-                                    ADD;
-                                    DUP 6;
-                                    GET 11;
-                                    DUP 2;
-                                    GET;
-                                    IF_NONE
-                                        {
-                                            PUSH nat 100
-                                        }
-                                        {
-                                        };
-                                    PUSH nat 100;
-                                    DUP 2;
-                                    DUP 7;
-                                    CAR;
-                                    MUL;
-                                    EDIV;
-                                    IF_NONE
-                                        {
-                                            PUSH int 190;
-                                            FAILWITH
-                                        }
-                                        {
-                                        };
-                                    CAR;
-                                    PUSH nat 3;
-                                    DUP 7;
-                                    CAR;
-                                    DUP 3;
-                                    COMPARE;
-                                    EQ;
-                                    IF
-                                        {
-                                            DROP;
-                                            PUSH nat 2
-                                        }
-                                        {
-                                        };
-                                    DUP 7;
-                                    CAR;
-                                    DUP 3;
-                                    COMPARE;
-                                    GT;
-                                    IF
-                                        {
-                                            DROP;
-                                            PUSH nat 1
-                                        }
-                                        {
-                                        };
-                                    DIG 8;
-                                    DUP;
-                                    GET 19;
-                                    DUP 10;
-                                    GET 4;
-                                    DUP 10;
-                                    GET 15;
-                                    DUP 5;
-                                    DUP 12;
-                                    GET 11;
-                                    DUP 13;
-                                    GET 9;
-                                    DUP 9;
-                                    DUP 16;
-                                    CAR;
-                                    DUP 15;
-                                    DUP 17;
-                                    CAR;
-                                    PAIR 9;
-                                    DIG 3;
-                                    DROP;
-                                    SOME;
-                                    DUP 10;
-                                    GET 3;
-                                    UPDATE;
-                                    UPDATE 19;
-                                    DUG 7;
-                                    PUSH mutez 0;
-                                    DUP 2;
-                                    COMPARE;
-                                    GT;
-                                    IF
-                                        {
-                                            DIG 2;
-                                            DROP;
-                                            DIG 2;
-                                            DROP;
-                                            DUP 6;
-                                            GET 15;
-                                            DUP 2;
-                                            COMPARE;
-                                            GT;
-                                            IF
-                                                {
-                                                    DUP 6;
-                                                    GET 15;
-                                                    DUP 2;
-                                                    SUB_MUTEZ;
-                                                    IF_NONE
-                                                        {
-                                                            PUSH int 220;
-                                                            FAILWITH
-                                                        }
-                                                        {
-                                                        };
-                                                    DUP;
-                                                    DUP 8;
-                                                    GET 17;
-                                                    COMPARE;
-                                                    GE;
-                                                    IF
-                                                        {
-                                                        }
-                                                        {
-                                                            PUSH string "pot + reserve too low";
-                                                            FAILWITH
-                                                        };
-                                                    DIG 6;
-                                                    DUP;
-                                                    GET 17;
-                                                    DUP 3;
-                                                    SWAP;
-                                                    SUB_MUTEZ;
-                                                    IF_NONE
-                                                        {
-                                                            PUSH int 222;
-                                                            FAILWITH
-                                                        }
-                                                        {
-                                                        };
-                                                    UPDATE 17;
-                                                    DUP;
-                                                    GET 15;
-                                                    DIG 2;
-                                                    ADD;
-                                                    UPDATE 15;
-                                                    DUG 5
-                                                }
-                                                {
-                                                };
-                                            DIG 5;
-                                            DUP;
-                                            GET 15;
-                                            DUP 3;
-                                            SWAP;
-                                            SUB_MUTEZ;
-                                            IF_NONE
-                                                {
-                                                    PUSH int 224;
-                                                    FAILWITH
-                                                }
-                                                {
-                                                };
-                                            UPDATE 15;
-                                            DUG 5;
-                                            NIL operation;
-                                            DIG 4;
-                                            GET 9;
-                                            CONTRACT unit;
-                                            IF_NONE
-                                                {
-                                                    PUSH int 225;
-                                                    FAILWITH
-                                                }
-                                                {
-                                                };
-                                            DIG 2;
-                                            UNIT;
-                                            TRANSFER_TOKENS;
-                                            CONS
-                                        }
-                                        {
-                                            DROP;
-                                            SWAP;
-                                            DROP;
-                                            SWAP;
-                                            DROP;
-                                            DIG 2;
-                                            DROP;
-                                            NIL operation
-                                        };
-                                    NIL nat;
-                                    DIG 2;
-                                    CONS;
-                                    DIG 2;
-                                    CONS;
-                                    DIG 2;
-                                    GET 3;
-                                    CONS;
-                                    EMIT %playResolved
-                                        (list nat);
-                                    CONS
-                                }
-                                {
-                                    IF_LEFT
-                                        {
-                                            DUP 2;
-                                            CAR;
-                                            SENDER;
-                                            COMPARE;
-                                            EQ;
-                                            IF
-                                                {
-                                                }
-                                                {
-                                                    PUSH string "not admin";
-                                                    FAILWITH
-                                                };
-                                            SWAP;
-                                            DUP;
-                                            GET 11;
-                                            DUP 3;
-                                            CDR;
-                                            SOME;
-                                            DIG 3;
-                                            CAR;
-                                            UPDATE;
-                                            UPDATE 11
-                                        }
-                                        {
-                                            DUP 2;
-                                            CAR;
-                                            SENDER;
-                                            COMPARE;
-                                            EQ;
-                                            IF
-                                                {
-                                                }
-                                                {
-                                                    PUSH string "not admin";
-                                                    FAILWITH
-                                                };
-                                            PUSH nat 100;
-                                            DUP 2;
-                                            CAR;
-                                            MUL;
-                                            PUSH nat 1000;
-                                            DUP 3;
-                                            GET 3;
-                                            MUL;
-                                            ADD;
-                                            DUP 2;
-                                            GET 4;
-                                            ITER
-                                                {
-                                                    CAR;
-                                                    DIG 3;
-                                                    DUP;
-                                                    GET 11;
-                                                    DUP 5;
-                                                    GET 4;
-                                                    DUP 4;
-                                                    GET;
-                                                    IF_NONE
-                                                        {
-                                                            PUSH int 118;
-                                                            FAILWITH
-                                                        }
-                                                        {
-                                                        };
-                                                    SOME;
-                                                    DIG 3;
-                                                    DUP 5;
-                                                    ADD;
-                                                    UPDATE;
-                                                    UPDATE 11;
-                                                    DUG 2
-                                                };
-                                            DROP 2
-                                        };
-                                    NIL operation
-                                }
-                        }
-                }
-                {
-                    IF_LEFT
-                        {
-                            IF_LEFT
-                                {
-                                    DUP 2;
-                                    CAR;
-                                    SENDER;
-                                    COMPARE;
-                                    EQ;
-                                    IF
-                                        {
-                                        }
-                                        {
-                                            PUSH string "not admin";
-                                            FAILWITH
-                                        };
-                                    SWAP;
-                                    DUP;
-                                    GET 17;
-                                    DUP 3;
-                                    SWAP;
-                                    SUB_MUTEZ;
-                                    IF_NONE
-                                        {
-                                            PUSH int 239;
-                                            FAILWITH
-                                        }
-                                        {
-                                        };
-                                    UPDATE 17;
-                                    DUP;
-                                    GET 15;
-                                    DIG 2;
-                                    ADD;
-                                    UPDATE 15
-                                }
-                                {
-                                    DUP 2;
-                                    CAR;
-                                    SENDER;
-                                    COMPARE;
-                                    EQ;
-                                    IF
-                                        {
-                                        }
-                                        {
-                                            PUSH string "not admin";
-                                            FAILWITH
-                                        };
-                                    SWAP;
-                                    DUP 2;
-                                    CDR;
-                                    UPDATE 9;
-                                    SWAP;
-                                    CAR;
-                                    UPDATE 7
-                                }
-                        }
-                        {
-                            IF_LEFT
-                                {
-                                    DUP 2;
-                                    CAR;
-                                    SENDER;
-                                    COMPARE;
-                                    EQ;
-                                    IF
-                                        {
-                                        }
-                                        {
-                                            PUSH string "not admin";
-                                            FAILWITH
-                                        };
-                                    UPDATE 5
-                                }
-                                {
-                                    IF_LEFT
-                                        {
-                                            DUP 2;
-                                            CAR;
-                                            SENDER;
-                                            COMPARE;
-                                            EQ;
-                                            IF
-                                                {
-                                                }
-                                                {
-                                                    PUSH string "not admin";
-                                                    FAILWITH
-                                                };
-                                            UPDATE 13
-                                        }
-                                        {
-                                            DUP 2;
-                                            CAR;
-                                            SENDER;
-                                            COMPARE;
-                                            EQ;
-                                            IF
-                                                {
-                                                }
-                                                {
-                                                    PUSH string "not admin";
-                                                    FAILWITH
-                                                };
-                                            UPDATE 20
-                                        }
-                                }
-                        };
-                    NIL operation
-                };
-            NIL operation;
-            SWAP;
-            ITER
-                {
-                    CONS
-                };
-            PAIR
-        }
-}
+              {
+                DROP;       # @storage
+                # == default ==
+                # self.data.potReserve += sp.amount # @storage
+                DUP;        # @storage : @storage
+                GET 17;     # mutez : @storage
+                AMOUNT;     # @amount : mutez : @storage
+                ADD;        # mutez : @storage
+                UPDATE 17;  # @storage
+                NIL operation; # list operation : @storage
+              }
+              {
+                # == play ==
+                # assert ( # @parameter%play : @storage
+                PUSH nat 8; # nat : @parameter%play : @storage
+                DUP 2;      # @parameter%play : nat : @parameter%play : @storage
+                CDR;        # nat : nat : @parameter%play : @storage
+                COMPARE;    # int : @parameter%play : @storage
+                EQ;         # bool : @parameter%play : @storage
+                IF
+                  {
+                    PUSH bool True; # bool : @parameter%play : @storage
+                  }
+                  {
+                    PUSH nat 12; # nat : @parameter%play : @storage
+                    DUP 2;      # @parameter%play : nat : @parameter%play : @storage
+                    CDR;        # nat : nat : @parameter%play : @storage
+                    COMPARE;    # int : @parameter%play : @storage
+                    EQ;         # bool : @parameter%play : @storage
+                  }; # bool : @parameter%play : @storage
+                IF
+                  {
+                    PUSH bool True; # bool : @parameter%play : @storage
+                  }
+                  {
+                    PUSH nat 16; # nat : @parameter%play : @storage
+                    DUP 2;      # @parameter%play : nat : @parameter%play : @storage
+                    CDR;        # nat : nat : @parameter%play : @storage
+                    COMPARE;    # int : @parameter%play : @storage
+                    EQ;         # bool : @parameter%play : @storage
+                  }; # bool : @parameter%play : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "rows must be 8, 12, or 16"; # string : @parameter%play : @storage
+                    FAILWITH;   # FAILED
+                  }; # @parameter%play : @storage
+                # assert params.risk < 3, "risk must be 0..2" # @parameter%play : @storage
+                PUSH nat 3; # nat : @parameter%play : @storage
+                DUP 2;      # @parameter%play : nat : @parameter%play : @storage
+                CAR;        # nat : nat : @parameter%play : @storage
+                COMPARE;    # int : @parameter%play : @storage
+                LT;         # bool : @parameter%play : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "risk must be 0..2"; # string : @parameter%play : @storage
+                    FAILWITH;   # FAILED
+                  }; # @parameter%play : @storage
+                # assert sp.amount >= self.data.minBet, "bet too small" # @parameter%play : @storage
+                DUP 2;      # @storage : @parameter%play : @storage
+                GET 9;      # mutez : @parameter%play : @storage
+                AMOUNT;     # @amount : mutez : @parameter%play : @storage
+                COMPARE;    # int : @parameter%play : @storage
+                GE;         # bool : @parameter%play : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "bet too small"; # string : @parameter%play : @storage
+                    FAILWITH;   # FAILED
+                  }; # @parameter%play : @storage
+                # assert sp.amount <= self.data.maxBet, "bet too big" # @parameter%play : @storage
+                DUP 2;      # @storage : @parameter%play : @storage
+                GET 7;      # mutez : @parameter%play : @storage
+                AMOUNT;     # @amount : mutez : @parameter%play : @storage
+                COMPARE;    # int : @parameter%play : @storage
+                LE;         # bool : @parameter%play : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "bet too big"; # string : @parameter%play : @storage
+                    FAILWITH;   # FAILED
+                  }; # @parameter%play : @storage
+                # betAfterFee = sp.amount - self.data.fee # @parameter%play : @storage
+                DUP 2;      # @storage : @parameter%play : @storage
+                GET 5;      # mutez : @parameter%play : @storage
+                AMOUNT;     # @amount : mutez : @parameter%play : @storage
+                SUB_MUTEZ;  # option mutez : @parameter%play : @storage
+                IF_NONE
+                  {
+                    PUSH int 164; # int : @parameter%play : @storage
+                    FAILWITH;   # FAILED
+                  }
+                  {}; # @some : @parameter%play : @storage
+                # self.data.pot += betAfterFee # @some : @parameter%play : @storage
+                DIG 2;      # @storage : @some : @parameter%play
+                DUP;        # @storage : @storage : @some : @parameter%play
+                GET 15;     # mutez : @storage : @some : @parameter%play
+                DUP 3;      # @some : mutez : @storage : @some : @parameter%play
+                ADD;        # mutez : @storage : @some : @parameter%play
+                UPDATE 15;  # @storage : @some : @parameter%play
+                DUG 2;      # @some : @parameter%play : @storage
+                # sp.send(self.data.txlContract, self.data.fee) # @some : @parameter%play : @storage
+                NIL operation; # list operation : @some : @parameter%play : @storage
+                DUP 4;      # @storage : list operation : @some : @parameter%play : @storage
+                GET 20;     # address : list operation : @some : @parameter%play : @storage
+                CONTRACT unit; # option (contract unit) : list operation : @some : @parameter%play : @storage
+                IF_NONE
+                  {
+                    PUSH int 166; # int : list operation : @some : @parameter%play : @storage
+                    FAILWITH;   # FAILED
+                  }
+                  {}; # @some : list operation : @some : @parameter%play : @storage
+                DUP 5;      # @storage : @some : list operation : @some : @parameter%play : @storage
+                GET 5;      # mutez : @some : list operation : @some : @parameter%play : @storage
+                UNIT;       # unit : mutez : @some : list operation : @some : @parameter%play : @storage
+                TRANSFER_TOKENS; # operation : list operation : @some : @parameter%play : @storage
+                CONS;       # list operation : @some : @parameter%play : @storage
+                # empty_path = sp.cast({}, sp.map[sp.nat, sp.nat]) # list operation : @some : @parameter%play : @storage
+                EMPTY_MAP nat nat; # map nat nat : list operation : @some : @parameter%play : @storage
+                # self.data.rounds[self.data.currentRoundId] = sp.record( # map nat nat : list operation : @some : @parameter%play : @storage
+                DUP 5;      # @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                DUP;        # @storage : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                GET 19;     # map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                DUP 3;      # map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                DUP 4;      # map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                PUSH string ""; # string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                DUP 9;      # @parameter%play : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                CDR;        # nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                PUSH nat 0; # nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                DUP 11;     # @parameter%play : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                CAR;        # nat : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                PUSH nat 0; # nat : nat : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                SENDER;     # @sender : nat : nat : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                PUSH mutez 0; # mutez : @sender : nat : nat : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                PUSH nat 0; # nat : mutez : @sender : nat : nat : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                DUP;        # nat : nat : mutez : @sender : nat : nat : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                DUP 16;     # @some : nat : nat : mutez : @sender : nat : nat : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                PAIR 12;    # pair @some (pair nat (pair nat (pair mutez (pair @sender (pair nat (pair nat (pair nat (pair nat (pair string (pair (map nat nat) (map nat nat))))))))))) : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : map nat nat : list operation : @some : @parameter%play : @storage
+                DIG 3;      # map nat nat : pair @some (pair nat (pair nat (pair mutez (pair @sender (pair nat (pair nat (pair nat (pair nat (pair string (pair (map nat nat) (map nat nat))))))))))) : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : list operation : @some : @parameter%play : @storage
+                DROP;       # pair @some (pair nat (pair nat (pair mutez (pair @sender (pair nat (pair nat (pair nat (pair nat (pair string (pair (map nat nat) (map nat nat))))))))))) : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : list operation : @some : @parameter%play : @storage
+                DIG 4;      # @some : pair @some (pair nat (pair nat (pair mutez (pair @sender (pair nat (pair nat (pair nat (pair nat (pair string (pair (map nat nat) (map nat nat))))))))))) : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : list operation : @parameter%play : @storage
+                DROP;       # pair @some (pair nat (pair nat (pair mutez (pair @sender (pair nat (pair nat (pair nat (pair nat (pair string (pair (map nat nat) (map nat nat))))))))))) : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : list operation : @parameter%play : @storage
+                SOME;       # option (pair @some (pair nat (pair nat (pair mutez (pair @sender (pair nat (pair nat (pair nat (pair nat (pair string (pair (map nat nat) (map nat nat)))))))))))) : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : list operation : @parameter%play : @storage
+                DIG 5;      # @storage : option (pair @some (pair nat (pair nat (pair mutez (pair @sender (pair nat (pair nat (pair nat (pair nat (pair string (pair (map nat nat) (map nat nat)))))))))))) : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : list operation : @parameter%play
+                GET 3;      # nat : option (pair @some (pair nat (pair nat (pair mutez (pair @sender (pair nat (pair nat (pair nat (pair nat (pair string (pair (map nat nat) (map nat nat)))))))))))) : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : list operation : @parameter%play
+                UPDATE;     # map nat (pair mutez (pair nat (pair nat (pair mutez (pair address (pair nat (pair nat (pair nat (pair nat (pair string (pair (map nat nat) (map nat nat)))))))))))) : @storage : list operation : @parameter%play
+                UPDATE 19;  # @storage : list operation : @parameter%play
+                DUG 2;      # list operation : @parameter%play : @storage
+                # sp.emit( # list operation : @parameter%play : @storage
+                NIL nat;    # list nat : list operation : @parameter%play : @storage
+                DUP 3;      # @parameter%play : list nat : list operation : @parameter%play : @storage
+                CAR;        # nat : list nat : list operation : @parameter%play : @storage
+                CONS;       # list nat : list operation : @parameter%play : @storage
+                DIG 2;      # @parameter%play : list nat : list operation : @storage
+                CDR;        # nat : list nat : list operation : @storage
+                CONS;       # list nat : list operation : @storage
+                DUP 3;      # @storage : list nat : list operation : @storage
+                GET 3;      # nat : list nat : list operation : @storage
+                CONS;       # list nat : list operation : @storage
+                EMIT %playRequested (list nat); # operation : list operation : @storage
+                CONS;       # list operation : @storage
+                SWAP;       # @storage : list operation
+                # self.data.currentRoundId += 1 # @storage : list operation
+                DUP;        # @storage : @storage : list operation
+                GET 3;      # nat : @storage : list operation
+                PUSH nat 1; # nat : nat : @storage : list operation
+                ADD;        # nat : @storage : list operation
+                UPDATE 3;   # @storage : list operation
+                SWAP;       # list operation : @storage
+              }; # list operation : @storage
+          }
+          {
+            IF_LEFT
+              {
+                # == resolve ==
+                # assert sp.sender == self.data.oracle, "not oracle" # @parameter%resolve : @storage
+                DUP 2;      # @storage : @parameter%resolve : @storage
+                GET 13;     # address : @parameter%resolve : @storage
+                SENDER;     # @sender : address : @parameter%resolve : @storage
+                COMPARE;    # int : @parameter%resolve : @storage
+                EQ;         # bool : @parameter%resolve : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "not oracle"; # string : @parameter%resolve : @storage
+                    FAILWITH;   # FAILED
+                  }; # @parameter%resolve : @storage
+                # r = self.data.rounds[params.roundId] # @parameter%resolve : @storage
+                DUP 2;      # @storage : @parameter%resolve : @storage
+                GET 19;     # map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @parameter%resolve : @storage
+                DUP 2;      # @parameter%resolve : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @parameter%resolve : @storage
+                CAR;        # nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @parameter%resolve : @storage
+                GET;        # option (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @parameter%resolve : @storage
+                IF_NONE
+                  {
+                    PUSH int 204; # int : @parameter%resolve : @storage
+                    FAILWITH;   # FAILED
+                  }
+                  {}; # @some : @parameter%resolve : @storage
+                # assert r.roundStatus == 0, "already resolved" # @some : @parameter%resolve : @storage
+                PUSH nat 0; # nat : @some : @parameter%resolve : @storage
+                DUP 2;      # @some : nat : @some : @parameter%resolve : @storage
+                GET 15;     # nat : nat : @some : @parameter%resolve : @storage
+                COMPARE;    # int : @some : @parameter%resolve : @storage
+                EQ;         # bool : @some : @parameter%resolve : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "already resolved"; # string : @some : @parameter%resolve : @storage
+                    FAILWITH;   # FAILED
+                  }; # @some : @parameter%resolve : @storage
+                # finalX = sp.nat(0) # @some : @parameter%resolve : @storage
+                PUSH nat 0; # nat : @some : @parameter%resolve : @storage
+                # xCount = sp.nat(0) # nat : @some : @parameter%resolve : @storage
+                PUSH nat 0; # nat : nat : @some : @parameter%resolve : @storage
+                # for i in params.xBits.keys(): # nat : nat : @some : @parameter%resolve : @storage
+                DUP 4;      # @parameter%resolve : nat : nat : @some : @parameter%resolve : @storage
+                GET 5;      # map nat nat : nat : nat : @some : @parameter%resolve : @storage
+                ITER
+                  {
+                    CAR;        # nat : nat : nat : @some : @parameter%resolve : @storage
+                    # xbit = params.xBits[i] # nat : nat : nat : @some : @parameter%resolve : @storage
+                    DUP 5;      # @parameter%resolve : nat : nat : nat : @some : @parameter%resolve : @storage
+                    GET 5;      # map nat nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    SWAP;       # nat : map nat nat : nat : nat : @some : @parameter%resolve : @storage
+                    GET;        # option nat : nat : nat : @some : @parameter%resolve : @storage
+                    IF_NONE
+                      {
+                        PUSH int 211; # int : nat : nat : @some : @parameter%resolve : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : nat : nat : @some : @parameter%resolve : @storage
+                    # assert xbit < 2, "xBit must be 0 or 1" # @some : nat : nat : @some : @parameter%resolve : @storage
+                    PUSH nat 2; # nat : @some : nat : nat : @some : @parameter%resolve : @storage
+                    DUP 2;      # @some : nat : @some : nat : nat : @some : @parameter%resolve : @storage
+                    COMPARE;    # int : @some : nat : nat : @some : @parameter%resolve : @storage
+                    LT;         # bool : @some : nat : nat : @some : @parameter%resolve : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "xBit must be 0 or 1"; # string : @some : nat : nat : @some : @parameter%resolve : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : nat : nat : @some : @parameter%resolve : @storage
+                    # finalX += xbit # @some : nat : nat : @some : @parameter%resolve : @storage
+                    DIG 2;      # nat : @some : nat : @some : @parameter%resolve : @storage
+                    ADD;        # nat : nat : @some : @parameter%resolve : @storage
+                    SWAP;       # nat : nat : @some : @parameter%resolve : @storage
+                    # xCount += 1 # nat : nat : @some : @parameter%resolve : @storage
+                    PUSH nat 1; # nat : nat : nat : @some : @parameter%resolve : @storage
+                    ADD;        # nat : nat : @some : @parameter%resolve : @storage
+                  }; # nat : nat : @some : @parameter%resolve : @storage
+                # assert xCount == r.rows, "xBits length must equal rows" # nat : nat : @some : @parameter%resolve : @storage
+                DUP 3;      # @some : nat : nat : @some : @parameter%resolve : @storage
+                GET 17;     # nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 2;      # nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                COMPARE;    # int : nat : nat : @some : @parameter%resolve : @storage
+                EQ;         # bool : nat : nat : @some : @parameter%resolve : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "xBits length must equal rows"; # string : nat : nat : @some : @parameter%resolve : @storage
+                    FAILWITH;   # FAILED
+                  }; # nat : nat : @some : @parameter%resolve : @storage
+                # finalZ = sp.nat(0) # nat : nat : @some : @parameter%resolve : @storage
+                PUSH nat 0; # nat : nat : nat : @some : @parameter%resolve : @storage
+                # zCount = sp.nat(0) # nat : nat : nat : @some : @parameter%resolve : @storage
+                PUSH nat 0; # nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # for j in params.zBits.keys(): # nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 6;      # @parameter%resolve : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                GET 6;      # map nat nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                ITER
+                  {
+                    CAR;        # nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    # zbit = params.zBits[j] # nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DUP 7;      # @parameter%resolve : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    GET 6;      # map nat nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    SWAP;       # nat : map nat nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    GET;        # option nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    IF_NONE
+                      {
+                        PUSH int 221; # int : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    # assert zbit < 2, "zBit must be 0 or 1" # @some : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    PUSH nat 2; # nat : @some : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DUP 2;      # @some : nat : @some : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    COMPARE;    # int : @some : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    LT;         # bool : @some : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "zBit must be 0 or 1"; # string : @some : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    # finalZ += zbit # @some : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DIG 2;      # nat : @some : nat : nat : nat : @some : @parameter%resolve : @storage
+                    ADD;        # nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    SWAP;       # nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    # zCount += 1 # nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    PUSH nat 1; # nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    ADD;        # nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                  }; # nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # assert zCount == r.rows, "zBits length must equal rows" # nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 5;      # @some : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                GET 17;     # nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 2;      # nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                COMPARE;    # int : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                EQ;         # bool : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "zBits length must equal rows"; # string : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    FAILWITH;   # FAILED
+                  }; # nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # half = sp.nat(4) # nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                PUSH nat 4; # nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # if r.rows == 12: # nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                PUSH nat 12; # nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 7;      # @some : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                GET 17;     # nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                COMPARE;    # int : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                EQ;         # bool : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                IF
+                  {
+                    DROP;       # nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    # half = sp.nat(6) # nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    PUSH nat 6; # nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                  }
+                  {}; # nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # if r.rows == 16: # nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                PUSH nat 16; # nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 7;      # @some : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                GET 17;     # nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                COMPARE;    # int : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                EQ;         # bool : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                IF
+                  {
+                    DROP;       # nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    # half = sp.nat(8) # nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    PUSH nat 8; # nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                  }
+                  {}; # nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # dx = abs(sp.to_int(finalX) - sp.to_int(half)) # nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP;        # nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                INT;        # int : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 6;      # nat : int : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                INT;        # int : int : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                SUB;        # int : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                ABS;        # nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # dz = abs(sp.to_int(finalZ) - sp.to_int(half)) # nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 2;      # nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                INT;        # int : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 5;      # nat : int : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                INT;        # int : int : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                SUB;        # int : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                ABS;        # nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # ring = dx # nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 2;      # nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # if dz > dx: # nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 3;      # nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 3;      # nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                COMPARE;    # int : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                GT;         # bool : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                IF
+                  {
+                    DROP;       # nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    # ring = dz # nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DUP;        # nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                  }
+                  {}; # nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # key = r.rows * 1000 + r.risk * 100 + ring # nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP;        # nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                PUSH nat 100; # nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 11;     # @some : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                GET 13;     # nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                MUL;        # nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                PUSH nat 1000; # nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 12;     # @some : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                GET 17;     # nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                MUL;        # nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                ADD;        # nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                ADD;        # nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # multBp = self.data.multipliers.get(key, default=sp.nat(100)) # nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 12;     # @storage : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                GET 11;     # map nat nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 2;      # nat : map nat nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                GET;        # option nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                IF_NONE
+                  {
+                    PUSH nat 100; # nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                  }
+                  {}; # nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # payout = sp.split_tokens(r.bet, multBp, 100) # nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                PUSH nat 100; # nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 2;      # nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 13;     # @some : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                CAR;        # mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                MUL;        # mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                EDIV;       # option (pair mutez mutez) : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                IF_NONE
+                  {
+                    PUSH int 244; # int : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    FAILWITH;   # FAILED
+                  }
+                  {
+                    # payout = sp.split_tokens(r.bet, multBp, 100) # @some : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                  }; # @some : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                CAR;        # mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # newStatus = sp.nat(3) # mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                PUSH nat 3; # nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # if payout == r.bet: # nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 13;     # @some : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                CAR;        # mutez : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 3;      # mutez : mutez : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                COMPARE;    # int : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                EQ;         # bool : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                IF
+                  {
+                    DROP;       # mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    # newStatus = sp.nat(2) # mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    PUSH nat 2; # nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                  }
+                  {}; # nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # if payout > r.bet: # nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 13;     # @some : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                CAR;        # mutez : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 3;      # mutez : mutez : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                COMPARE;    # int : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                GT;         # bool : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                IF
+                  {
+                    DROP;       # mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    # newStatus = sp.nat(1) # mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    PUSH nat 1; # nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                  }
+                  {}; # nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # self.data.rounds[params.roundId] = sp.record( # nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DIG 14;     # @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DUP;        # @storage : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                GET 19;     # map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DUP 16;     # @parameter%resolve : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                GET 6;      # map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DUP 17;     # @parameter%resolve : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                GET 5;      # map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DUP 18;     # @parameter%resolve : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                GET 3;      # string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DUP 18;     # @some : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                GET 17;     # nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DUP 7;      # nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DUP 20;     # @some : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                GET 13;     # nat : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DUP 13;     # nat : nat : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DUP 22;     # @some : nat : nat : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                GET 9;      # address : nat : nat : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DUP 12;     # mutez : address : nat : nat : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DUP 21;     # nat : mutez : address : nat : nat : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DUP 24;     # nat : nat : mutez : address : nat : nat : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DUP 26;     # @some : nat : nat : mutez : address : nat : nat : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                CAR;        # mutez : nat : nat : mutez : address : nat : nat : nat : nat : string : map nat nat : map nat nat : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                PAIR 12;    # pair mutez (pair nat (pair nat (pair mutez (pair address (pair nat (pair nat (pair nat (pair nat (pair string (pair (map nat nat) (map nat nat))))))))))) : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DIG 3;      # nat : pair mutez (pair nat (pair nat (pair mutez (pair address (pair nat (pair nat (pair nat (pair nat (pair string (pair (map nat nat) (map nat nat))))))))))) : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DROP;       # pair mutez (pair nat (pair nat (pair mutez (pair address (pair nat (pair nat (pair nat (pair nat (pair string (pair (map nat nat) (map nat nat))))))))))) : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                SOME;       # option (pair mutez (pair nat (pair nat (pair mutez (pair address (pair nat (pair nat (pair nat (pair nat (pair string (pair (map nat nat) (map nat nat)))))))))))) : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DUP 16;     # @parameter%resolve : option (pair mutez (pair nat (pair nat (pair mutez (pair address (pair nat (pair nat (pair nat (pair nat (pair string (pair (map nat nat) (map nat nat)))))))))))) : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                CAR;        # nat : option (pair mutez (pair nat (pair nat (pair mutez (pair address (pair nat (pair nat (pair nat (pair nat (pair string (pair (map nat nat) (map nat nat)))))))))))) : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (string %seed) (pair (map %xPath nat nat) (map %zPath nat nat)))))))))))) : @storage : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                UPDATE;     # map nat (pair mutez (pair nat (pair nat (pair mutez (pair address (pair nat (pair nat (pair nat (pair nat (pair string (pair (map nat nat) (map nat nat)))))))))))) : @storage : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                UPDATE 19;  # @storage : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve
+                DUG 13;     # mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                # if payout > sp.mutez(0): # mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                PUSH mutez 0; # mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                DUP 2;      # mutez : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                COMPARE;    # int : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                GT;         # bool : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                IF
+                  {
+                    DIG 2;      # nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DROP;       # mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DIG 3;      # nat : mutez : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DROP;       # mutez : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DIG 3;      # nat : mutez : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DROP;       # mutez : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DIG 3;      # nat : mutez : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DROP;       # mutez : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DIG 3;      # nat : mutez : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DROP;       # mutez : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DIG 4;      # nat : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DROP;       # mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    # if payout > self.data.pot: # mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DUP 8;      # @storage : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    GET 15;     # mutez : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DUP 2;      # mutez : mutez : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    COMPARE;    # int : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    GT;         # bool : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    IF
+                      {
+                        # deficit = payout - self.data.pot # mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                        DUP 8;      # @storage : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                        GET 15;     # mutez : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                        DUP 2;      # mutez : mutez : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                        SUB_MUTEZ;  # option mutez : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                        IF_NONE
+                          {
+                            PUSH int 277; # int : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                            FAILWITH;   # FAILED
+                          }
+                          {}; # @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                        # assert self.data.potReserve >= deficit, "pot + reserve too low" # @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                        DUP;        # @some : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                        DUP 10;     # @storage : @some : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                        GET 17;     # mutez : @some : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                        COMPARE;    # int : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                        GE;         # bool : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                        IF
+                          {}
+                          {
+                            PUSH string "pot + reserve too low"; # string : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                            FAILWITH;   # FAILED
+                          }; # @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                        # self.data.potReserve -= deficit # @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                        DIG 8;      # @storage : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                        DUP;        # @storage : @storage : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                        GET 17;     # mutez : @storage : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                        DUP 3;      # @some : mutez : @storage : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                        SWAP;       # mutez : @some : @storage : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                        SUB_MUTEZ;  # option mutez : @storage : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                        IF_NONE
+                          {
+                            PUSH int 279; # int : @storage : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                            FAILWITH;   # FAILED
+                          }
+                          {}; # @some : @storage : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                        UPDATE 17;  # @storage : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                        # self.data.pot += deficit # @storage : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                        DUP;        # @storage : @storage : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                        GET 15;     # mutez : @storage : @some : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                        DIG 2;      # @some : mutez : @storage : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                        ADD;        # mutez : @storage : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                        UPDATE 15;  # @storage : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                        DUG 7;      # mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                      }
+                      {}; # mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    # self.data.pot -= payout # mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DIG 7;      # @storage : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                    DUP;        # @storage : @storage : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                    GET 15;     # mutez : @storage : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                    DUP 3;      # mutez : mutez : @storage : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                    SWAP;       # mutez : mutez : @storage : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                    SUB_MUTEZ;  # option mutez : @storage : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                    IF_NONE
+                      {
+                        PUSH int 281; # int : @storage : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @storage : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                    UPDATE 15;  # @storage : mutez : nat : nat : nat : nat : @some : @parameter%resolve
+                    DUG 7;      # mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    # sp.send(r.player, payout) # mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    NIL operation; # list operation : mutez : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DIG 6;      # @some : list operation : mutez : nat : nat : nat : nat : @parameter%resolve : @storage
+                    GET 9;      # address : list operation : mutez : nat : nat : nat : nat : @parameter%resolve : @storage
+                    CONTRACT unit; # option (contract unit) : list operation : mutez : nat : nat : nat : nat : @parameter%resolve : @storage
+                    IF_NONE
+                      {
+                        PUSH int 282; # int : list operation : mutez : nat : nat : nat : nat : @parameter%resolve : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : list operation : mutez : nat : nat : nat : nat : @parameter%resolve : @storage
+                    DIG 2;      # mutez : @some : list operation : nat : nat : nat : nat : @parameter%resolve : @storage
+                    UNIT;       # unit : mutez : @some : list operation : nat : nat : nat : nat : @parameter%resolve : @storage
+                    TRANSFER_TOKENS; # operation : list operation : nat : nat : nat : nat : @parameter%resolve : @storage
+                    CONS;       # list operation : nat : nat : nat : nat : @parameter%resolve : @storage
+                  }
+                  {
+                    DROP;       # nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    SWAP;       # nat : nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DROP;       # nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DIG 2;      # nat : nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DROP;       # nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DIG 2;      # nat : nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DROP;       # nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DIG 2;      # nat : nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DROP;       # nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DIG 2;      # nat : nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DROP;       # nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DIG 3;      # nat : nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DROP;       # nat : nat : nat : nat : @some : @parameter%resolve : @storage
+                    DIG 4;      # @some : nat : nat : nat : nat : @parameter%resolve : @storage
+                    DROP;       # nat : nat : nat : nat : @parameter%resolve : @storage
+                    NIL operation; # list operation : nat : nat : nat : nat : @parameter%resolve : @storage
+                  }; # list operation : nat : nat : nat : nat : @parameter%resolve : @storage
+                # sp.emit( # list operation : nat : nat : nat : nat : @parameter%resolve : @storage
+                NIL nat;    # list nat : list operation : nat : nat : nat : nat : @parameter%resolve : @storage
+                DIG 2;      # nat : list nat : list operation : nat : nat : nat : @parameter%resolve : @storage
+                CONS;       # list nat : list operation : nat : nat : nat : @parameter%resolve : @storage
+                DIG 2;      # nat : list nat : list operation : nat : nat : @parameter%resolve : @storage
+                CONS;       # list nat : list operation : nat : nat : @parameter%resolve : @storage
+                DIG 2;      # nat : list nat : list operation : nat : @parameter%resolve : @storage
+                CONS;       # list nat : list operation : nat : @parameter%resolve : @storage
+                DIG 2;      # nat : list nat : list operation : @parameter%resolve : @storage
+                CONS;       # list nat : list operation : @parameter%resolve : @storage
+                DIG 2;      # @parameter%resolve : list nat : list operation : @storage
+                CAR;        # nat : list nat : list operation : @storage
+                CONS;       # list nat : list operation : @storage
+                EMIT %playResolved (list nat); # operation : list operation : @storage
+                CONS;       # list operation : @storage
+              }
+              {
+                IF_LEFT
+                  {
+                    # == setMultiplier ==
+                    # assert sp.sender == self.data.admin, "not admin" # @parameter%setMultiplier : @storage
+                    DUP 2;      # @storage : @parameter%setMultiplier : @storage
+                    CAR;        # address : @parameter%setMultiplier : @storage
+                    SENDER;     # @sender : address : @parameter%setMultiplier : @storage
+                    COMPARE;    # int : @parameter%setMultiplier : @storage
+                    EQ;         # bool : @parameter%setMultiplier : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "not admin"; # string : @parameter%setMultiplier : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%setMultiplier : @storage
+                    SWAP;       # @storage : @parameter%setMultiplier
+                    # self.data.multipliers[params.key] = params.value # @storage : @parameter%setMultiplier
+                    DUP;        # @storage : @storage : @parameter%setMultiplier
+                    GET 11;     # map nat nat : @storage : @parameter%setMultiplier
+                    DUP 3;      # @parameter%setMultiplier : map nat nat : @storage : @parameter%setMultiplier
+                    CDR;        # nat : map nat nat : @storage : @parameter%setMultiplier
+                    SOME;       # option nat : map nat nat : @storage : @parameter%setMultiplier
+                    DIG 3;      # @parameter%setMultiplier : option nat : map nat nat : @storage
+                    CAR;        # nat : option nat : map nat nat : @storage
+                    UPDATE;     # map nat nat : @storage
+                    UPDATE 11;  # @storage
+                  }
+                  {
+                    # == setMultiplierRow ==
+                    # assert sp.sender == self.data.admin, "not admin" # @parameter%setMultiplierRow : @storage
+                    DUP 2;      # @storage : @parameter%setMultiplierRow : @storage
+                    CAR;        # address : @parameter%setMultiplierRow : @storage
+                    SENDER;     # @sender : address : @parameter%setMultiplierRow : @storage
+                    COMPARE;    # int : @parameter%setMultiplierRow : @storage
+                    EQ;         # bool : @parameter%setMultiplierRow : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "not admin"; # string : @parameter%setMultiplierRow : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%setMultiplierRow : @storage
+                    # base = params.rows * 1000 + params.risk * 100 # @parameter%setMultiplierRow : @storage
+                    PUSH nat 100; # nat : @parameter%setMultiplierRow : @storage
+                    DUP 2;      # @parameter%setMultiplierRow : nat : @parameter%setMultiplierRow : @storage
+                    CAR;        # nat : nat : @parameter%setMultiplierRow : @storage
+                    MUL;        # nat : @parameter%setMultiplierRow : @storage
+                    PUSH nat 1000; # nat : nat : @parameter%setMultiplierRow : @storage
+                    DUP 3;      # @parameter%setMultiplierRow : nat : nat : @parameter%setMultiplierRow : @storage
+                    GET 3;      # nat : nat : nat : @parameter%setMultiplierRow : @storage
+                    MUL;        # nat : nat : @parameter%setMultiplierRow : @storage
+                    ADD;        # nat : @parameter%setMultiplierRow : @storage
+                    # for ring in params.values.keys(): # nat : @parameter%setMultiplierRow : @storage
+                    DUP 2;      # @parameter%setMultiplierRow : nat : @parameter%setMultiplierRow : @storage
+                    GET 4;      # map nat nat : nat : @parameter%setMultiplierRow : @storage
+                    ITER
+                      {
+                        CAR;        # nat : nat : @parameter%setMultiplierRow : @storage
+                        # self.data.multipliers[base + ring] = params.values[ring] # nat : nat : @parameter%setMultiplierRow : @storage
+                        DIG 3;      # @storage : nat : nat : @parameter%setMultiplierRow
+                        DUP;        # @storage : @storage : nat : nat : @parameter%setMultiplierRow
+                        GET 11;     # map nat nat : @storage : nat : nat : @parameter%setMultiplierRow
+                        DUP 5;      # @parameter%setMultiplierRow : map nat nat : @storage : nat : nat : @parameter%setMultiplierRow
+                        GET 4;      # map nat nat : map nat nat : @storage : nat : nat : @parameter%setMultiplierRow
+                        DUP 4;      # nat : map nat nat : map nat nat : @storage : nat : nat : @parameter%setMultiplierRow
+                        GET;        # option nat : map nat nat : @storage : nat : nat : @parameter%setMultiplierRow
+                        IF_NONE
+                          {
+                            PUSH int 142; # int : map nat nat : @storage : nat : nat : @parameter%setMultiplierRow
+                            FAILWITH;   # FAILED
+                          }
+                          {}; # @some : map nat nat : @storage : nat : nat : @parameter%setMultiplierRow
+                        SOME;       # option nat : map nat nat : @storage : nat : nat : @parameter%setMultiplierRow
+                        DIG 3;      # nat : option nat : map nat nat : @storage : nat : @parameter%setMultiplierRow
+                        DUP 5;      # nat : nat : option nat : map nat nat : @storage : nat : @parameter%setMultiplierRow
+                        ADD;        # nat : option nat : map nat nat : @storage : nat : @parameter%setMultiplierRow
+                        UPDATE;     # map nat nat : @storage : nat : @parameter%setMultiplierRow
+                        UPDATE 11;  # @storage : nat : @parameter%setMultiplierRow
+                        DUG 2;      # nat : @parameter%setMultiplierRow : @storage
+                      }; # nat : @parameter%setMultiplierRow : @storage
+                    DROP 2;     # @storage
+                  }; # @storage
+                NIL operation; # list operation : @storage
+              }; # list operation : @storage
+          }; # list operation : @storage
+      }
+      {
+        IF_LEFT
+          {
+            IF_LEFT
+              {
+                # == topUpPot ==
+                # assert sp.sender == self.data.admin, "not admin" # @parameter%topUpPot : @storage
+                DUP 2;      # @storage : @parameter%topUpPot : @storage
+                CAR;        # address : @parameter%topUpPot : @storage
+                SENDER;     # @sender : address : @parameter%topUpPot : @storage
+                COMPARE;    # int : @parameter%topUpPot : @storage
+                EQ;         # bool : @parameter%topUpPot : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "not admin"; # string : @parameter%topUpPot : @storage
+                    FAILWITH;   # FAILED
+                  }; # @parameter%topUpPot : @storage
+                SWAP;       # @storage : @parameter%topUpPot
+                # self.data.potReserve -= params.amount # @storage : @parameter%topUpPot
+                DUP;        # @storage : @storage : @parameter%topUpPot
+                GET 17;     # mutez : @storage : @parameter%topUpPot
+                DUP 3;      # @parameter%topUpPot : mutez : @storage : @parameter%topUpPot
+                SWAP;       # mutez : @parameter%topUpPot : @storage : @parameter%topUpPot
+                SUB_MUTEZ;  # option mutez : @storage : @parameter%topUpPot
+                IF_NONE
+                  {
+                    PUSH int 296; # int : @storage : @parameter%topUpPot
+                    FAILWITH;   # FAILED
+                  }
+                  {}; # @some : @storage : @parameter%topUpPot
+                UPDATE 17;  # @storage : @parameter%topUpPot
+                # self.data.pot += params.amount # @storage : @parameter%topUpPot
+                DUP;        # @storage : @storage : @parameter%topUpPot
+                GET 15;     # mutez : @storage : @parameter%topUpPot
+                DIG 2;      # @parameter%topUpPot : mutez : @storage
+                ADD;        # mutez : @storage
+                UPDATE 15;  # @storage
+              }
+              {
+                # == updateBetBounds ==
+                # assert sp.sender == self.data.admin, "not admin" # @parameter%updateBetBounds : @storage
+                DUP 2;      # @storage : @parameter%updateBetBounds : @storage
+                CAR;        # address : @parameter%updateBetBounds : @storage
+                SENDER;     # @sender : address : @parameter%updateBetBounds : @storage
+                COMPARE;    # int : @parameter%updateBetBounds : @storage
+                EQ;         # bool : @parameter%updateBetBounds : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "not admin"; # string : @parameter%updateBetBounds : @storage
+                    FAILWITH;   # FAILED
+                  }; # @parameter%updateBetBounds : @storage
+                SWAP;       # @storage : @parameter%updateBetBounds
+                # self.data.minBet = params.minBet # @storage : @parameter%updateBetBounds
+                DUP 2;      # @parameter%updateBetBounds : @storage : @parameter%updateBetBounds
+                CDR;        # mutez : @storage : @parameter%updateBetBounds
+                UPDATE 9;   # @storage : @parameter%updateBetBounds
+                SWAP;       # @parameter%updateBetBounds : @storage
+                # self.data.maxBet = params.maxBet # @parameter%updateBetBounds : @storage
+                CAR;        # mutez : @storage
+                UPDATE 7;   # @storage
+              }; # @storage
+          }
+          {
+            IF_LEFT
+              {
+                # == updateFee ==
+                # assert sp.sender == self.data.admin, "not admin" # @parameter%updateFee : @storage
+                DUP 2;      # @storage : @parameter%updateFee : @storage
+                CAR;        # address : @parameter%updateFee : @storage
+                SENDER;     # @sender : address : @parameter%updateFee : @storage
+                COMPARE;    # int : @parameter%updateFee : @storage
+                EQ;         # bool : @parameter%updateFee : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "not admin"; # string : @parameter%updateFee : @storage
+                    FAILWITH;   # FAILED
+                  }; # @parameter%updateFee : @storage
+                # self.data.fee = params.fee # @parameter%updateFee : @storage
+                UPDATE 5;   # @storage
+              }
+              {
+                IF_LEFT
+                  {
+                    # == updateOracle ==
+                    # assert sp.sender == self.data.admin, "not admin" # @parameter%updateOracle : @storage
+                    DUP 2;      # @storage : @parameter%updateOracle : @storage
+                    CAR;        # address : @parameter%updateOracle : @storage
+                    SENDER;     # @sender : address : @parameter%updateOracle : @storage
+                    COMPARE;    # int : @parameter%updateOracle : @storage
+                    EQ;         # bool : @parameter%updateOracle : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "not admin"; # string : @parameter%updateOracle : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%updateOracle : @storage
+                    # self.data.oracle = params.newOracle # @parameter%updateOracle : @storage
+                    UPDATE 13;  # @storage
+                  }
+                  {
+                    # == updateTxlContract ==
+                    # assert sp.sender == self.data.admin, "not admin" # @parameter%updateTxlContract : @storage
+                    DUP 2;      # @storage : @parameter%updateTxlContract : @storage
+                    CAR;        # address : @parameter%updateTxlContract : @storage
+                    SENDER;     # @sender : address : @parameter%updateTxlContract : @storage
+                    COMPARE;    # int : @parameter%updateTxlContract : @storage
+                    EQ;         # bool : @parameter%updateTxlContract : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "not admin"; # string : @parameter%updateTxlContract : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%updateTxlContract : @storage
+                    # self.data.txlContract = params.newContract # @parameter%updateTxlContract : @storage
+                    UPDATE 20;  # @storage
+                  }; # @storage
+              }; # @storage
+          }; # @storage
+        NIL operation; # list operation : @storage
+      }; # list operation : @storage
+    NIL operation; # list operation : list operation : @storage
+    SWAP;       # list operation : list operation : @storage
+    ITER
+      {
+        CONS;       # list operation : @storage
+      }; # list operation : @storage
+    PAIR;       # pair (list operation) @storage
+  };

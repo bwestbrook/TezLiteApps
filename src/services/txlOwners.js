@@ -18,9 +18,10 @@
 //     })
 //   }
 //
-// The default loadOwners() calls loadSnapshot() for instant paint, then
-// fires fetchLive() in the background and resolves the new data when it
-// arrives — wrap in a watcher / second .then() if you need both stages.
+// loadOwners() resolves once with the freshest data available, so a single
+// .then() always works. To paint progressively, pass an `onUpdate` callback:
+// it fires immediately with the snapshot, then again with the live data when
+// the background tzkt fetch lands.
 //
 // To regenerate the snapshot: see reports/txl-owners-README.md (run
 // src/services/reconcile_txl_owners.py — it writes the same data to
@@ -31,7 +32,10 @@ import { tzktGet } from './tzkt'
 
 const SNAPSHOT_URL = '/txl-owners-snapshot.json'
 const TXL_OWNER_BIGMAP = 857
-const OBJKT_MARKETPLACE = 'KT1FvqJwEDWb1Gwc55Jd1jjTHRVWbYKUUpyq'
+
+// The objkt.com marketplace contract. Tokens held here are listed for sale,
+// not owned by a collector — components should label them accordingly.
+export const OBJKT_MARKETPLACE = 'KT1FvqJwEDWb1Gwc55Jd1jjTHRVWbYKUUpyq'
 
 // Full set of Kalamint token IDs the TXL manager tracks. Keep in sync with
 // idLookUp in browseNFTs.vue and src/services/smart_contract_txl.py.
@@ -112,10 +116,26 @@ export async function fetchLive() {
   }
 }
 
-/** Snapshot first, refresh in background. Resolves to whichever is freshest. */
-export async function loadOwners({ refresh = true } = {}) {
+/**
+ * Snapshot first, live refresh second.
+ *
+ * Resolves to the freshest data available — live if the tzkt fetch lands,
+ * otherwise the snapshot, otherwise null — so `loadOwners().then(...)` always
+ * gets a usable result in one `.then()`.
+ *
+ * Pass `onUpdate` to paint progressively: it fires once with the snapshot the
+ * instant it's read (no network wait), then again with the live data when the
+ * background fetch lands. Each call receives the full
+ * { owners, topHolders, distinctHolders, onMarketplace, fetchedAt } shape.
+ */
+export async function loadOwners({ refresh = true, onUpdate } = {}) {
+  const notify = typeof onUpdate === 'function' ? onUpdate : null
   const snapshot = await loadSnapshot().catch(() => null)
+  // Instant paint — hand the snapshot back before touching the network.
+  if (snapshot && notify) notify(snapshot)
   if (!refresh) return snapshot
   const live = await fetchLive().catch(() => null)
+  // Background refresh landed — push the fresher numbers to the caller.
+  if (live && notify) notify(live)
   return live ?? snapshot
 }

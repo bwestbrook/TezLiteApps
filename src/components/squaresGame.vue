@@ -2,10 +2,11 @@
 // Super-Bowl-Squares UI.
 // Reads grid state from contract storage via tzkt; writes via wallet.
 //
-// Two-mode component:
-//   • view = 'landing' — lobby/intro: hero, status, rules, CTAs.
-//                        Default state when the user opens Squares.
-//   • view = 'play'    — the 10×10 grid + buy controls.
+// Single-view component: a game-selector bar (one button per pool on
+// chain) + the 10×10 grid + buy/create controls. App-level nav lives in
+// the top carousel. The selector follows the newest game until the user
+// picks one explicitly (gameSelected flag); createGame resets that so
+// the bar jumps to the freshly-created pool.
 //
 // Phases (must match smart_contract_squares_v2.py):
 //   0 = SELLING
@@ -13,12 +14,11 @@
 //   2 = AXES_SET
 //   3 = COMPLETE
 
-import { getContractStorage } from '../services/tzkt'
+import { getContractStorage, tzktGet } from '../services/tzkt'
 import {
   ADMIN_ADDRESS,
   BLOCKCHAIN_ENABLED,
   SQUARES_CONTRACT_ADDRESS,
-  SQUARES_GAME_INFO,
 } from '../constants'
 
 const PHASE_LABELS = {
@@ -27,35 +27,100 @@ const PHASE_LABELS = {
   2: 'In play',
   3: 'Game complete',
 }
-const PHASE_TONES = {
-  0: 'phaseOpen',
-  1: 'phaseLocked',
-  2: 'phaseLive',
-  3: 'phaseDone',
-}
+
+// Test fixtures — real, completed playoff games (verified ESPN event ids).
+// fetchEspnGames() falls back to these when the live slate for the
+// chosen date is empty, so the picker always has something to select
+// during testing. All are Finals with complete quarter linescores, so
+// the oracle's reportQuarter path can be exercised end-to-end. The two
+// Cavs games plus a non-Cavs matchup give the picker some contrast.
+const TEST_NBA_GAMES = [
+  {
+    id: '401871337',
+    awayAbbr: 'CLE', homeAbbr: 'DET',
+    awayName: 'Cleveland Cavaliers', homeName: 'Detroit Pistons',
+    awayLogo: 'https://a.espncdn.com/i/teamlogos/nba/500/cle.png',
+    homeLogo: 'https://a.espncdn.com/i/teamlogos/nba/500/det.png',
+    statusDetail: 'Final/OT',
+  },
+  {
+    id: '401871336',
+    awayAbbr: 'DET', homeAbbr: 'CLE',
+    awayName: 'Detroit Pistons', homeName: 'Cleveland Cavaliers',
+    awayLogo: 'https://a.espncdn.com/i/teamlogos/nba/500/det.png',
+    homeLogo: 'https://a.espncdn.com/i/teamlogos/nba/500/cle.png',
+    statusDetail: 'Final',
+  },
+  // More real 2025 playoff games — a fuller lobby to pick from while
+  // testing, and contrast for the "Cavs Vs." labeling.
+  {
+    id: '401768057',
+    awayAbbr: 'LAL', homeAbbr: 'MIN',
+    awayName: 'Los Angeles Lakers', homeName: 'Minnesota Timberwolves',
+    awayLogo: 'https://a.espncdn.com/i/teamlogos/nba/500/lal.png',
+    homeLogo: 'https://a.espncdn.com/i/teamlogos/nba/500/min.png',
+    statusDetail: 'Final',
+  },
+  {
+    id: '401768043',
+    awayAbbr: 'NY', homeAbbr: 'DET',
+    awayName: 'New York Knicks', homeName: 'Detroit Pistons',
+    awayLogo: 'https://a.espncdn.com/i/teamlogos/nba/500/ny.png',
+    homeLogo: 'https://a.espncdn.com/i/teamlogos/nba/500/det.png',
+    statusDetail: 'Final',
+  },
+  {
+    id: '401768031',
+    awayAbbr: 'BOS', homeAbbr: 'ORL',
+    awayName: 'Boston Celtics', homeName: 'Orlando Magic',
+    awayLogo: 'https://a.espncdn.com/i/teamlogos/nba/500/bos.png',
+    homeLogo: 'https://a.espncdn.com/i/teamlogos/nba/500/orl.png',
+    statusDetail: 'Final',
+  },
+  {
+    id: '401768049',
+    awayAbbr: 'IND', homeAbbr: 'MIL',
+    awayName: 'Indiana Pacers', homeName: 'Milwaukee Bucks',
+    awayLogo: 'https://a.espncdn.com/i/teamlogos/nba/500/ind.png',
+    homeLogo: 'https://a.espncdn.com/i/teamlogos/nba/500/mil.png',
+    statusDetail: 'Final',
+  },
+]
 
 export default {
   name: 'squaresGame',
   props: ['socket', 'wallet', 'tezos'],
   data() {
     return {
-      info: SQUARES_GAME_INFO,
       currentGameId: 0,
       activeGameId: 0,
+      // Every game record from contract storage, keyed by id. Powers the
+      // game-selector bar and lets selectGameId switch without a refetch.
+      allGames: {},
+      // false → the selector follows the newest game on every poll.
+      // true  → the user has explicitly picked one; stop auto-following.
+      gameSelected: false,
       game: null,
       walletAddress: '',
       pollInterval: null,
       blockchainStatus: 'idle',
       selectedSquare: null,
       buyCount: 1,
-      view: 'landing', // 'landing' | 'play'
-      showRules: false,
       myAddress: '',
       // Create-game form. Anyone can start a new pool; admin still
       // owns scoring (reportQuarter) and randomization (setAxes).
       newGameName: '',
       newGameTicketTez: 1.0,
       showCreateForm: false,
+      // ─── NBA game picker for createGame ─────────────────────────
+      // Lets the creator bind a pool to a real ESPN event. The chosen
+      // id is encoded into the on-chain game name as "ESPN:<id>"; the
+      // oracle (scripts/oracle_worker.py) parses that tag to auto-report
+      // quarter scores. Convention lives in scripts/sports_api.py.
+      espnDate: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
+      espnGames: [],
+      espnLoading: false,
+      selectedEspnId: null,
       // ─── ESPN-derived live scoreboard for the active grid ───────
       // Populated by refreshSports() when the active game.name carries
       // an "ESPN:<event_id>" tag. Stays null otherwise.
@@ -68,18 +133,11 @@ export default {
       if (!this.game) return 'No game loaded'
       return PHASE_LABELS[this.game.phase] || `phase ${this.game.phase}`
     },
-    phaseTone() {
-      if (!this.game) return 'phaseNone'
-      return PHASE_TONES[this.game.phase] || 'phaseNone'
-    },
     canBuy() {
       return this.game && Number(this.game.phase) === 0
     },
     sold() {
       return this.game ? Number(this.game.sold) : 0
-    },
-    soldPct() {
-      return Math.max(0, Math.min(100, this.sold))
     },
     ticketPriceTez() {
       if (!this.game) return '—'
@@ -102,11 +160,6 @@ export default {
       // comparable. We track the user's actual address separately in
       // myAddress (set by refreshState() once a wallet is connected).
       return this.myAddress && this.myAddress === ADMIN_ADDRESS
-    },
-    canPlay() {
-      // The Play CTA is meaningful when there's a loaded game. The grid
-      // itself is read-only after phase 0; users can still browse it.
-      return !!this.game
     },
     grid() {
       // Build a 10x10 array of { idx, owner, axisHome, axisAway }.
@@ -166,6 +219,20 @@ export default {
       // ESPN's `detail` is nicely human ('Final/OT', 'End 3rd Quarter', etc).
       return t.detail || t.shortDetail || t.description || ''
     },
+    // A pool must be bound to a real NBA game before it can be created —
+    // the squares contract is only meaningful when an ESPN event drives
+    // the quarter scores. Gates the "Start game" button.
+    canCreateGame() {
+      return !!this.selectedEspnId
+    },
+    // Game ids for the selector bar, newest first. Game ids are a dense
+    // 0..currentGameId-1 range (contract increments currentGameId on
+    // every createGame), so we don't need to read the map keys.
+    gameIds() {
+      const ids = []
+      for (let i = this.currentGameId - 1; i >= 0; i--) ids.push(i)
+      return ids
+    },
   },
   created() {
     this.socket.on('newWallet', (w) => {
@@ -185,14 +252,19 @@ export default {
         const storage = await getContractStorage(SQUARES_CONTRACT_ADDRESS)
         if (!storage) return
         this.currentGameId = Number(storage.currentGameId || 0)
-        // Landing always reflects the most-recently-created game. The
-        // past-games picker is gone, so pinning activeGameId would
-        // silently strand the lobby on game #0 once newer games are
-        // created. Recompute every refresh — cheap, and createGame()
-        // auto-shows the new game without any extra wiring.
-        const targetId = Math.max(0, this.currentGameId - 1)
-        this.activeGameId = targetId
-        this.game = storage.games?.[targetId] || null
+        // `games` is a big_map in the v2 contract — storage carries only its
+        // numeric id, so the rows come from the bigmap keys endpoint.
+        this.allGames = this.currentGameId > 0
+          ? await this.fetchGames(storage.games)
+          : {}
+        // Until the user clicks a game in the selector bar, follow the
+        // newest pool. Once they've picked one (gameSelected = true),
+        // keep their choice across polls — but clamp it if that game id
+        // somehow no longer exists.
+        if (!this.gameSelected || this.activeGameId >= this.currentGameId) {
+          this.activeGameId = Math.max(0, this.currentGameId - 1)
+        }
+        this.game = this.allGames?.[this.activeGameId] || null
         // Cache the user's wallet address for the admin gate.
         try {
           const account = await this.wallet?.client?.getActiveAccount?.()
@@ -205,6 +277,42 @@ export default {
       } catch (e) {
         console.warn('squares storage refresh failed:', e?.message)
       }
+    },
+    // Resolve the `games` big_map into a { gameId: record } object. Storage
+    // gives us only the bigmap's numeric id; a plain object means an
+    // inline-map contract, so pass that straight through for back-compat.
+    async fetchGames(games) {
+      if (games == null) return {}
+      if (typeof games === 'object') return games
+      const rows = await tzktGet(`/v1/bigmaps/${games}/keys?active=true&limit=1000`)
+      if (!rows) return {}
+      const out = {}
+      for (const row of rows) out[row.key] = row.value
+      return out
+    },
+    // Game-selector bar: load a specific pool. Switches without a
+    // refetch — refreshState() already cached every game in allGames.
+    selectGameId(id) {
+      this.activeGameId = Number(id)
+      this.gameSelected = true
+      this.game = this.allGames?.[this.activeGameId] || null
+      this.selectedSquare = null
+      this.refreshSports()
+    },
+    // Short label for a game-selector button: the matchup (ESPN tag
+    // stripped) when the pool is linked to an NBA game, else "Game #id".
+    gameButtonLabel(id) {
+      const name = this.allGames?.[id]?.name || ''
+      const matchup = name
+        .replace(/\bESPN:\d{6,}\b/, '')
+        .replace(/^[\s\-–—·|]+/, '')
+        .trim()
+      if (!matchup) return `Game #${id}`
+      // Cavs pools read as "Cavs Vs. <opponent>" — matches the NBA picker.
+      const m = /^(\w+)\s*@\s*(\w+)$/.exec(matchup)
+      if (m && m[1] === 'CLE') return `#${id} · Cavs Vs. ${m[2]}`
+      if (m && m[2] === 'CLE') return `#${id} · Cavs Vs. ${m[1]}`
+      return `#${id} · ${matchup}`
     },
     async refreshSports() {
       // Read the ESPN event id from the active grid's name. If there
@@ -255,18 +363,10 @@ export default {
         // Best-effort. Next tick retries; don't spam the console.
       }
     },
-    setView(v) {
-      this.view = v
-      if (v === 'landing') this.selectedSquare = null
-    },
     selectSquare(idx) {
       if (!this.canBuy) return
       if (this.game?.squares?.[idx]) return
       this.selectedSquare = idx
-    },
-    selectGameId(id) {
-      this.activeGameId = Number(id)
-      this.refreshState()
     },
     async buySelected() {
       if (this.selectedSquare == null) return
@@ -357,14 +457,88 @@ export default {
     },
     toggleCreateForm() {
       this.showCreateForm = !this.showCreateForm
-      if (this.showCreateForm && !this.newGameName) {
-        this.newGameName = `Squares #${this.currentGameId}`
+      if (this.showCreateForm) {
+        if (!this.newGameName) this.newGameName = `Squares #${this.currentGameId}`
+        // Pull the day's NBA slate the first time the form opens.
+        if (!this.espnGames.length) this.fetchEspnGames()
       }
+    },
+    // Fetch the NBA slate for `espnDate` from ESPN's open scoreboard API.
+    // Same endpoint family scripts/sports_api.py uses on the oracle side.
+    async fetchEspnGames() {
+      this.espnLoading = true
+      this.espnGames = []
+      try {
+        const ymd = this.espnDate.replace(/-/g, '')
+        const url = `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${ymd}`
+        const res = await fetch(url, { headers: { Accept: 'application/json' } })
+        if (!res.ok) return
+        const json = await res.json()
+        this.espnGames = (json.events || []).map((ev) => {
+          const comp = (ev.competitions || [])[0] || {}
+          const cs = comp.competitors || []
+          const home = cs.find((c) => c.homeAway === 'home') || cs[0] || {}
+          const away = cs.find((c) => c.homeAway === 'away') || cs[1] || {}
+          const t = (ev.status || {}).type || {}
+          return {
+            id: String(ev.id),
+            homeAbbr: home.team?.abbreviation || '?',
+            awayAbbr: away.team?.abbreviation || '?',
+            homeName: home.team?.displayName || home.team?.shortDisplayName || '?',
+            awayName: away.team?.displayName || away.team?.shortDisplayName || '?',
+            homeLogo: home.team?.logo || '',
+            awayLogo: away.team?.logo || '',
+            statusDetail: t.shortDetail || t.detail || t.description || '',
+          }
+        })
+      } catch (e) {
+        console.warn('ESPN scoreboard fetch failed:', e?.message)
+      } finally {
+        // Fall back to the Cavs test fixtures when the live slate is
+        // empty (off-season date, fetch failure, etc.) so the picker is
+        // never a dead end during testing.
+        if (!this.espnGames.length) {
+          this.espnGames = TEST_NBA_GAMES.slice()
+        }
+        this.espnLoading = false
+      }
+    },
+    // Picker label for an NBA game. Cavs games (the test fixtures, or a live
+    // slate that includes Cleveland) read as "Cavs Vs. <opponent>"; every
+    // other game keeps the plain away @ home abbreviation.
+    espnGameLabel(g) {
+      const CAVS = 'Cleveland Cavaliers'
+      if (g.homeName === CAVS) return `Cavs Vs. ${g.awayName}`
+      if (g.awayName === CAVS) return `Cavs Vs. ${g.homeName}`
+      return `${g.awayAbbr} @ ${g.homeAbbr}`
+    },
+    // Bind / unbind the pool to an NBA game. The on-chain name carries
+    // the "ESPN:<id>" tag — that's how the contract + oracle know which
+    // real game this pool tracks. 64-char cap matches createGame()'s slice.
+    pickEspnGame(g) {
+      if (this.selectedEspnId === g.id) {
+        // Re-click = unbind. Strip the tag, keep any trailing label.
+        this.selectedEspnId = null
+        this.newGameName =
+          this.newGameName.replace(/\bESPN:\d{6,}\b\s*·?\s*/, '').trim() ||
+          `Squares #${this.currentGameId}`
+        return
+      }
+      this.selectedEspnId = g.id
+      // ASCII only — Michelson strings reject unicode, so no "·"/em-dash.
+      this.newGameName = `ESPN:${g.id} - ${g.awayAbbr} @ ${g.homeAbbr}`.slice(0, 64)
     },
     // Anyone can spin up a new Squares pool. The contract gates scoring
     // (reportQuarter) and randomization (setAxes) to admin, so the only
     // trust the creator earns is "I named the pool".
     async createGame() {
+      // Hard gate: a pool has to track a real NBA game. The button is
+      // disabled in this state too, but guard here in case createGame is
+      // reached another way (keyboard, programmatic).
+      if (!this.canCreateGame) {
+        this.blockchainStatus = 'Pick an NBA game from the list first.'
+        return
+      }
       const activeAccount = await this.wallet.client.getActiveAccount()
       if (!activeAccount) return
       const ticketTez = Math.max(0.001, Number(this.newGameTicketTez) || 1)
@@ -373,7 +547,14 @@ export default {
       // 15/15/15/55 is the standard Super-Bowl-Squares split. Sum is
       // validated on-chain to equal 100.
       const quarterWeights = { 0: 15, 1: 15, 2: 15, 3: 55 }
-      const name = (this.newGameName || `Squares #${this.currentGameId}`).slice(0, 64)
+      // Michelson strings are ASCII-only — strip anything outside printable
+      // ASCII so a stray "·" / em-dash / emoji can't revert the tx with an
+      // opaque "unicode symbols are not allowed" error.
+      // eslint-disable-next-line no-control-regex
+      const asciiName = (this.newGameName || `Squares #${this.currentGameId}`)
+        .replace(/[^\x20-\x7E]/g, '')
+        .trim()
+      const name = (asciiName || `Squares #${this.currentGameId}`).slice(0, 64)
       this.tezos.setWalletProvider(this.wallet)
       this.blockchainStatus = `Creating "${name}"...`
       try {
@@ -391,10 +572,58 @@ export default {
         this.blockchainStatus = `New game created: "${name}".`
         this.showCreateForm = false
         this.newGameName = ''
+        this.selectedEspnId = null
+        // Jump the selector bar to the just-created game.
+        this.gameSelected = false
         await this.refreshState()
       } catch (err) {
         console.error('createGame failed:', err)
         this.blockchainStatus = 'createGame failed — see console'
+      }
+    },
+    // A "card" is another Squares pool bound to the SAME NBA game as the
+    // one currently selected: it reuses that pool's ESPN-tagged name so the
+    // oracle reports identical quarter scores. The creator only picks the
+    // per-square price; everything else matches createGame().
+    async createCard() {
+      if (!this.game) {
+        this.blockchainStatus = 'Select a game first.'
+        return
+      }
+      const activeAccount = await this.wallet.client.getActiveAccount()
+      if (!activeAccount) return
+      const ticketTez = Math.max(0.001, Number(this.newGameTicketTez) || 1)
+      const ticketMutez = Math.round(ticketTez * 1_000_000)
+      const holderFeeMutez = 50_000 // 0.05 ꜩ — matches createGame()
+      const quarterWeights = { 0: 15, 1: 15, 2: 15, 3: 55 }
+      // Same ASCII-only guard as createGame() — Michelson rejects unicode.
+      // eslint-disable-next-line no-control-regex
+      const name = (this.game.name || `Squares #${this.currentGameId}`)
+        .replace(/[^\x20-\x7E]/g, '')
+        .trim()
+        .slice(0, 64)
+      this.tezos.setWalletProvider(this.wallet)
+      this.blockchainStatus = `Creating a new card for "${name}"...`
+      try {
+        const contract = await this.tezos.wallet.at(SQUARES_CONTRACT_ADDRESS)
+        const op = await contract.methodsObject
+          .createGame({
+            name,
+            ticketPrice: ticketMutez,
+            holderFee: holderFeeMutez,
+            quarterWeights,
+          })
+          .send()
+        this.blockchainStatus = `Submitted (${op.opHash}) — waiting for confirmation`
+        await op.confirmation()
+        this.blockchainStatus = `New card created for "${name}".`
+        this.showCreateForm = false
+        // Jump the selector bar to the just-created card.
+        this.gameSelected = false
+        await this.refreshState()
+      } catch (err) {
+        console.error('createCard failed:', err)
+        this.blockchainStatus = 'createCard failed — see console'
       }
     },
     // Admin-only: close sales when the board is full or it's gametime.
@@ -406,13 +635,17 @@ export default {
       this.blockchainStatus = 'Locking sales...'
       try {
         const contract = await this.tezos.wallet.at(SQUARES_CONTRACT_ADDRESS)
-        const op = await contract.methodsObject.lockSales(this.activeGameId).send()
+        // v2 entrypoint is `closeSales`, taking a { gameId } record — it
+        // flips the game's phase to LOCKED.
+        const op = await contract.methodsObject
+          .closeSales({ gameId: this.activeGameId })
+          .send()
         await op.confirmation()
         this.blockchainStatus = 'Sales locked.'
         await this.refreshState()
       } catch (err) {
-        console.error('lockSales failed:', err)
-        this.blockchainStatus = 'lockSales failed — check contract entrypoint name'
+        console.error('closeSales failed:', err)
+        this.blockchainStatus = 'Lock sales failed — see console'
       }
     },
     isMine(owner) {
@@ -421,129 +654,131 @@ export default {
       // Fallback for sessions where myAddress hasn't loaded yet.
       return this.walletAddress?.endsWith(owner.slice(-4))
     },
-    toggleRules() {
-      this.showRules = !this.showRules
-    },
   },
 }
 </script>
 
 <template>
   <div class="gameManagement squaresRoot">
-    <!-- ───── Landing / lobby view ───────────────────────────────────── -->
-    <template v-if="view === 'landing'">
-      <div class="sqHero">
-        <div class="sqHeroBrand">
-          <div class="sqHeroEyebrow">SUPER · BOWL · SQUARES</div>
-          <div class="sqHeroTitle">10 × 10. Quarter payouts.</div>
-          <div class="sqHeroSub">
-            Pick any open square. When the digits on its row + column match
-            the score's last digits at the end of a quarter, you take that
-            quarter's share of the pot.
-          </div>
-        </div>
-
-        <div class="sqHeroBoard" aria-hidden="true">
-          <!-- Decorative mini-grid: visual hook only -->
-          <div class="sqMini">
-            <div
-              v-for="i in 100"
-              :key="i"
-              :class="['sqMiniCell', i % 11 === 0 ? 'sqMiniHot' : '']"
-            ></div>
-          </div>
-        </div>
+    <!-- Available games — one button per Squares pool on chain. Click to
+         load it. Newest first. Replaces the old back/title/refresh bar;
+         app-level nav lives in the top carousel now. -->
+    <div class="rowFlex sqGameBar">
+      <div
+        v-for="id in gameIds"
+        :key="id"
+        :class="['actionButton', 'sqGameBtn', activeGameId === id ? 'sqGameBtn--active' : '']"
+        @click="selectGameId(id)"
+      >
+        {{ gameButtonLabel(id) }}
       </div>
-
-      <!-- ESPN scoreboard for the active grid (only when the grid name
-           carries an ESPN:<id> tag and the API has returned data). -->
-      <div v-if="sports" class="sqScoreboard">
-        <div class="sqScoreSide">
-          <img
-            v-if="sports.away.logo"
-            class="sqScoreLogo"
-            :src="sports.away.logo"
-            :alt="sports.away.name"
-          />
-          <div class="sqScoreText">
-            <div class="sqScoreTeam">{{ sports.away.name }}</div>
-            <div class="sqScoreAbbr">{{ sports.away.abbr }}</div>
-          </div>
-          <div class="sqScorePts">{{ sports.away.score }}</div>
-        </div>
-        <div class="sqScoreMid">
-          <div class="sqScoreStatus">{{ sportsStatusLabel || '—' }}</div>
-          <div class="sqScoreQuarters" v-if="sports.home.quarters.length">
-            <span
-              v-for="(q, idx) in sports.home.quarters"
-              :key="`hq-${idx}`"
-              class="sqScoreQ"
-            >Q{{ idx + 1 }}: {{ sports.away.quarters[idx] ?? 0 }} – {{ q }}</span>
-          </div>
-          <div v-if="gridDisplayName" class="sqScoreSubtitle">{{ gridDisplayName }}</div>
-        </div>
-        <div class="sqScoreSide sqScoreSide--right">
-          <div class="sqScorePts">{{ sports.home.score }}</div>
-          <div class="sqScoreText sqScoreText--right">
-            <div class="sqScoreTeam">{{ sports.home.name }}</div>
-            <div class="sqScoreAbbr">{{ sports.home.abbr }}</div>
-          </div>
-          <img
-            v-if="sports.home.logo"
-            class="sqScoreLogo"
-            :src="sports.home.logo"
-            :alt="sports.home.name"
-          />
-        </div>
+      <div v-if="!gameIds.length" class="gameInfo sqGameBarEmpty">
+        No games yet — start one below.
       </div>
+    </div>
 
-      <!-- Game selector / status pills -->
-      <div class="sqStatusRow">
-        <div :class="['sqPill', phaseTone]">
-          <div class="sqPillLabel">Phase</div>
-          <div class="sqPillValue">{{ phaseLabel }}</div>
+    <!-- ESPN scoreboard for the active grid (only when the grid name
+         carries an ESPN:<id> tag and refreshSports() has data). -->
+    <div v-if="sports" class="sqScoreboard">
+      <div class="sqScoreSide">
+        <img
+          v-if="sports.away.logo"
+          class="sqScoreLogo"
+          :src="sports.away.logo"
+          :alt="sports.away.name"
+        />
+        <div class="sqScoreText">
+          <div class="sqScoreTeam">{{ sports.away.name }}</div>
+          <div class="sqScoreAbbr">{{ sports.away.abbr }}</div>
         </div>
-        <div class="sqPill">
-          <div class="sqPillLabel">Game</div>
-          <div class="sqPillValue">#{{ activeGameId }}</div>
-        </div>
-        <div class="sqPill">
-          <div class="sqPillLabel">Pot</div>
-          <div class="sqPillValue">{{ potTez }} ꜩ</div>
-        </div>
-        <div class="sqPill">
-          <div class="sqPillLabel">Sold</div>
-          <div class="sqPillValue">{{ sold }} / 100</div>
-          <div class="sqPillBar">
-            <div class="sqPillBarFill" :style="{ width: soldPct + '%' }"></div>
-          </div>
-        </div>
-        <div class="sqPill">
-          <div class="sqPillLabel">Ticket</div>
-          <div class="sqPillValue">{{ ticketPriceTez }} ꜩ</div>
-          <div class="sqPillFootnote">+ {{ feePriceTez }} ꜩ fee</div>
-        </div>
+        <div class="sqScorePts">{{ sports.away.score }}</div>
       </div>
+      <div class="sqScoreMid">
+        <div class="sqScoreStatus">{{ sportsStatusLabel || '—' }}</div>
+        <div class="sqScoreQuarters" v-if="sports.home.quarters.length">
+          <span
+            v-for="(q, idx) in sports.home.quarters"
+            :key="`hq-${idx}`"
+            class="sqScoreQ"
+          >Q{{ idx + 1 }}: {{ sports.away.quarters[idx] ?? 0 }} – {{ q }}</span>
+        </div>
+        <div v-if="gridDisplayName" class="sqScoreSubtitle">{{ gridDisplayName }}</div>
+      </div>
+      <div class="sqScoreSide sqScoreSide--right">
+        <div class="sqScorePts">{{ sports.home.score }}</div>
+        <div class="sqScoreText sqScoreText--right">
+          <div class="sqScoreTeam">{{ sports.home.name }}</div>
+          <div class="sqScoreAbbr">{{ sports.home.abbr }}</div>
+        </div>
+        <img
+          v-if="sports.home.logo"
+          class="sqScoreLogo"
+          :src="sports.home.logo"
+          :alt="sports.home.name"
+        />
+      </div>
+    </div>
 
+    <div v-if="!game" class="gameInfo">
+      No game loaded yet. Start one below.
+    </div>
+    <div v-else class="rowFlex">
+      <div class="txlRank">Sold: {{ sold }} / 100</div>
+      <div class="txlRank">Pot: {{ potTez }} ꜩ</div>
+      <div class="txlRank">Ticket: {{ ticketPriceTez }} ꜩ + {{ feePriceTez }} ꜩ fee</div>
+    </div>
 
-      <!-- Primary CTAs -->
-      <div class="rowFlex sqPrimaryRow">
+    <!-- The 10×10 board always renders — blank (numbered, no owners)
+         when no game is loaded, live once one is. -->
+    <div class="squaresWrap">
+      <table class="squaresGrid">
+        <thead>
+          <tr>
+            <th></th>
+            <th v-for="c in 10" :key="c">
+              {{ game && game.axesAssigned ? game.axisAway?.[c - 1] : '?' }}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(row, r) in grid" :key="r">
+            <th>{{ game && game.axesAssigned ? game.axisHome?.[r] : '?' }}</th>
+            <td
+              v-for="cell in row"
+              :key="cell.idx"
+              :class="[
+                'square',
+                cell.owner ? 'taken' : 'open',
+                selectedSquare === cell.idx ? 'selected' : '',
+                isMine(cell.owner) ? 'mine' : '',
+              ]"
+              @click="selectSquare(cell.idx)"
+            >
+              <span v-if="cell.owner" class="ownerInitial">
+                {{ cell.owner.slice(-3) }}
+              </span>
+              <span v-else>{{ cell.idx }}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Buy + admin controls only make sense once a game is loaded. -->
+    <template v-if="game">
+      <div class="rowFlex">
         <div
-          :class="['actionButton', 'sqPrimary', !canPlay ? 'sqPrimaryDisabled' : '']"
-          @click="canPlay && setView('play')"
+          :class="['actionButton', 'sqPrimary', !canBuy || selectedSquare == null ? 'sqPrimaryDisabled' : '']"
+          @click="buySelected"
         >
-          {{ canBuy ? 'Pick a square' : (canPlay ? 'View board' : 'No game loaded') }}
+          {{ selectedSquare == null ? 'Pick a square' : `Buy square ${selectedSquare}` }}
         </div>
         <div class="actionButton" @click="claimAll">Claim winnings</div>
-        <div class="actionButton" @click="refreshState">Refresh</div>
-        <div class="actionButtonHelp" @click="toggleRules">
-          {{ showRules ? 'Hide rules' : 'How it works' }}
-        </div>
       </div>
 
-      <!-- Quick buy: N random squares (lobby) -->
+      <!-- Quick buy: N random squares -->
       <div v-if="canBuy" class="sqQuickBuy">
-        <div class="sqQuickBuyLabel">Buy random squares</div>
+        <div class="sqQuickBuyLabel">Or buy random squares</div>
         <div class="rowFlex sqQuickBuyRow">
           <input
             class="sqBuyInput"
@@ -566,49 +801,6 @@ export default {
         </div>
       </div>
 
-      <!-- Start a new game — open to any user. -->
-      <div class="sqCreatePanel">
-        <div class="rowFlex">
-          <div class="actionButton sqCreateToggle" @click="toggleCreateForm">
-            {{ showCreateForm ? 'Cancel' : 'Start a new game' }}
-          </div>
-        </div>
-        <div v-if="showCreateForm" class="sqCreateForm">
-          <label class="sqCreateField">
-            <span class="sqCreateLabel">Name</span>
-            <input
-              type="text"
-              maxlength="64"
-              v-model="newGameName"
-              :placeholder="`Squares #${currentGameId}`"
-              class="sqCreateInput"
-            />
-          </label>
-          <label class="sqCreateField">
-            <span class="sqCreateLabel">Ticket price (ꜩ)</span>
-            <input
-              type="number"
-              min="0.001"
-              step="0.1"
-              v-model.number="newGameTicketTez"
-              class="sqCreateInput"
-            />
-          </label>
-          <div class="sqCreateHint">
-            Defaults: 0.05 ꜩ holder fee, 15/15/15/55 quarter split. Sales
-            auto-lock at 100 squares; admin reports the scores.
-          </div>
-          <div class="rowFlex">
-            <div
-              class="actionButton sqPrimary"
-              @click="createGame"
-            >
-              Start game — {{ Number(newGameTicketTez).toFixed(3) }} ꜩ / square
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Admin actions — score reporting + sales lock stay restricted. -->
       <div v-if="isAdmin" class="sqAdminPanel">
         <div class="sqAdminLabel">Admin</div>
@@ -616,107 +808,144 @@ export default {
           <div class="actionButton" @click="lockSales">Lock sales</div>
         </div>
       </div>
-
-      <!-- Rules drawer -->
-      <div v-if="showRules" class="sqRules">
-        <ol>
-          <li v-for="(line, i) in info" :key="i">{{ line }}</li>
-        </ol>
-      </div>
-
-      <div class="gameInfo sqStatusLine">{{ blockchainStatus }}</div>
     </template>
 
-    <!-- ───── Play view: the 10×10 grid + buy controls ───────────────── -->
-    <template v-else>
-      <div class="rowFlex sqPlayHeader">
-        <div class="actionButton sqBackBtn" @click="setView('landing')">‹ Lobby</div>
-        <div class="gameInfo">Game #{{ activeGameId }} — {{ phaseLabel }}</div>
-        <div class="actionButton" @click="refreshState">Refresh</div>
+    <!-- Start a new card (for the selected game) or — when nothing is
+         selected — a brand-new game. Open to any user, always reachable. -->
+    <div class="sqCreatePanel">
+      <div class="rowFlex">
+        <div class="actionButton sqCreateToggle" @click="toggleCreateForm">
+          {{ showCreateForm
+              ? 'Cancel'
+              : (game ? `Start a new card for ${gridDisplayName}` : 'Start a new game') }}
+        </div>
       </div>
 
-      <div v-if="!game" class="gameInfo">No game loaded yet. Admin needs to create one.</div>
-
-      <template v-else>
-        <div class="rowFlex">
-          <div class="txlRank">Sold: {{ sold }} / 100</div>
-          <div class="txlRank">Pot: {{ potTez }} ꜩ</div>
-          <div class="txlRank">Ticket: {{ ticketPriceTez }} ꜩ + {{ feePriceTez }} ꜩ fee</div>
-        </div>
-
-        <div class="squaresWrap">
-          <table class="squaresGrid">
-            <thead>
-              <tr>
-                <th></th>
-                <th v-for="c in 10" :key="c">
-                  {{ game.axesAssigned ? game.axisAway?.[c - 1] : '?' }}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(row, r) in grid" :key="r">
-                <th>{{ game.axesAssigned ? game.axisHome?.[r] : '?' }}</th>
-                <td
-                  v-for="cell in row"
-                  :key="cell.idx"
-                  :class="[
-                    'square',
-                    cell.owner ? 'taken' : 'open',
-                    selectedSquare === cell.idx ? 'selected' : '',
-                    isMine(cell.owner) ? 'mine' : '',
-                  ]"
-                  @click="selectSquare(cell.idx)"
-                >
-                  <span v-if="cell.owner" class="ownerInitial">
-                    {{ cell.owner.slice(-3) }}
-                  </span>
-                  <span v-else>{{ cell.idx }}</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="rowFlex">
-          <div
-            :class="['actionButton', 'sqPrimary', !canBuy || selectedSquare == null ? 'sqPrimaryDisabled' : '']"
-            @click="buySelected"
-          >
-            {{ selectedSquare == null ? 'Pick a square' : `Buy square ${selectedSquare}` }}
+      <!-- A "card" is another pool bound to the SAME NBA game as the one
+           currently selected — so it only needs a per-square price. -->
+      <div v-if="showCreateForm && game" class="sqCreateForm">
+        <div class="sqCreateField">
+          <span class="sqCreateLabel">New card for</span>
+          <div class="sqCreateHint">
+            {{ gridDisplayName }} — same NBA game, a fresh 10×10 board.
           </div>
-          <div class="actionButton" @click="claimAll">Claim winnings</div>
-          <div class="actionButton" @click="setView('landing')">Back to lobby</div>
         </div>
+        <label class="sqCreateField">
+          <span class="sqCreateLabel">Tez per square</span>
+          <input
+            type="number"
+            min="0.001"
+            step="0.1"
+            v-model.number="newGameTicketTez"
+            class="sqCreateInput"
+          />
+        </label>
+        <div class="rowFlex">
+          <div class="actionButton sqPrimary" @click="createCard">
+            Create card — {{ Number(newGameTicketTez).toFixed(3) }} ꜩ / square
+          </div>
+        </div>
+      </div>
 
-        <!-- Quick buy: N random squares (play view) -->
-        <div v-if="canBuy" class="sqQuickBuy">
-          <div class="sqQuickBuyLabel">Or buy random squares</div>
-          <div class="rowFlex sqQuickBuyRow">
+      <!-- No game selected yet → full new-game flow: pick the NBA matchup. -->
+      <div v-else-if="showCreateForm" class="sqCreateForm">
+        <!-- NBA game picker. Binding to a real ESPN event writes an
+             "ESPN:<id>" tag into the on-chain name, which the oracle
+             reads to auto-report quarter scores. -->
+        <div class="sqCreateField">
+          <span class="sqCreateLabel">Pick an NBA game (required)</span>
+          <div class="rowFlex sqEspnDateRow">
             <input
-              class="sqBuyInput"
-              type="number"
-              min="1"
-              :max="maxBuy"
-              v-model.number="buyCount"
-              :disabled="maxBuy === 0"
+              type="date"
+              v-model="espnDate"
+              class="sqCreateInput sqEspnDate"
+              @change="fetchEspnGames"
             />
-            <div class="actionButton sqMaxBtn" @click="setBuyMax">Max ({{ maxBuy }})</div>
-            <div
-              :class="['actionButton', 'sqPrimary', maxBuy === 0 ? 'sqPrimaryDisabled' : '']"
-              @click="maxBuy > 0 && buyRandomMany()"
-            >
-              Buy {{ clampedBuyCount }} OK — {{ buyTotalTez }} ꜩ
+            <div class="actionButton sqEspnRefresh" @click="fetchEspnGames">
+              {{ espnLoading ? 'Loading…' : 'Refresh slate' }}
             </div>
           </div>
-          <div class="sqQuickBuyHint">
-            Squares are picked at random from the open pool. Max 100 per game.
+          <div v-if="espnLoading" class="sqCreateHint">Loading NBA slate…</div>
+          <div v-else-if="!espnGames.length" class="sqCreateHint">
+            No NBA games on {{ espnDate }}.
+          </div>
+          <div v-else class="sqEspnList">
+            <div
+              v-for="g in espnGames"
+              :key="g.id"
+              :class="['sqGameCard', selectedEspnId === g.id ? 'sqGameCard--active' : '']"
+              @click="pickEspnGame(g)"
+            >
+              <div class="sqGameCardTop">
+                <span class="sqGameTitle">{{ espnGameLabel(g) }}</span>
+                <span class="sqGameStatus">{{ g.statusDetail }}</span>
+              </div>
+              <div class="sqGameTeam">
+                <img v-if="g.awayLogo" :src="g.awayLogo" :alt="g.awayAbbr" class="sqGameLogo" />
+                <span class="sqGameAbbr">{{ g.awayAbbr }}</span>
+                <span class="sqGameTeamName">{{ g.awayName }}</span>
+                <span class="sqGameSide">AWAY</span>
+              </div>
+              <div class="sqGameTeam">
+                <img v-if="g.homeLogo" :src="g.homeLogo" :alt="g.homeAbbr" class="sqGameLogo" />
+                <span class="sqGameAbbr">{{ g.homeAbbr }}</span>
+                <span class="sqGameTeamName">{{ g.homeName }}</span>
+                <span class="sqGameSide">HOME</span>
+              </div>
+              <div v-if="selectedEspnId === g.id" class="sqGamePicked">
+                ✓ Selected — tap again to unbind
+              </div>
+            </div>
           </div>
         </div>
+        <label class="sqCreateField">
+          <span class="sqCreateLabel">Name</span>
+          <input
+            type="text"
+            maxlength="64"
+            v-model="newGameName"
+            :placeholder="`Squares #${currentGameId}`"
+            class="sqCreateInput"
+          />
+        </label>
+        <label class="sqCreateField">
+          <span class="sqCreateLabel">Tez per square</span>
+          <input
+            type="number"
+            min="0.001"
+            step="0.1"
+            v-model.number="newGameTicketTez"
+            class="sqCreateInput"
+          />
+        </label>
+        <div class="sqCreateHint">
+          Defaults: 0.05 ꜩ holder fee, 15/15/15/55 quarter split. Sales
+          auto-lock at 100 squares; admin reports the scores.
+          <template v-if="selectedEspnId">
+            Linked to ESPN game {{ selectedEspnId }} — the oracle will
+            auto-report quarter scores.
+          </template>
+          <template v-else>
+            Select a game above to enable "Start game".
+          </template>
+        </div>
+        <div class="rowFlex">
+          <div
+            :class="['actionButton', 'sqPrimary', canCreateGame ? '' : 'sqPrimaryDisabled']"
+            @click="createGame"
+          >
+            <template v-if="canCreateGame">
+              Start game — {{ Number(newGameTicketTez).toFixed(3) }} ꜩ / square
+            </template>
+            <template v-else>
+              Pick an NBA game first
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
 
-        <div class="gameInfo sqStatusLine">{{ blockchainStatus }}</div>
-      </template>
-    </template>
+    <div class="gameInfo sqStatusLine">{{ blockchainStatus }}</div>
   </div>
 </template>
 
@@ -725,69 +954,6 @@ export default {
 .squaresRoot {
   font-family: 'EB Garamond';
   color: #efeae2;
-}
-
-/* ─── Hero ───────────────────────────────────────────────────────────── */
-.sqHero {
-  display: flex;
-  flex-direction: row;
-  gap: 18px;
-  align-items: stretch;
-  padding: 16px 14px;
-  margin: 8px 4px 14px;
-  border-radius: 14px;
-  background:
-    radial-gradient(ellipse at 80% 20%, rgba(212, 162, 78, 0.18) 0%, transparent 60%),
-    linear-gradient(135deg, #0e3b22 0%, #07291a 70%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 8px 22px rgba(0, 0, 0, 0.45);
-}
-.sqHeroBrand { flex: 1.4; min-width: 0; }
-.sqHeroBoard {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.sqHeroEyebrow {
-  font-size: 10px;
-  letter-spacing: 4px;
-  color: rgba(245, 196, 81, 0.75);
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-.sqHeroTitle {
-  font-size: clamp(20px, 4.5vw, 30px);
-  line-height: 1.1;
-  font-weight: 700;
-  color: #fff;
-  margin-bottom: 8px;
-}
-.sqHeroSub {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.78);
-  line-height: 1.4;
-}
-/* Decorative mini-grid */
-.sqMini {
-  display: grid;
-  grid-template-columns: repeat(10, 1fr);
-  gap: 2px;
-  width: 100%;
-  max-width: 180px;
-  aspect-ratio: 1 / 1;
-  padding: 6px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.25);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-}
-.sqMiniCell {
-  background: rgba(22, 56, 42, 0.85);
-  border-radius: 1px;
-}
-.sqMiniHot {
-  background: linear-gradient(135deg, #f5c451, #d4a24e);
 }
 
 /* ─── ESPN scoreboard ────────────────────────────────────────────────
@@ -892,71 +1058,7 @@ export default {
   .sqScoreSide--right { justify-content: space-between; width: 100%; }
 }
 
-/* ─── Status pills ───────────────────────────────────────────────────── */
-.sqStatusRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0 4px 12px;
-}
-.sqPill {
-  flex: 1 1 110px;
-  min-width: 110px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-.sqPillLabel {
-  font-size: 9px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.55);
-}
-.sqPillValue {
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
-  margin-top: 2px;
-  word-break: break-word;
-}
-.sqPillFootnote {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.55);
-  margin-top: 2px;
-}
-.sqPillBar {
-  margin-top: 6px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(0, 0, 0, 0.35);
-  overflow: hidden;
-}
-.sqPillBarFill {
-  height: 100%;
-  background: linear-gradient(90deg, #f5c451, #d4a24e);
-  transition: width 0.4s ease;
-}
-.phaseOpen   { border-color: rgba(118, 196, 138, 0.5); }
-.phaseLocked { border-color: rgba(212, 162, 78, 0.5); }
-.phaseLive   { border-color: rgba(245, 196, 81, 0.6); }
-.phaseDone   { border-color: rgba(196, 82, 79, 0.5); }
-.phaseNone   { border-color: rgba(255, 255, 255, 0.08); }
-
-/* ─── Past-games picker ──────────────────────────────────────────────── */
-.sqGamesLabel {
-  flex: 0 0 auto;
-  align-self: center;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
-}
-.sqGameBtnActive {
-  border-color: #f5c451 !important;
-  color: #f5c451 !important;
-}
-
 /* ─── Primary CTAs ───────────────────────────────────────────────────── */
-.sqPrimaryRow { margin-top: 4px; }
 .sqPrimary {
   background: linear-gradient(135deg, #1f5c3a 0%, #0e3b22 100%);
   border-color: #f5c451;
@@ -1050,6 +1152,113 @@ export default {
   margin-bottom: 8px;
 }
 
+/* ─── NBA game picker (inside the create-game form) ──────────────────── */
+.sqEspnDateRow {
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.sqEspnDate { flex: 0 0 auto; }
+.sqEspnRefresh { flex: 0 0 auto; }
+/* ─── DraftKings/FanDuel-style game lobby ────────────────────────────
+   Each NBA matchup is a tappable card: matchup title + status pill up
+   top, then an away row and a home row with logo, abbr, and full name. */
+.sqEspnList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+  margin-bottom: 4px;
+  padding-right: 2px;
+}
+.sqGameCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.35));
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+.sqGameCard:hover {
+  border-color: rgba(245, 196, 81, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+.sqGameCard--active {
+  border-color: #f5c451;
+  background: linear-gradient(180deg, rgba(245, 196, 81, 0.14), rgba(245, 196, 81, 0.04));
+  box-shadow: 0 0 0 1px rgba(245, 196, 81, 0.35);
+}
+.sqGameCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sqGameTitle {
+  font-weight: 700;
+  font-size: 13px;
+  color: #f5c451;
+  letter-spacing: 0.01em;
+}
+.sqGameStatus {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.sqGameTeam {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sqGameLogo {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+.sqGameAbbr {
+  font-weight: 800;
+  font-size: 13px;
+  width: 38px;
+  flex: 0 0 auto;
+}
+.sqGameTeamName {
+  flex: 1;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sqGameSide {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.4);
+  flex: 0 0 auto;
+}
+.sqGamePicked {
+  font-size: 11px;
+  font-weight: 700;
+  color: #f5c451;
+  text-align: center;
+  padding-top: 2px;
+  border-top: 1px solid rgba(245, 196, 81, 0.25);
+}
+
 /* ─── Admin panel ────────────────────────────────────────────────────── */
 .sqAdminPanel {
   margin: 14px 4px;
@@ -1091,8 +1300,29 @@ export default {
 }
 
 /* ─── Play view header ───────────────────────────────────────────────── */
-.sqPlayHeader { margin: 4px 0 8px; }
-.sqBackBtn { flex: 0 0 auto; min-width: 90px; }
+/* ─── Game-selector bar ───────────────────────────────────────────── */
+.sqGameBar {
+  margin: 4px 0 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 6px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.sqGameBar::-webkit-scrollbar { display: none; }
+.sqGameBtn {
+  flex: 0 0 auto;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sqGameBtn--active {
+  border-color: #f5c451;
+  box-shadow: 0 0 0 1px rgba(245, 196, 81, 0.55) inset;
+  color: #f5c451;
+}
+.sqGameBarEmpty { flex: 1; opacity: 0.7; }
 
 /* ─── 10×10 grid (existing styles, kept) ──────────────────────────── */
 .squaresWrap {
@@ -1130,9 +1360,6 @@ export default {
 
 /* ─── Mobile ─────────────────────────────────────────────────────────── */
 @media (max-width: 480px) {
-  .sqHero { flex-direction: column; gap: 12px; }
-  .sqHeroBoard { justify-content: flex-start; }
-  .sqMini { max-width: 140px; }
   .square { width: 26px; height: 26px; font-size: 9px; }
 }
 </style>

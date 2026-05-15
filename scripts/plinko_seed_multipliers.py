@@ -23,28 +23,36 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CONSTANTS_PATH = PROJECT_ROOT / "src" / "constants.js"
 
-# ─── Payout tables ────────────────────────────────────────────────────────
-# Source: standard Stake-style Plinko multipliers. Symmetric: edges pay big,
-# middle pays tiny. Values are floats; converted to bp (×100) below.
+# ─── Payout tables — 3D Plinko, RING-indexed ──────────────────────────────
+# Index = Chebyshev ring distance from centre (0 = dead-centre bin, worst
+# payout; rows/2 = outer corner ring, best). Radially symmetric, so the
+# table is just rows/2 + 1 entries per (rows, risk).
+#
+# These were scaled (see SHAPES + ring-probability math, below the comment
+# in git history of this file) so each profile pays ~97% RTP against the
+# TRUE 3D ring distribution — P(ring=r) = q(r)² − q(r−1)², where q(r) is
+# P(|finalX − rows/2| ≤ r) and the two axes are independent Binomials.
+#
+# Must mirror PLINKO_MULTIPLIERS in src/constants.js.
 TABLES: dict[tuple[int, int], list[float]] = {
-    # 8 rows ─ 9 buckets
-    (8, 0): [5.6, 2.1, 1.1, 1.0, 0.5, 1.0, 1.1, 2.1, 5.6],
-    (8, 1): [13.0, 3.0, 1.3, 0.7, 0.4, 0.7, 1.3, 3.0, 13.0],
-    (8, 2): [29.0, 4.0, 1.5, 0.3, 0.2, 0.3, 1.5, 4.0, 29.0],
-    # 12 rows ─ 13 buckets
-    (12, 0): [10.0, 3.0, 1.6, 1.4, 1.1, 1.0, 0.5, 1.0, 1.1, 1.4, 1.6, 3.0, 10.0],
-    (12, 1): [33.0, 11.0, 4.0, 2.0, 1.1, 0.6, 0.3, 0.6, 1.1, 2.0, 4.0, 11.0, 33.0],
-    (12, 2): [76.0, 18.0, 5.0, 1.9, 0.4, 0.2, 0.2, 0.2, 0.4, 1.9, 5.0, 18.0, 76.0],
-    # 16 rows ─ 17 buckets
-    (16, 0): [16.0, 9.0, 2.0, 1.4, 1.4, 1.2, 1.1, 1.0, 0.5, 1.0, 1.1, 1.2, 1.4, 1.4, 2.0, 9.0, 16.0],
-    (16, 1): [110.0, 41.0, 10.0, 5.0, 3.0, 1.5, 1.0, 0.5, 0.3, 0.5, 1.0, 1.5, 3.0, 5.0, 10.0, 41.0, 110.0],
-    (16, 2): [1000.0, 130.0, 26.0, 9.0, 4.0, 2.0, 0.2, 0.2, 0.2, 0.2, 0.2, 2.0, 4.0, 9.0, 26.0, 130.0, 1000.0],
+    # 8 rows ─ rings 0..4
+    (8, 0): [0.4, 0.81, 0.89, 1.69, 4.52],
+    (8, 1): [0.29, 0.5, 0.93, 2.14, 9.27],
+    (8, 2): [0.12, 0.18, 0.9, 2.4, 17.43],
+    # 12 rows ─ rings 0..6
+    (12, 0): [0.42, 0.84, 0.92, 1.17, 1.34, 2.51, 8.38],
+    (12, 1): [0.21, 0.42, 0.76, 1.38, 2.77, 7.61, 22.83],
+    (12, 2): [0.16, 0.16, 0.33, 1.55, 4.09, 14.71, 62.12],
+    # 16 rows ─ rings 0..8
+    (16, 0): [0.43, 0.86, 0.94, 1.03, 1.2, 1.2, 1.72, 7.72, 13.72],
+    (16, 1): [0.21, 0.34, 0.69, 1.03, 2.06, 3.43, 6.85, 28.1, 75.39],
+    (16, 2): [0.12, 0.12, 0.12, 1.15, 2.3, 5.18, 14.96, 74.81, 575.44],
 }
 
 
 def to_bp(row: list[float]) -> dict[int, int]:
-    """Convert a floats-row to {slot: bp_int} for setMultiplierRow."""
-    return {slot: int(round(mult * 100)) for slot, mult in enumerate(row)}
+    """Convert a floats-row to {ring: bp_int} for setMultiplierRow."""
+    return {ring: int(round(mult * 100)) for ring, mult in enumerate(row)}
 
 
 def lookup_address(network: str) -> str:

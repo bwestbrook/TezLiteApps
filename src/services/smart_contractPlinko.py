@@ -59,7 +59,7 @@ def main():
             # Bet sizing — admin tunable post-deploy
             self.data.fee = sp.mutez(100000)          # 0.1 ꜩ holder fee
             self.data.minBet = sp.mutez(100000)       # 0.1 ꜩ
-            self.data.maxBet = sp.mutez(1000000)      # 1.0 ꜩ
+            self.data.maxBet = sp.mutez(10000000)     # 10.0 ꜩ
 
             # Pot
             self.data.pot = sp.mutez(0)

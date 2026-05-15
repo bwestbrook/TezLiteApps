@@ -206,8 +206,11 @@ def _build_ad_action(entrypoint: str, game_id: int) -> ADAction:
 class PlinkoAction:
     round_id: int
     rows: int
-    bits: dict[int, int]     # per-row 0/1 decisions (left/right)
-    slot: int                # = sum(bits.values())
+    x_bits: dict[int, int]   # per-layer 0/1 deflections on the X axis
+    z_bits: dict[int, int]   # per-layer 0/1 deflections on the Z axis
+    final_x: int             # = sum(x_bits.values())   ∈ [0, rows]
+    final_z: int             # = sum(z_bits.values())   ∈ [0, rows]
+    ring: int                # Chebyshev distance from centre = the contract's payout key
     seed: str                # auditable hex tag committed on chain
 
 def next_action_for_round(round_id: int, rnd: Any) -> PlinkoAction | None:
@@ -215,12 +218,13 @@ def next_action_for_round(round_id: int, rnd: Any) -> PlinkoAction | None:
     Returns a PlinkoAction, or None if the round is already settled or
     the row count is bogus.
 
-    We draw N independent 50/50 coin flips up front — one per peg row —
-    and submit them as a list. The contract derives the slot from their
-    sum (binomial distribution: center exponentially more likely than
-    edges, mirroring Pascal's triangle). The UI replays the bits as the
-    ball's left/right decisions, so the on-chain randomness directly
-    drives the animation."""
+    3D Plinko: the ball makes TWO independent 50/50 deflections per
+    layer — one on X, one on Z — so we draw `rows` coin flips for each
+    axis. The contract derives finalX = sum(xBits), finalZ = sum(zBits),
+    both Binomial(rows, 1/2), then the Chebyshev `ring` distance from
+    centre that drives the (radially-symmetric) multiplier lookup. The
+    UI replays both bit streams as the ball's 3D path, so the on-chain
+    randomness directly drives the animation."""
     status = int(_field(rnd, "roundStatus", 0))
     if status != 0:
         return None
@@ -229,10 +233,18 @@ def next_action_for_round(round_id: int, rnd: Any) -> PlinkoAction | None:
         # Shouldn't happen — the contract rejects other values at play()
         # time — but if we somehow see one, skip rather than guess.
         return None
-    bits = {i: secrets.randbelow(2) for i in range(rows)}
-    slot = sum(bits.values())
+    x_bits = {i: secrets.randbelow(2) for i in range(rows)}
+    z_bits = {i: secrets.randbelow(2) for i in range(rows)}
+    final_x = sum(x_bits.values())
+    final_z = sum(z_bits.values())
+    half = rows // 2
+    ring = max(abs(final_x - half), abs(final_z - half))
     seed = f"plinko-{round_id}-{secrets.token_hex(8)}"
-    return PlinkoAction(round_id=int(round_id), rows=rows, bits=bits, slot=slot, seed=seed)
+    return PlinkoAction(
+        round_id=int(round_id), rows=rows,
+        x_bits=x_bits, z_bits=z_bits,
+        final_x=final_x, final_z=final_z, ring=ring, seed=seed,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -331,13 +343,16 @@ class PlinkoHandler(GameHandler):
         return []
 
     def _wrap(self, action: PlinkoAction) -> HandlerAction:
-        bits_preview = "".join(str(action.bits[i]) for i in range(action.rows))
-        label = (f"round {action.round_id:>3} → resolve(bits={bits_preview}, "
-                 f"slot={action.slot}/{action.rows})")
+        x_preview = "".join(str(action.x_bits[i]) for i in range(action.rows))
+        z_preview = "".join(str(action.z_bits[i]) for i in range(action.rows))
+        label = (f"round {action.round_id:>3} → resolve("
+                 f"x={x_preview} z={z_preview} → "
+                 f"({action.final_x},{action.final_z}) ring={action.ring})")
         def submit(contract: Any) -> str:
             op = contract.resolve(
                 roundId=action.round_id,
-                bits=action.bits,
+                xBits=action.x_bits,
+                zBits=action.z_bits,
                 seed=action.seed,
             ).send(min_confirmations=1)
             return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
@@ -416,14 +431,50 @@ class ChessHandler(_CoinFlipHandler):
         return f"CHESS_CONTRACT_ADDRESS_{network.upper()}"
 
 
-class TTTHandler(_CoinFlipHandler):
-    """TTT uses the same flipForFirst pattern. (If the deployed TTT
-    contract doesn't have that entrypoint yet, this handler will fail
-    on submit — that's the signal to upgrade and redeploy TTT.)"""
+class TTTHandler(GameHandler):
+    """TezTacToe first-move flip.
+
+    Unlike reversi/chess, TTT keeps per-game state nested under a
+    `metaData` map (string→int), and the flip happens *after* both
+    players pair — the game is already `gameStatus == 2` (active) but
+    `firstMoveDecided == 0`. flipForFirst(gameId, bit, seed) sets
+    playerTurn from the bit and marks firstMoveDecided, unblocking
+    makeMove. Idempotent on-chain, so a double-submit just reverts.
+    """
     name = "ttt"
+
     @classmethod
     def address_constant_for(cls, network: str) -> str:
         return f"TTT_CONTRACT_ADDRESS_{network.upper()}"
+
+    def find_actions(self) -> list[HandlerAction]:
+        storage = self.contract.storage()
+        games = _field(storage, "games", {}) or {}
+        for raw_id, g in games.items():
+            try:
+                gid = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            meta = _field(g, "metaData", {}) or {}
+            try:
+                status = int(meta.get("gameStatus", 0))
+                decided = int(meta.get("firstMoveDecided", 0))
+            except (TypeError, ValueError, AttributeError):
+                continue
+            # Flip once both players have paired (status 2) and the flip
+            # hasn't run yet.
+            if status != 2 or decided != 0:
+                continue
+            bit = secrets.randbelow(2)
+            seed = f"ttt-flip-{gid}-{secrets.token_hex(6)}"
+            label = f"game {gid:>3} → flipForFirst(bit={bit}) → P{bit + 1} moves first"
+            def submit(contract: Any, gid=gid, bit=bit, seed=seed) -> str:
+                op = contract.flipForFirst(
+                    gameId=gid, bit=bit, seed=seed,
+                ).send(min_confirmations=1)
+                return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+            return [HandlerAction(label=label, submit=submit)]
+        return []
 
 
 class SquaresHandler(GameHandler):

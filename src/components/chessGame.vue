@@ -15,7 +15,7 @@
 //   g.houseCutBps  (nat)     — basis points snapshotted at game creation
 //   g.status       (variant) — { play | finished: "player_1_won"|"player_2_won"|"draw" | ... }
 
-import { getContractStorage } from '../services/tzkt'
+import { getContractStorage, isPlaceholderAddress } from '../services/tzkt'
 import {
   BLOCKCHAIN_ENABLED,
   CHESS_CONTRACT_ADDRESS,
@@ -246,9 +246,21 @@ export default {
       const range = this.maxWagerTez - this.minWagerTez
       this.wagerTez = +(this.minWagerTez + range * (pct / 100)).toFixed(3)
     },
+    // Returns false (and sets a friendly status) when CHESS_CONTRACT_ADDRESS
+    // is still a KT1XXX… placeholder for the active network — feeding one to
+    // tezos.wallet.at() throws an uncaught InvalidContractAddressError.
+    // Every write path checks this first: `if (!this.prepWallet()) return`.
+    prepWallet() {
+      if (isPlaceholderAddress(CHESS_CONTRACT_ADDRESS)) {
+        this.blockchainStatus = 'Chess is not deployed on this network yet.'
+        return false
+      }
+      this.tezos.setWalletProvider(this.wallet)
+      return true
+    },
     async createGame() {
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         this.blockchainStatus = 'creating chess game...'
         const wagerMutez = Math.round(this.wagerTez * 1_000_000)
         const feeMutez = Math.round(this.feeTez * 1_000_000)
@@ -267,7 +279,7 @@ export default {
     },
     async joinGame(gameId) {
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         const g = this.games[gameId]
         const wagerMutez = mutez(g.wager)
         const feeMutez = Math.round(this.feeTez * 1_000_000)
@@ -326,7 +338,7 @@ export default {
     },
     async submitMove(fromSq, toSq) {
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         this.blockchainStatus = `move ${fromSq}→${toSq}...`
         // Build the new board client-side (trust-but-verify model).
         const board = { ...(this.game?.board || {}) }
@@ -362,7 +374,7 @@ export default {
     },
     async giveup() {
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
         const op = await contract.methodsObject
           .giveup({ gameId: this.activeGameId }).send()
@@ -372,7 +384,7 @@ export default {
     },
     async claimCheckmate() {
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
         const op = await contract.methodsObject
           .claim_checkmate({ gameId: this.activeGameId }).send()
@@ -382,7 +394,7 @@ export default {
     },
     async offerDraw() {
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
         const op = await contract.methodsObject
           .offer_draw({ gameId: this.activeGameId }).send()
@@ -392,7 +404,7 @@ export default {
     },
     async denyDraw() {
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
         const op = await contract.methodsObject
           .deny_draw({ gameId: this.activeGameId }).send()
@@ -402,7 +414,7 @@ export default {
     },
     async claimStalemate() {
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
         const op = await contract.methodsObject
           .claim_stalemate({ gameId: this.activeGameId }).send()
@@ -412,7 +424,7 @@ export default {
     },
     async claimByTimeout() {
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
         const op = await contract.methodsObject
           .claimByTimeout({ gameId: this.activeGameId }).send()
@@ -422,7 +434,7 @@ export default {
     },
     async cancelGame() {
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         const contract = await this.tezos.wallet.at(CHESS_CONTRACT_ADDRESS)
         const op = await contract.methodsObject
           .cancelGame({ gameId: this.activeGameId }).send()

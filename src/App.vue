@@ -35,16 +35,38 @@ if (typeof window !== 'undefined') {
     const probe = `${r.title || ''} ${r.description || ''} ${r.message || ''}`.toLowerCase()
     return /aborted|cancel|denied|user closed|user rejected/.test(probe)
   }
+  // Some wallets (notably Kukai's hosted web wallet) don't implement the
+  // `shadownet` network type even though beacon-sdk's enum declares it.
+  // They reject the permission request with NetworkNotSupportedBeaconError.
+  // That rejection escapes Beacon's internal subscribers as an uncaught
+  // promise — swallow it and point the user at a wallet that works.
+  const isBeaconNetworkUnsupported = (r) => {
+    if (!r) return false
+    if (r.name === 'NetworkNotSupportedBeaconError') return true
+    const probe = `${r.title || ''} ${r.description || ''} ${r.message || ''}`.toLowerCase()
+    return /network.*not.*support|not.*support.*network|network_not_supported/.test(probe)
+  }
   window.addEventListener('unhandledrejection', (event) => {
     if (isBeaconAbort(event.reason)) {
       event.preventDefault()
       // Surface a quiet console note so devs can still see it happened.
       // eslint-disable-next-line no-console
       console.info('[beacon] user dismissed wallet popup — suppressing overlay')
+    } else if (isBeaconNetworkUnsupported(event.reason)) {
+      event.preventDefault()
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[beacon] wallet rejected the shadownet network. Kukai\'s web wallet ' +
+        'does not support shadownet — use Temple (browser extension), which ' +
+        'connects to custom/test networks.',
+      )
     }
   })
   window.addEventListener('error', (event) => {
-    if (isBeaconAbort(event.error) || isBeaconAbort(event)) {
+    if (
+      isBeaconAbort(event.error) || isBeaconAbort(event) ||
+      isBeaconNetworkUnsupported(event.error) || isBeaconNetworkUnsupported(event)
+    ) {
       event.preventDefault()
     }
   })

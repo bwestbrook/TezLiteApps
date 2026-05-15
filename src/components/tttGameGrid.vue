@@ -158,7 +158,13 @@ export default {
       gameId: -1,
       walletPlayerTurn1: '',
       walletPlayerTurn2: '',
-      gamePaused: false,
+      // [i,j,k] of the tentatively-picked vertex, or null. One pick at a
+      // time — you must deselect (click it again) before choosing another.
+      selectedCoord: null,
+      // True while a move is being written to chain (mirrored to both
+      // players). The board is fully locked — no clicks, no rotation —
+      // until the chain confirms and the turn can switch.
+      movePending: false,
       halfTurn: false,
       player1Plays: {},
       player2Plays: {},
@@ -190,6 +196,18 @@ export default {
     // Socket: same wires as before.
     this.socket.on('updateGameGrid', (gameGrid) => {
       this.gameGrid = gameGrid
+      // Re-stamp our tentative pick on top of the synced grid. A chain
+      // re-sync carries only committed marks, so without this a poll
+      // would wipe a selection that hasn't been submitted yet. If the
+      // cell is no longer empty on-chain, the pick is stale — drop it.
+      if (this.selectedCoord) {
+        const [i, j, k] = this.selectedCoord
+        if (this.gameGrid?.[i]?.[j]?.[k] === 0) {
+          this.gameGrid[i][j][k] = -1 * this.playerTurn
+        } else {
+          this.selectedCoord = null
+        }
+      }
       this.gameGridRev++
     })
     this.socket.on('resizeGame', () => {
@@ -200,16 +218,46 @@ export default {
     })
     this.socket.on('updateGamePlayable', (gamePlayable) => {
       this.gamePlayable = gamePlayable
-      this.gamePaused = !gamePlayable
-    })
-    this.socket.on('updateGamePaused', (gamePaused) => {
-      this.gamePaused = gamePaused
+      // Turn passed (or game ended) — drop any tentative pick so it
+      // can't linger as stale state into the opponent's turn.
+      if (!gamePlayable) this.selectedCoord = null
     })
     this.socket.on('updateGameId', (gameId) => {
       this.gameId = gameId
+      // A real game loaded — kill the idle auto-spin so the board sits
+      // still (and stays in sync with the opponent's view).
+      if (gameId >= 0) this._idleStopped = true
     })
     this.socket.on('updatePlayersInGame', (playersInGame) => {
       this.playersInGame = playersInGame
+    })
+    // Board orientation pushed by the active player. We only receive this
+    // as the watcher (the server doesn't echo to the sender), so mirror
+    // it straight onto our view.
+    this.socket.on('updateGridView', (view) => {
+      if (!view || typeof view !== 'object') return
+      if (typeof view.rotX === 'number') this.rotX = view.rotX
+      if (typeof view.rotY === 'number') this.rotY = view.rotY
+      if (typeof view.zoom === 'number') this.zoom = view.zoom
+    })
+    // A move is being written to chain — lock the board for both players
+    // until it confirms (canControl reads this). selectedCoord is NOT
+    // cleared here: the in-flight move marker must stay visible (and
+    // protected by the updateGameGrid re-stamp) until the turn actually
+    // passes — updateGamePlayable(false) clears it at that point.
+    this.socket.on('updateMovePending', (pending) => {
+      this.movePending = !!pending
+      if (this._movePendingTimer) {
+        clearTimeout(this._movePendingTimer)
+        this._movePendingTimer = 0
+      }
+      if (pending) {
+        // Safety net mirroring tezTacToe.vue — never leave the board
+        // locked forever if the submitter's client dies mid-write.
+        this._movePendingTimer = setTimeout(() => {
+          this.movePending = false
+        }, 90000)
+      }
     })
 
     // Idle auto-rotate: gentle Y spin until the user touches the board.
@@ -221,8 +269,32 @@ export default {
       cancelAnimationFrame(this._idleRaf)
       this._idleRaf = 0
     }
+    if (this._movePendingTimer) {
+      clearTimeout(this._movePendingTimer)
+      this._movePendingTimer = 0
+    }
   },
   computed: {
+    // ─── Turn-gating ────────────────────────────────────────────────
+    // A contract game is loaded once gameId >= 0; before that the board
+    // is a free-play demo. gamePlayable (synced from the parent) is true
+    // only when it's THIS wallet's turn.
+    inRealGame() {
+      return this.gameId >= 0
+    },
+    // Can this client click vertices AND rotate/zoom the board?
+    //   • a move is being written to chain → no — locked for both sides
+    //   • demo (no game loaded)            → yes, free play
+    //   • real game, my turn               → yes
+    //   • real game, not my turn           → no — watch the opponent
+    canControl() {
+      if (this.movePending) return false
+      return !this.inRealGame || this.gamePlayable
+    },
+    // In a real game and it's the opponent's turn — view-only.
+    isWatching() {
+      return this.inRealGame && !this.gamePlayable && !this.movePending
+    },
     // 64 vertices, each projected to screen space.
     // Sorted back-to-front so the SVG renders deeper spheres first.
     projectedVertices() {
@@ -266,17 +338,16 @@ export default {
           // Default: dim hint of the underlying geometry.
           let stroke = 'rgba(120, 200, 150, 0.10)'
           let width = 1
+          let hot = false
+          // Light a segment ONLY when both ends are the same colour —
+          // committed or tentative, in any mix (Math.abs folds the
+          // tentative -1/-2 onto 1/2). A connection between two
+          // different colours is never highlighted.
           if (Math.abs(oa) === Math.abs(ob) && oa !== 0 && ob !== 0) {
-            // Both ends played by the same side — light it up.
             const owner = Math.abs(oa)
             stroke = owner === 1 ? 'rgba(196, 82, 79, 0.85)' : 'rgba(79, 108, 196, 0.85)'
             width = 2
-          } else if ((oa < 0 && ob !== 0) || (ob < 0 && oa !== 0)) {
-            // One end is a tentative move — preview its color.
-            const owner = Math.abs(oa < 0 ? oa : ob)
-            stroke =
-              owner === 1 ? 'rgba(196, 82, 79, 0.45)' : 'rgba(79, 108, 196, 0.45)'
-            width = 1.5
+            hot = true
           }
           out.push({
             x1: 200 + ra[0] * this.zoom,
@@ -286,16 +357,24 @@ export default {
             z: (ra[2] + rb[2]) / 2,
             stroke,
             width,
+            hot,
           })
         }
       }
-      out.sort((a, b) => a.z - b.z)
+      // Paint dim lattice lines first (back-to-front), then highlighted
+      // segments on top (also back-to-front). Without this, a lit diagonal
+      // — which threads through the middle of the structure — gets buried
+      // under the dim lines crossing in front of it; axis-aligned lits sit
+      // on the shell and survive, which is why only diagonals looked broken.
+      out.sort((a, b) => (Number(a.hot) - Number(b.hot)) || (a.z - b.z))
       return out
     },
   },
   methods: {
     // ─── Mouse / touch interaction ─────────────────────────────────────
     onPointerDown(evt) {
+      // Watching the opponent's turn — no grabbing the board.
+      if (!this.canControl) return
       // Stop the idle auto-rotate the moment the user grabs the board.
       this._idleStopped = true
       this.isDragging = true
@@ -309,13 +388,14 @@ export default {
       }
     },
     onPointerMove(evt) {
-      if (!this.isDragging) return
+      if (!this.isDragging || !this.canControl) return
       const p = this.eventPoint(evt)
       const dx = p.x - this.dragStart.x
       const dy = p.y - this.dragStart.y
       if (Math.abs(dx) + Math.abs(dy) > 4) this.dragMoved = true
       this.rotY = this.dragStart.rotY + dx * 0.012
       this.rotX = clamp(this.dragStart.rotX + dy * 0.012, -1.4, 1.4)
+      this.emitView()
     },
     onPointerUp() {
       // If the user clicked without dragging on a hovered vertex, play it.
@@ -328,9 +408,25 @@ export default {
     },
     onWheel(evt) {
       evt.preventDefault()
+      if (!this.canControl) return
       this._idleStopped = true
       const next = this.zoom * (evt.deltaY < 0 ? 1.08 : 1 / 1.08)
       this.zoom = clamp(next, 0.6, 2.2)
+      this.emitView()
+    },
+    // Broadcast our board orientation to the opponent — but only when
+    // we're the active player (the watcher must never push its view
+    // back). Throttled to ~30/s so a drag doesn't flood the socket.
+    emitView() {
+      if (!this.inRealGame || !this.gamePlayable) return
+      const now = performance.now()
+      if (now - (this._lastViewEmit || 0) < 33) return
+      this._lastViewEmit = now
+      this.socket.emit(
+        'updateGridView',
+        { rotX: this.rotX, rotY: this.rotY, zoom: this.zoom },
+        this.gameId,
+      )
     },
     onTouchStart(evt) {
       if (evt.touches.length !== 1) return
@@ -365,8 +461,10 @@ export default {
       this.hoverCoord = null
     },
     // ─── Idle auto-rotate ────────────────────────────────────────────
+    // Only spins in demo (no game loaded). Inside a real game the board
+    // stays put so it can't fight the synced opponent view.
     idleTick(now) {
-      if (!this._idleStopped) {
+      if (!this._idleStopped && !this.inRealGame) {
         const t = (now - this._idleStart) / 1000
         // Gentle yaw around the initial pose. ±0.3 rad over ~12s.
         this.rotY = 0.6 + Math.sin(t * 0.5) * 0.3
@@ -390,10 +488,15 @@ export default {
       // Default: silver. Use depth to slightly darken farther spheres.
       return this.isHovered(v.i, v.j, v.k) ? 'url(#vGold)' : `rgba(220, 230, 240, ${tint})`
     },
-    // Play a move at coordinates. Same semantics as before.
+    // Click a vertex.
+    //   • demo (no game loaded)  → free-cycle the cell's color
+    //   • real game, my turn     → select / deselect a vertex (one at a time)
+    //   • real game, watching    → ignored (handled by canControl, but
+    //                              guarded here too in case of a stray call)
     playAt(i, j, k, evt) {
+      void evt // signature kept for backwards-compat
       // ── DEMO MODE ─────────────────────────────────────────────────
-      if (!this.gamePlayable) {
+      if (!this.inRealGame) {
         const cur = this.gameGrid[i][j][k]
         let next
         if (cur === 0) next = this.demoTurn
@@ -405,41 +508,33 @@ export default {
         return
       }
       // ── REAL GAME ─────────────────────────────────────────────────
-      if (!this.gamePaused) {
-        if (this.gameGrid[i][j][k] === 0) {
-          this.socket.emit('updatePlayedPoint', [i, j, k], 'Move Selected', this.gameId)
-          this.gameGrid[i][j][k] = -1 * this.playerTurn
-          this.socket.emit('updateGamePaused', true, this.gameId)
-          this.gamePaused = true
-        }
+      // Not my turn → no interaction (watch only).
+      if (!this.gamePlayable) return
+
+      const sel = this.selectedCoord
+      const isSelectedCell =
+        sel && sel[0] === i && sel[1] === j && sel[2] === k
+
+      if (!sel) {
+        // Nothing picked yet — select this empty cell.
+        if (this.gameGrid[i][j][k] !== 0) return
+        this.gameGrid[i][j][k] = -1 * this.playerTurn // tentative marker
+        this.selectedCoord = [i, j, k]
+        this.playedPoint = [i, j, k]
+        this.socket.emit('updatePlayedPoint', [i, j, k], 'Move selected', this.gameId)
+      } else if (isSelectedCell) {
+        // Click the picked cell again → deselect.
+        this.gameGrid[i][j][k] = 0
+        this.selectedCoord = null
+        this.socket.emit('updatePlayedPoint', 'NO MOVE', 'Active', this.gameId)
       } else {
-        if (this.gameGrid[i][j][k] < 0) {
-          this.gamePaused = false
-          this.socket.emit('updateGamePaused', false, this.gameId)
-          this.socket.emit('updatePlayedPoint', 'NO MOVE', 'Active', this.gameId)
-        } else if (this.gameGrid[i][j][k] === this.playerTurn) {
-          this.socket.emit('updatePlayedPoint', 'NO MOVE', 'Active', this.gameId)
-          this.socket.emit('updateGamePaused', false, this.gameId)
-          this.gamePaused = false
-        }
+        // A pick is already active and this is a different cell —
+        // ignore. One ball at a time: deselect before choosing another.
+        return
       }
-      this.playedPoint = [i, j, k]
+      // Sync the tentative pick to the opponent's board so both see it.
       this.socket.emit('updateGameGrid', this.gameGrid, this.gameId, true)
       this.gameGridRev++
-      // Avoid unused-arg warnings while keeping signature backwards-compatible.
-      void evt
-    },
-    resetDemo() {
-      this.gameGrid = emptyGameGrid()
-      this.demoTurn = 1
-      this.gameGridRev++
-    },
-    resetView() {
-      this.rotX = -0.45
-      this.rotY = 0.6
-      this.zoom = 1
-      this._idleStopped = false
-      this._idleStart = performance.now()
     },
   },
 }
@@ -447,9 +542,22 @@ export default {
 
 <template>
   <div class="gridRoot">
+    <!-- A move is being written to chain — board locked for both
+         players until the chain confirms and the turn can switch. -->
+    <div v-if="movePending" class="watchBanner watchBanner--pending">
+      <span class="watchDot watchDot--pending"></span>
+      Writing move to blockchain…
+    </div>
+    <!-- Watching overlay — shown while it's the opponent's turn. The
+         board still updates live (synced grid + view), it's just not
+         interactive for this client. -->
+    <div v-else-if="isWatching" class="watchBanner">
+      <span class="watchDot"></span>
+      Opponent's turn — watching live
+    </div>
     <svg
       ref="svg"
-      class="gridSvg"
+      :class="['gridSvg', canControl ? '' : 'gridSvg--locked']"
       viewBox="0 0 400 400"
       preserveAspectRatio="xMidYMid meet"
       @mousedown="onPointerDown"
@@ -532,16 +640,6 @@ export default {
       </g>
     </svg>
 
-    <!-- Demo hint: shown whenever there's no real game in progress. -->
-    <div v-if="!gamePlayable" class="demoHint">
-      <span class="demoHintDot"></span>
-      <span class="demoHintLabel">DEMO</span>
-      <span class="demoHintBody">
-        Click a vertex to cycle red / blue. Drag the board to rotate. Scroll to zoom.
-      </span>
-      <button class="demoBtn" @click="resetDemo">Reset board</button>
-      <button class="demoBtn demoBtn--ghost" @click="resetView">Reset view</button>
-    </div>
   </div>
 </template>
 
@@ -572,61 +670,54 @@ export default {
 }
 .gridSvg:active { cursor: grabbing; }
 
+/* Watching the opponent's turn — board is view-only. */
+.gridSvg--locked,
+.gridSvg--locked:active { cursor: default; }
+.gridSvg--locked .gridVerts circle { cursor: default; }
+.gridSvg--locked .gridVerts circle:hover { filter: none; }
+
 /* Hovering a vertex changes the cursor to communicate "you can click here". */
 .gridVerts circle { transition: filter 0.18s ease; cursor: pointer; }
 .gridVerts circle:hover { filter: drop-shadow(0 0 4px rgba(245, 196, 81, 0.7)); }
 
-/* Demo hint chip — same styling family as the rest of the app. */
-.demoHint {
+/* ── Watching banner ─────────────────────────────────────────────── */
+.watchBanner {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  flex-wrap: wrap;
-  padding: 6px 10px;
-  margin: 8px auto 0;
+  margin: 0 auto 6px;
   max-width: 600px;
+  padding: 5px 12px;
   border-radius: 8px;
-  background: rgba(245, 196, 81, 0.08);
-  border: 1px dashed rgba(245, 196, 81, 0.45);
-  color: rgba(255, 255, 255, 0.85);
+  background: rgba(79, 108, 196, 0.14);
+  border: 1px solid rgba(79, 108, 196, 0.5);
+  color: #aebdf0;
   font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-weight: 700;
 }
-.demoHintDot {
+.watchDot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #f5c451;
-  box-shadow: 0 0 6px rgba(245, 196, 81, 0.8);
-  animation: demoPulse 1.6s ease-in-out infinite;
+  background: #5d80e4;
+  box-shadow: 0 0 6px rgba(93, 128, 228, 0.9);
+  animation: watchPulse 1.4s ease-in-out infinite;
 }
-@keyframes demoPulse {
-  0%, 100% { opacity: 0.5; }
+/* Move-being-written variant — gold, matches the "writing to bc" badge. */
+.watchBanner--pending {
+  background: rgba(245, 196, 81, 0.14);
+  border-color: rgba(245, 196, 81, 0.55);
+  color: #f5c451;
+}
+.watchDot--pending {
+  background: #f5c451;
+  box-shadow: 0 0 6px rgba(245, 196, 81, 0.95);
+}
+@keyframes watchPulse {
+  0%, 100% { opacity: 0.4; }
   50% { opacity: 1; }
 }
-.demoHintLabel {
-  font-size: 10px;
-  letter-spacing: 3px;
-  font-weight: 700;
-  color: #f5c451;
-}
-.demoHintBody { flex: 1; min-width: 0; }
-.demoBtn {
-  background: transparent;
-  border: 1px solid rgba(245, 196, 81, 0.55);
-  border-radius: 4px;
-  color: #f5c451;
-  font-family: 'EB Garamond', serif;
-  font-size: 11px;
-  letter-spacing: 1.5px;
-  font-weight: 700;
-  padding: 4px 10px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.demoBtn:hover { background: rgba(245, 196, 81, 0.12); }
-.demoBtn--ghost {
-  border-color: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.7);
-}
-.demoBtn--ghost:hover { background: rgba(255, 255, 255, 0.06); }
 </style>

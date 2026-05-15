@@ -1,7 +1,14 @@
 <script>
 // Registry-driven nav. Adding a new app = one entry in src/apps/registry.js.
 import { APPS, HOME_APP, NAV_APPS, APP_BY_ID } from '../apps/registry'
-import { NETWORK, setNetwork, getBeaconNetwork } from '../constants'
+import {
+  NETWORK,
+  setNetwork,
+  getBeaconNetwork,
+  TXL_CONTRACT_ADDRESS,
+  BLOCKCHAIN_ENABLED,
+} from '../constants'
+import { getContractStorage } from '../services/tzkt'
 
 export default {
   name: 'mainBody',
@@ -16,6 +23,17 @@ export default {
       NETWORK,
       activeView: HOME_APP.id,
       walletAddress: 'SYNC WALLET',
+      // TXL manager contract state, polled from storage so the holder pool
+      // total + the connected wallet's claimable share show on every page.
+      txlPoolValue: 0,
+      txlShare: 0,
+      txlOwnsNft: false,
+      txlCashStatus: '',
+      // Flashes the "Unclaimed" chip green for ~1s when the pool grows (a bet
+      // somewhere sent its holder fee in). txlPoolSeeded guards the first poll
+      // so the initial 0 → real-value jump doesn't trigger a flash.
+      txlPoolFlash: false,
+      txlPoolSeeded: false,
     }
   },
   computed: {
@@ -36,6 +54,19 @@ export default {
     this.socket.on('selectGame', (game) => {
       this.selectGame(game)
     })
+  },
+  mounted() {
+    // Poll the TXL manager contract for the holder pool total and — when a
+    // wallet is connected — that wallet's claimable share. Lives here (not in
+    // browseNFTs) so the Cash Out button + stats appear on every page.
+    this.refreshTxlContract()
+    if (BLOCKCHAIN_ENABLED) {
+      this.txlPollInterval = setInterval(() => this.refreshTxlContract(), 30000)
+    }
+  },
+  beforeUnmount() {
+    if (this.txlPollInterval) clearInterval(this.txlPollInterval)
+    if (this.txlFlashTimeout) clearTimeout(this.txlFlashTimeout)
   },
   methods: {
     selectGame(id) {
@@ -95,12 +126,26 @@ export default {
       } catch (err) {
         // User-visible message. Most common failure modes: relay DNS issue
         // (we now mitigate via custom matrixNodes), user closed the popup,
-        // wallet extension locked.
+        // wallet extension locked, or the wallet not supporting shadownet.
         const msg = err?.message || String(err)
+        const name = err?.name || ''
         const isAborted = /aborted|cancel|denied/i.test(msg)
+        const isNetworkUnsupported =
+          name === 'NetworkNotSupportedBeaconError' ||
+          /network.*not.*support|not.*support.*network|network_not_supported/i.test(msg)
         const isNetwork = /timeout|network|relay|resolve|ENOTFOUND|ERR_NAME/i.test(msg)
         if (isAborted) {
           this.walletAddress = 'SYNC WALLET (cancelled)'
+        } else if (isNetworkUnsupported) {
+          // Kukai's hosted web wallet doesn't implement shadownet. Temple
+          // (extension) does — steer the user there.
+          this.walletAddress = 'SYNC WALLET (use Temple for shadownet)'
+          console.warn(
+            'Wallet rejected shadownet. Kukai\'s web wallet does not support ' +
+            'it — use Temple (browser extension), which connects to custom / ' +
+            'test networks.',
+            err,
+          )
         } else if (isNetwork) {
           this.walletAddress = 'SYNC WALLET (relay error)'
           console.warn(
@@ -151,6 +196,70 @@ export default {
         : true
       if (ok) setNetwork(next)
     },
+    // Poll the TXL manager contract: the holder pool total (storage
+    // totalRewards), and — if a wallet is connected — that wallet's claimable
+    // share, summed from the contract's own idLookUp owner records (exactly
+    // what payTxlHolder pays out, so it matches the Cash Out button).
+    async refreshTxlContract() {
+      const storage = await getContractStorage(TXL_CONTRACT_ADDRESS)
+      if (!storage) return
+      const nextPool = Number(storage.totalRewards || 0) / 1e6
+      // A bet landed its holder fee — flash the chip green. Skip the very
+      // first poll (0 → real value isn't a "bet was placed").
+      if (this.txlPoolSeeded && nextPool > this.txlPoolValue) this.flashTxlPool()
+      this.txlPoolValue = nextPool
+      this.txlPoolSeeded = true
+
+      const activeAccount = await this.wallet?.client?.getActiveAccount?.()
+      const address = activeAccount?.address
+      if (!address) {
+        this.txlOwnsNft = false
+        this.txlShare = 0
+        return
+      }
+      let shareMutez = 0
+      let owns = false
+      for (const entry of Object.values(storage.idLookUp || {})) {
+        if (entry?.owner === address) {
+          owns = true
+          shareMutez += Number(entry.balance || 0)
+        }
+      }
+      this.txlOwnsNft = owns
+      this.txlShare = shareMutez / 1e6
+    },
+    // Claim this wallet's accrued TXL holder earnings. payTxlHolder zeroes the
+    // per-NFT balances the contract attributes to the sender and sends the sum.
+    async payNftHolderBC() {
+      const activeAccount = await this.wallet.client.getActiveAccount()
+      if (!activeAccount) {
+        this.txlCashStatus = 'Sync a wallet first'
+        return
+      }
+      this.txlCashStatus = 'Cashing out…'
+      this.tezos.setWalletProvider(this.wallet)
+      await this.tezos.wallet
+        .at(TXL_CONTRACT_ADDRESS)
+        .then((contract) => contract.methodsObject.payTxlHolder().send())
+        .then((op) => op.confirmation().then(() => op.opHash))
+        .then(() => {
+          this.txlCashStatus = 'Cashed out!'
+          // Balances were just zeroed on-chain — repoll so the pool total
+          // and "Your Share" reflect the payout.
+          this.refreshTxlContract()
+        })
+        .catch((error) => {
+          console.error('payNftHolderBC failed:', error)
+          this.txlCashStatus = 'Cash out failed'
+        })
+    },
+    // Pulse the "Unclaimed" chip green for ~1s. Re-arm the timer each call so
+    // back-to-back increases don't leave it stuck on.
+    flashTxlPool() {
+      this.txlPoolFlash = true
+      if (this.txlFlashTimeout) clearTimeout(this.txlFlashTimeout)
+      this.txlFlashTimeout = setTimeout(() => { this.txlPoolFlash = false }, 1000)
+    },
   },
 }
 </script>
@@ -161,6 +270,8 @@ export default {
       <div class="gameManagement">
         <div class="rowFlex">
           <div class="actionButton" @click="toggleWallet">{{ walletAddress }}</div>
+          <div class="actionButton" @click="payNftHolderBC"> Cash Out TXL Earnings </div>
+          <div :class="['txlRank', txlPoolFlash ? 'txlRank--flash' : '']"> Unclaimed: {{ txlPoolValue.toFixed(3) }} ꜩ </div>
           <div
             v-if="walletAddress.includes('error') || walletAddress.includes('failed')"
             class="actionButtonHelp walletReset"
@@ -183,6 +294,11 @@ export default {
             {{ NETWORK }}
             <span class="networkBadge__arrow" aria-hidden="true">⇄</span>
           </div>
+        </div>
+
+        <div class="rowFlex" v-if="txlOwnsNft || txlCashStatus">
+          <div class="txlRank" v-if="txlOwnsNft"> Your Claimable Share: {{ txlShare.toFixed(6) }} ꜩ </div>
+          <div class="txlRank" v-if="txlCashStatus"> {{ txlCashStatus }} </div>
         </div>
 
         <div class="navCarousel" role="tablist" aria-label="Apps">
@@ -213,14 +329,21 @@ export default {
           >›</button>
         </div>
 
+        <!-- The wrapper div is load-bearing: <Transition mode="out-in">
+             needs a single element root to track enter/leave. Some app
+             components (e.g. tezTacToe) have multi-root templates, which
+             leaves the transition unable to fire afterLeave — the next
+             view never mounts and the pane goes blank. Wrapping the
+             dynamic component guarantees one element root regardless. -->
         <transition name="view" mode="out-in">
-          <component
-            :is="activeComponent"
-            :key="activeView"
-            :socket="socket"
-            :wallet="wallet"
-            :tezos="tezos"
-          />
+          <div :key="activeView" class="viewSlot">
+            <component
+              :is="activeComponent"
+              :socket="socket"
+              :wallet="wallet"
+              :tezos="tezos"
+            />
+          </div>
         </transition>
       </div>
     </div>
@@ -266,6 +389,10 @@ export default {
   width: 100%;
   flex: 1;
   cursor: default;
+}
+/* Single-element root for <Transition mode="out-in"> — see template. */
+.viewSlot {
+  width: 100%;
 }
 
 .rowFlex {
@@ -329,6 +456,22 @@ export default {
   flex: 1;
   cursor: default;
   min-height: 38px;
+}
+/* Flash a chip green for ~1s when the value it shows grows. */
+.txlRank--flash {
+  animation: txlRankFlash 1s ease-out;
+}
+@keyframes txlRankFlash {
+  0%, 15% {
+    background: rgba(74, 222, 128, 0.30);
+    border-color: rgba(74, 222, 128, 0.75);
+    color: #4ade80;
+  }
+  100% {
+    background: var(--ad-bg-elev-1);
+    border-color: var(--ad-border-faint);
+    color: var(--ad-text-1);
+  }
 }
 .infoBox {
   justify-content: center;

@@ -65,9 +65,12 @@ export async function tzktGet(
  * Some contracts in constants.js are placeholders (e.g.
  * "KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX") for entries that haven't been
  * deployed yet. Polling them spams TzKT with 400 responses every refresh
- * cycle. Detect that pattern and short-circuit before hitting the network.
+ * cycle, and feeding one to Taquito's `wallet.at()` throws an uncaught
+ * InvalidContractAddressError (failed checksum). Detect the pattern and
+ * short-circuit. Exported so game components can guard their write paths
+ * before calling `tezos.wallet.at()`.
  */
-function isPlaceholderAddress(addr) {
+export function isPlaceholderAddress(addr) {
   return !addr || /^KT1X{10,}/.test(addr)
 }
 

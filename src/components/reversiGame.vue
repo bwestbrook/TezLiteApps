@@ -11,7 +11,7 @@
 // When `gamePlayable` becomes true (joined contract game), the contract state
 // takes over and the demo board is hidden.
 
-import { getContractStorage } from '../services/tzkt'
+import { getContractStorage, isPlaceholderAddress } from '../services/tzkt'
 import {
   BLOCKCHAIN_ENABLED,
   REVERSI_CONTRACT_ADDRESS,
@@ -167,10 +167,22 @@ export default {
         console.warn('reversi storage refresh failed:', e?.message)
       }
     },
+    // Returns false (and sets a friendly status) when REVERSI_CONTRACT_ADDRESS
+    // is still a KT1XXX… placeholder for the active network — feeding one to
+    // tezos.wallet.at() throws an uncaught InvalidContractAddressError.
+    // Every write path checks this first: `if (!this.prepWallet()) return`.
+    prepWallet() {
+      if (isPlaceholderAddress(REVERSI_CONTRACT_ADDRESS)) {
+        this.blockchainStatus = 'Reversi is not deployed on this network yet.'
+        return false
+      }
+      this.tezos.setWalletProvider(this.wallet)
+      return true
+    },
     async createGame() {
       const total = this.stakeMutez + 50000
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         this.blockchainStatus = 'creating game...'
         const contract = await this.tezos.wallet.at(REVERSI_CONTRACT_ADDRESS)
         const op = await contract.methodsObject
@@ -186,7 +198,7 @@ export default {
     },
     async joinGame(gameId) {
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         this.blockchainStatus = `joining game ${gameId}...`
         const g = this.games[gameId]
         const total = Number(g.stake) + 50000
@@ -219,7 +231,7 @@ export default {
       if (!this.myTurn) return
       if (cell.stone !== 0) return
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         this.blockchainStatus = `moving (${cell.r},${cell.c})...`
         const contract = await this.tezos.wallet.at(REVERSI_CONTRACT_ADDRESS)
         const op = await contract.methodsObject
@@ -236,7 +248,7 @@ export default {
     },
     async passTurn() {
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         this.blockchainStatus = 'passing turn...'
         const contract = await this.tezos.wallet.at(REVERSI_CONTRACT_ADDRESS)
         const op = await contract.methodsObject.passTurn({ gameId: this.activeGameId }).send()
@@ -250,7 +262,7 @@ export default {
     },
     async claim() {
       try {
-        this.tezos.setWalletProvider(this.wallet)
+        if (!this.prepWallet()) return
         this.blockchainStatus = 'claiming...'
         const contract = await this.tezos.wallet.at(REVERSI_CONTRACT_ADDRESS)
         const op = await contract.methodsObject.claim().send()

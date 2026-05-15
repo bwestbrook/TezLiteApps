@@ -68,10 +68,10 @@ directly — see the `write_reports` function.)
   these as "for sale on objkt" in the UI rather than showing the raw KT1.
 - `tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w` — `jamin_b` (the deployer).
 
-`browseNFTs.vue` already has a `PRIMARY_OWNER_TAG` ('t.Upyq', the reduced form
-of the marketplace KT1) used to flip the per-card label to
-`'PRIMARY - OBJKT.COM'`. New views (lists, leaderboards) should use the same
-label conventionally.
+`txlOwners.js` exports `OBJKT_MARKETPLACE` (the marketplace KT1) — compare an
+owner address against it to flip the label to `'PRIMARY - OBJKT.COM'`.
+`browseNFTs.vue` does this in `labelForOwner()`; new views (lists,
+leaderboards) should use the same constant and label conventionally.
 
 ## Mainnet vs ghostnet reminder
 
