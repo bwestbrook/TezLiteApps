@@ -1,18 +1,21 @@
 <script>
-// War — 1-card high-card showdown.
+// Speed War — best-of-3 high-card showdown.
 //
 // Mirrors src/services/smart_contractWar.py exactly:
 //
 //   1. createGame(wager)    — player1 stakes wager + 0.1ꜩ fee
 //   2. joinGame(gameId)     — player2 matches; gameStatus → 1 (awaiting deal)
-//   3. (off-chain) oracle calls deal(gameId, card1, card2, seed)
-//   4. Inline settlement: higher rank wins the pot; tie refunds both.
+//   3. (off-chain) oracle calls deal(gameId, cards1, cards2, seed)
+//      cards1 / cards2 are 3-entry maps {0,1,2 → deck_idx}
+//   4. Inline settlement: more round wins takes the pot; tied series refunds.
 //
-// Storage shape per game (sp.record): player1, player2, wager, card1, card2,
-// gameStatus (0=open / 1=awaiting deal / 2=settled / 3=cancelled), winner, seed.
+// Storage shape per game (sp.record): player1, player2, wager, cards1, cards2,
+// p1Wins, p2Wins, gameStatus (0=open / 1=awaiting deal / 2=settled /
+// 3=cancelled), winner, seed.
 //
-// Demo mode (no wallet, no contract) runs a random local draw so visitors can
-// see the 3D card-flip stage before any tez is staked.
+// Demo mode (no wallet, no contract) runs a random local 3-round draw so
+// visitors can see the round-by-round 3D flip animation. 2-0 sweeps
+// short-circuit before round 3 to play up the "speed" branding.
 
 import { getContractStorage, isPlaceholderAddress } from '../services/tzkt'
 import {
@@ -55,12 +58,33 @@ const PHASE_LABELS = {
   3: 'Cancelled',
 }
 
-function pickPair() {
-  // Two distinct deck indices, 0..51.
-  let a = Math.floor(Math.random() * 52)
-  let b = Math.floor(Math.random() * 52)
-  while (b === a) b = Math.floor(Math.random() * 52)
-  return [a, b]
+function pickSix() {
+  // Six distinct deck indices — mirrors what the oracle daemon does
+  // for an on-chain deal (one physical deck, no repeats). Returns
+  // { you: [3 ints], opp: [3 ints] }.
+  const deck = Array.from({ length: 52 }, (_, i) => i)
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[deck[i], deck[j]] = [deck[j], deck[i]]
+  }
+  return { you: deck.slice(0, 3), opp: deck.slice(3, 6) }
+}
+
+// Round-by-round speed-war scoring. Returns { youWins, oppWins,
+// roundOutcomes } where roundOutcomes[r] ∈ {'you','opp','wash'}.
+// Caller picks the verdict via youWins vs oppWins.
+function scoreRounds(youCards, oppCards) {
+  let youWins = 0
+  let oppWins = 0
+  const roundOutcomes = []
+  for (let r = 0; r < 3; r++) {
+    const yr = rankOf(youCards[r])
+    const or = rankOf(oppCards[r])
+    if (yr > or) { youWins++; roundOutcomes.push('you') }
+    else if (or > yr) { oppWins++; roundOutcomes.push('opp') }
+    else { roundOutcomes.push('wash') }
+  }
+  return { youWins, oppWins, roundOutcomes }
 }
 
 export default {
@@ -81,12 +105,23 @@ export default {
       // progress — they see the knight vs orc duel before reading copy.
       view: 'play',
       showRules: false,
-      // ─── Demo / animation state ──────────────────────────────────────
-      demoYouCard: null,
-      demoOppCard: null,
-      youRevealed: false,
-      oppRevealed: false,
+      // ─── Demo / animation state (best-of-3) ──────────────────────────
+      // Three cards per side. demoYouCards[r] / demoOppCards[r] are deck
+      // indices; youRevealed[r] / oppRevealed[r] drive the per-round flip.
+      demoYouCards: [null, null, null],
+      demoOppCards: [null, null, null],
+      youRevealed: [false, false, false],
+      oppRevealed: [false, false, false],
+      // Per-round outcomes ('you' | 'opp' | 'wash' | null) — used for the
+      // running score badges and the per-round result glow.
+      roundOutcomes: [null, null, null],
+      // Running totals after the most recent revealed round.
+      youWins: 0,
+      oppWins: 0,
       demoVerdict: null, // 'win' | 'lose' | 'push'
+      // Animation timers — collected so we can cancel them on unmount
+      // (otherwise a half-finished deal can fire after navigation).
+      demoTimeouts: [],
       // Auto-loop driver: re-deals demo cards on a cadence so the table
       // is never static. Disabled the moment a real game is active.
       demoLoopTimer: null,
@@ -125,19 +160,15 @@ export default {
     feeTez() {
       return (FEE_MUTEZ / 1_000_000).toFixed(2)
     },
-    // For the active real game, which card belongs to me vs opponent.
-    myCard() {
-      if (!this.game) return null
-      const c = Number(this.game.card1)
-      if (this.game.player1 === this.walletAddress) return Number(this.game.card1)
-      if (this.game.player2 === this.walletAddress) return Number(this.game.card2)
-      return c
+    myCards() {
+      if (!this.game) return [null, null, null]
+      const mine = this.game.player1 === this.walletAddress ? this.game.cards1 : this.game.cards2
+      return this.normalizeCardMap(mine)
     },
-    oppCard() {
-      if (!this.game) return null
-      if (this.game.player1 === this.walletAddress) return Number(this.game.card2)
-      if (this.game.player2 === this.walletAddress) return Number(this.game.card1)
-      return Number(this.game.card2)
+    oppCards() {
+      if (!this.game) return [null, null, null]
+      const theirs = this.game.player1 === this.walletAddress ? this.game.cards2 : this.game.cards1
+      return this.normalizeCardMap(theirs)
     },
     // Verdict for the active *real* game, once settled.
     realVerdict() {
@@ -148,23 +179,42 @@ export default {
       if (w === this.walletAddress) return 'win'
       return 'lose'
     },
-    // The pair of cards & reveal flags to render — sourced from contract
-    // when in a real settled game, otherwise from demo state.
-    displayYouCard() {
-      if (this.game && Number(this.game.gameStatus) === 2) return this.myCard
-      return this.demoYouCard
+    settledReal() {
+      return !!this.game && Number(this.game.gameStatus) === 2
     },
-    displayOppCard() {
-      if (this.game && Number(this.game.gameStatus) === 2) return this.oppCard
-      return this.demoOppCard
+    // Per-side card arrays + reveal flags to render — sourced from
+    // contract on a settled real game, otherwise from demo state.
+    displayYouCards() {
+      return this.settledReal ? this.myCards : this.demoYouCards
+    },
+    displayOppCards() {
+      return this.settledReal ? this.oppCards : this.demoOppCards
     },
     displayYouRevealed() {
-      if (this.game && Number(this.game.gameStatus) === 2) return true
+      // Settled real games reveal all three at once (UI hasn't run a
+      // round-by-round flip animation for them — they arrive resolved).
+      if (this.settledReal) return [true, true, true]
       return this.youRevealed
     },
     displayOppRevealed() {
-      if (this.game && Number(this.game.gameStatus) === 2) return true
+      if (this.settledReal) return [true, true, true]
       return this.oppRevealed
+    },
+    // Per-side cumulative round wins — uses contract values once
+    // settled, otherwise reflects the in-flight demo count.
+    displayYouScore() {
+      if (this.settledReal) {
+        const mine = this.game.player1 === this.walletAddress
+        return Number(mine ? this.game.p1Wins : this.game.p2Wins)
+      }
+      return this.youWins
+    },
+    displayOppScore() {
+      if (this.settledReal) {
+        const mine = this.game.player1 === this.walletAddress
+        return Number(mine ? this.game.p2Wins : this.game.p1Wins)
+      }
+      return this.oppWins
     },
     displayVerdict() {
       return this.realVerdict || this.demoVerdict
@@ -259,6 +309,7 @@ export default {
   beforeUnmount() {
     if (this.pollInterval) clearInterval(this.pollInterval)
     this.stopDemoLoop()
+    this.cancelPendingDemo()
   },
   methods: {
     setView(v) {
@@ -280,40 +331,92 @@ export default {
     rankOf(idx) {
       return idx == null || idx < 0 ? 0 : rankOf(idx)
     },
-    // ─── Demo: deal & reveal ────────────────────────────────────────
+    // Coerce a contract cards1/cards2 map (keys may be string '0' or
+    // number 0 depending on the JSON path) into a 3-slot array.
+    normalizeCardMap(map) {
+      const out = [null, null, null]
+      if (!map) return out
+      for (const r of [0, 1, 2]) {
+        const v = map[r] ?? map[String(r)]
+        if (v != null && Number(v) >= 0) out[r] = Number(v)
+      }
+      return out
+    },
+    // ─── Demo: deal & reveal (best-of-3, with 2-0 sweep skip) ───────
     dealDemo() {
-      const [y, o] = pickPair()
-      this.demoYouCard = y
-      this.demoOppCard = o
-      this.youRevealed = false
-      this.oppRevealed = false
+      this.cancelPendingDemo()
+      const { you, opp } = pickSix()
+      this.demoYouCards = you
+      this.demoOppCards = opp
+      this.youRevealed = [false, false, false]
+      this.oppRevealed = [false, false, false]
+      this.roundOutcomes = [null, null, null]
+      this.youWins = 0
+      this.oppWins = 0
       this.demoVerdict = null
       this.knightLean = false
       this.orcLean = false
-      // Beat 1: orc cranes forward & opp card flips.
-      setTimeout(() => { this.orcLean = true; this.oppRevealed = true }, 420)
-      // Beat 2: knight cranes forward & your card flips.
-      setTimeout(() => { this.knightLean = true; this.youRevealed = true }, 1100)
-      // Beat 3: settle verdict.
-      setTimeout(() => {
-        const yr = rankOf(this.demoYouCard)
-        const or = rankOf(this.demoOppCard)
-        if (yr > or) this.demoVerdict = 'win'
-        else if (yr < or) this.demoVerdict = 'lose'
+
+      // Score the full match up front so we know whether to short-circuit.
+      const { youWins, oppWins, roundOutcomes } = scoreRounds(you, opp)
+      // Sweep = whichever side has 2 wins in the first two rounds.
+      const sweepAfterRound2 =
+        (roundOutcomes[0] === 'you' && roundOutcomes[1] === 'you') ||
+        (roundOutcomes[0] === 'opp' && roundOutcomes[1] === 'opp')
+
+      // Beat schedule (ms). One round ≈ 800ms total: ~300ms opp flip,
+      // ~250ms gap, ~250ms knight flip. Sweep ends after round 2.
+      const ROUND_GAP = 850
+      const ORC_FLIP = 320
+      const KNIGHT_FLIP = 560
+      const RESULT = 760
+
+      const sched = (delay, fn) => {
+        this.demoTimeouts.push(setTimeout(fn, delay))
+      }
+
+      const lastRound = sweepAfterRound2 ? 1 : 2
+      for (let r = 0; r <= lastRound; r++) {
+        const base = r * ROUND_GAP
+        sched(base + ORC_FLIP, () => {
+          this.orcLean = true
+          this.oppRevealed = this.oppRevealed.map((v, i) => i === r ? true : v)
+        })
+        sched(base + KNIGHT_FLIP, () => {
+          this.knightLean = true
+          this.youRevealed = this.youRevealed.map((v, i) => i === r ? true : v)
+        })
+        sched(base + RESULT, () => {
+          this.roundOutcomes = this.roundOutcomes.map((v, i) => i === r ? roundOutcomes[r] : v)
+          if (roundOutcomes[r] === 'you') this.youWins += 1
+          else if (roundOutcomes[r] === 'opp') this.oppWins += 1
+          this.knightLean = false
+          this.orcLean = false
+        })
+      }
+
+      // Verdict pass after the final revealed round.
+      const endBeat = (lastRound + 1) * ROUND_GAP
+      sched(endBeat, () => {
+        if (youWins > oppWins) this.demoVerdict = 'win'
+        else if (oppWins > youWins) this.demoVerdict = 'lose'
         else this.demoVerdict = 'push'
-      }, 1800)
-      // Beat 4: characters relax back so the loop's next deal reads as
-      // a fresh round rather than a continuation.
-      setTimeout(() => { this.knightLean = false; this.orcLean = false }, 3600)
+      })
+    },
+    cancelPendingDemo() {
+      for (const t of this.demoTimeouts) clearTimeout(t)
+      this.demoTimeouts = []
     },
     // Auto-redeal so the table is never static. Skips when a real game
-    // is in flight — the on-chain state takes precedence.
+    // is in flight — the on-chain state takes precedence. Sweep games
+    // resolve at ~2.4s, full series at ~3.2s; the 4.5s loop leaves a
+    // breath of dead air between rounds.
     startDemoLoop() {
       this.stopDemoLoop()
       this.demoLoopTimer = setInterval(() => {
         if (this.inRealGame) return
         this.dealDemo()
-      }, 5200)
+      }, 4500)
     },
     stopDemoLoop() {
       if (this.demoLoopTimer) {
@@ -433,12 +536,12 @@ export default {
     <template v-if="view === 'landing'">
       <div class="warHero">
         <div class="warHeroBrand">
-          <div class="warHeroEyebrow">WAR · HIGH-CARD SHOWDOWN</div>
-          <div class="warHeroTitle">One card. One winner. 50/50.</div>
+          <div class="warHeroEyebrow">SPEED WAR · BEST OF 3</div>
+          <div class="warHeroTitle">3 rounds. Higher card wins. 50/50.</div>
           <div class="warHeroSub">
-            Both players ante up. The oracle draws one card per side. Higher
-            rank takes the pot, ties refund. No edge, no decisions —
-            cinematic high-card war, settled on-chain the moment the oracle deals.
+            Both players ante up. The oracle deals six cards in one tx —
+            three each. Each round the higher rank scores; more rounds won
+            takes the pot. 2-0 sweep ends early. Tied series refunds.
           </div>
         </div>
         <div class="warHeroBoard" aria-hidden="true">
@@ -520,7 +623,7 @@ export default {
           <div class="warTable">
             <div class="warRail" aria-hidden="true"></div>
             <div class="warFelt">
-              <div class="warBrand">HIGH-CARD WAR</div>
+              <div class="warBrand">SPEED WAR · BEST OF 3</div>
 
               <!-- Opponent's card (top) — orc avatar leans in alongside -->
               <div class="warSide warSide--opp">
@@ -561,23 +664,32 @@ export default {
                 </div>
                 <div class="warSideLabel">
                   Opponent
-                  <span class="warTotal">{{ displayOppRevealed ? rankOf(displayOppCard) : '?' }}</span>
+                  <span class="warTotal warTotal--score">{{ displayOppScore }}</span>
                 </div>
-                <div class="warCardSlot warCardSlot--big">
-                  <div :class="['warCard', { 'warCard--flipped': displayOppRevealed, 'warCard--winner': displayVerdict === 'lose' && displayOppRevealed }]">
-                    <div class="warCardFace warCardFace--back">
-                      <div class="warBack"><div class="warBackInner"><div class="warBackMark">W</div></div></div>
-                    </div>
-                    <div class="warCardFace warCardFace--front">
-                      <img
-                        v-if="cardFace(displayOppCard)"
-                        :src="cardFace(displayOppCard)"
-                        :alt="cardLabel(displayOppCard)"
-                        class="warCardImg"
-                        draggable="false"
-                      />
-                      <div :class="['warCardCorner', `warCardCorner--${suitColor(displayOppCard)}`]">
-                        {{ cardLabel(displayOppCard) }}
+                <div class="warHand">
+                  <div
+                    v-for="r in 3"
+                    :key="'opp-' + r"
+                    :class="['warCardSlot', 'warCardSlot--round', `warCardSlot--round--${roundOutcomes[r-1] || 'pending'}`]"
+                  >
+                    <div :class="['warCard', {
+                      'warCard--flipped': displayOppRevealed[r-1],
+                      'warCard--winner': displayOppRevealed[r-1] && roundOutcomes[r-1] === 'opp',
+                    }]">
+                      <div class="warCardFace warCardFace--back">
+                        <div class="warBack"><div class="warBackInner"><div class="warBackMark">W</div></div></div>
+                      </div>
+                      <div class="warCardFace warCardFace--front">
+                        <img
+                          v-if="cardFace(displayOppCards[r-1])"
+                          :src="cardFace(displayOppCards[r-1])"
+                          :alt="cardLabel(displayOppCards[r-1])"
+                          class="warCardImg"
+                          draggable="false"
+                        />
+                        <div :class="['warCardCorner', `warCardCorner--${suitColor(displayOppCards[r-1])}`]">
+                          {{ cardLabel(displayOppCards[r-1]) }}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -626,23 +738,32 @@ export default {
                 </div>
                 <div class="warSideLabel">
                   You
-                  <span class="warTotal">{{ displayYouRevealed ? rankOf(displayYouCard) : '?' }}</span>
+                  <span class="warTotal warTotal--score">{{ displayYouScore }}</span>
                 </div>
-                <div class="warCardSlot warCardSlot--big">
-                  <div :class="['warCard', { 'warCard--flipped': displayYouRevealed, 'warCard--winner': displayVerdict === 'win' && displayYouRevealed }]">
-                    <div class="warCardFace warCardFace--back">
-                      <div class="warBack"><div class="warBackInner"><div class="warBackMark">W</div></div></div>
-                    </div>
-                    <div class="warCardFace warCardFace--front">
-                      <img
-                        v-if="cardFace(displayYouCard)"
-                        :src="cardFace(displayYouCard)"
-                        :alt="cardLabel(displayYouCard)"
-                        class="warCardImg"
-                        draggable="false"
-                      />
-                      <div :class="['warCardCorner', `warCardCorner--${suitColor(displayYouCard)}`]">
-                        {{ cardLabel(displayYouCard) }}
+                <div class="warHand">
+                  <div
+                    v-for="r in 3"
+                    :key="'you-' + r"
+                    :class="['warCardSlot', 'warCardSlot--round', `warCardSlot--round--${roundOutcomes[r-1] || 'pending'}`]"
+                  >
+                    <div :class="['warCard', {
+                      'warCard--flipped': displayYouRevealed[r-1],
+                      'warCard--winner': displayYouRevealed[r-1] && roundOutcomes[r-1] === 'you',
+                    }]">
+                      <div class="warCardFace warCardFace--back">
+                        <div class="warBack"><div class="warBackInner"><div class="warBackMark">W</div></div></div>
+                      </div>
+                      <div class="warCardFace warCardFace--front">
+                        <img
+                          v-if="cardFace(displayYouCards[r-1])"
+                          :src="cardFace(displayYouCards[r-1])"
+                          :alt="cardLabel(displayYouCards[r-1])"
+                          class="warCardImg"
+                          draggable="false"
+                        />
+                        <div :class="['warCardCorner', `warCardCorner--${suitColor(displayYouCards[r-1])}`]">
+                          {{ cardLabel(displayYouCards[r-1]) }}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1039,6 +1160,24 @@ export default {
   width: clamp(86px, 18vw, 140px);
   aspect-ratio: 2.5 / 3.5;
   perspective: 1200px;
+}
+/* Three smaller slots side-by-side for the best-of-3 layout. */
+.warHand {
+  display: flex; flex-direction: row;
+  gap: clamp(4px, 1.5vw, 12px);
+}
+.warCardSlot--round {
+  width: clamp(56px, 12vw, 96px);
+  aspect-ratio: 2.5 / 3.5;
+  perspective: 1200px;
+  position: relative;
+  transition: filter 0.4s ease;
+}
+.warCardSlot--round--you  .warCard { filter: drop-shadow(0 0 8px rgba(245, 196, 81, 0.65)); }
+.warCardSlot--round--opp  .warCard { filter: drop-shadow(0 0 8px rgba(196, 82, 79, 0.55)); }
+.warCardSlot--round--wash .warCard { filter: grayscale(0.45) drop-shadow(0 0 5px rgba(212, 162, 78, 0.35)); }
+.warTotal--score {
+  font-size: 18px; padding: 1px 10px;
 }
 
 /* ─── Characters (knight & orc) ─────────────────────────────────────── */

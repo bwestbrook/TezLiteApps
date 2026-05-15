@@ -255,9 +255,44 @@ export default {
       // potBalance is a formatted string ("0.500"); coerce. Floor at
       // betMinTez so a freshly-deployed contract with a tiny pot still
       // lets you place the minimum bet.
+      //
+      // Two ceilings, take the lower:
+      //   1. UX cap — flat 30% of pot, the same conservative
+      //      bankroll guard we've always shown.
+      //   2. Contract cap — once both anchors are dealt the spread
+      //      is known. The contract rejects any bet whose worst-case
+      //      payout (bet × 12.35 / spread) would exceed pot+bet at
+      //      lastCard. Solving: bet ≤ pot × spread × 100 / (1235 −
+      //      spread × 100). Tight spreads dominate (spread=1 caps at
+      //      ~8.8% of pot); spread ≥ 7 the contract permits more
+      //      than the UX cap so the 30% rule wins.
       const pot = Number(this.potBalance) || 0
-      const cap = pot * 0.3
+      let cap = pot * 0.3
+      if (this.spread != null && this.spread > 0) {
+        const denom = 1235 - this.spread * 100
+        if (denom > 0) {
+          // shave 0.001 ꜩ as an integer-rounding margin so a slider
+          // that lands at the boundary doesn't get rejected by the
+          // contract's mutez-precision split_tokens math.
+          const contractCap = (pot * this.spread * 100) / denom - 0.001
+          if (contractCap < cap) cap = contractCap
+        }
+      }
       return Math.max(this.betMinTez, Number(cap.toFixed(3)))
+    },
+    // One-line label explaining what's currently binding the slider —
+    // the flat 30% bankroll guard, or the spread-aware contract guard
+    // (which bites only on tight spreads, ~spread ≤ 3).
+    betCapReason() {
+      const pot = Number(this.potBalance) || 0
+      if (this.spread != null && this.spread > 0) {
+        const denom = 1235 - this.spread * 100
+        if (denom > 0) {
+          const contractCap = (pot * this.spread * 100) / denom - 0.001
+          if (contractCap < pot * 0.3) return `spread ${this.spread} cap`
+        }
+      }
+      return '30% of pot'
     },
     betStepTez() {
       // 100,000 mutez (0.1 ꜩ) increments — matches the contract's
@@ -343,6 +378,15 @@ export default {
     winProbability() {
       if (this.spread == null) return 0
       return this.spread / 13
+    },
+  },
+  watch: {
+    // Whenever the slider's ceiling drops (typically when both anchor
+    // cards land and the spread-aware cap kicks in tighter than 30%),
+    // pull thisBet down with it so the slider thumb and v-model value
+    // can never exceed the contract's accepting bet.
+    betMaxTez(newMax) {
+      if (Number(this.thisBet) > newMax) this.thisBet = newMax
     },
   },
   methods: {
@@ -961,7 +1005,7 @@ export default {
         </span>
         <span class="adBetSliderMax">
           max {{ betMaxTez }} {{ tezosSymbol }}
-          <span class="adBetSliderMaxHint">(30% of pot)</span>
+          <span class="adBetSliderMaxHint">({{ betCapReason }})</span>
         </span>
       </div>
       <input

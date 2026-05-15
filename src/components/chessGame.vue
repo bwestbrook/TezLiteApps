@@ -373,6 +373,17 @@ export default {
     if (BLOCKCHAIN_ENABLED) {
       this.pollInterval = setInterval(() => this.refresh(), 8000)
     }
+    // Show the Scholar's Mate showcase on first mount. We use $nextTick
+    // so the DOM has painted the opening position for at least a frame
+    // before the source-square flash begins — otherwise the animation
+    // can start on a board that hasn't visually settled. refresh() is
+    // async but the inRealGame guard inside startScholarMate() bails
+    // cleanly if it resolves us into a contract-backed game.
+    this.$nextTick(() => {
+      if (!this.inRealGame && this.demoHistory.length === 0) {
+        this.startScholarMate()
+      }
+    })
   },
   beforeUnmount() {
     if (this.pollInterval) clearInterval(this.pollInterval)
@@ -709,6 +720,9 @@ export default {
     // We use chained setTimeouts (rather than setInterval) so each cycle
     // can self-cancel cleanly if the user interrupts.
     startScholarMate() {
+      // A real game outranks the showcase — don't mutate demo state when
+      // a contract-backed game is loaded.
+      if (this.inRealGame) return
       this.stopScholarMate()
       // Wipe to opening but DON'T call resetDemo — it calls stopScholarMate
       // back into us; safe but noisy. Inline the reset instead.
@@ -727,6 +741,10 @@ export default {
     },
     playScholarMove(idx) {
       if (!this.demoAutoplayActive) return
+      // refresh() can flip inRealGame asynchronously while the animation
+      // is in flight. Abort cleanly rather than scribbling on the demo
+      // board while the user is staring at a real game.
+      if (this.inRealGame) { this.stopScholarMate(); return }
       if (idx >= SCHOLARS_MATE.length) {
         // Sequence done. Final hold, then reveal the checkmate banner.
         this.demoAutoplayTimer = setTimeout(() => {
@@ -765,7 +783,7 @@ export default {
   <div class="gameManagement chRoot">
     <!-- ───── Landing view ────────────────────────────────────────────── -->
     <template v-if="view === 'landing'">
-      <div class="chHero">
+      <div class="chHero chHero--solo">
         <div class="chHeroBrand">
           <div class="chHeroEyebrow">CHESS · H2H · WAGERED · ON-CHAIN</div>
           <div class="chHeroTitle">Standard chess. Stake set per match. House takes a small cut.</div>
@@ -777,27 +795,144 @@ export default {
             the rest. Drawn games refund both sides minus the cut.
           </div>
         </div>
-        <div class="chHeroBoard" aria-hidden="true">
-          <svg viewBox="0 0 120 120" class="chHeroSvg">
-            <rect x="2" y="2" width="116" height="116" rx="6" fill="#3e2914"/>
-            <g>
-              <g v-for="(_, r) in 8" :key="'rr-' + r">
-                <rect
-                  v-for="(__, c) in 8"
-                  :key="'rc-' + r + '-' + c"
-                  :x="10 + c * 12.5"
-                  :y="10 + r * 12.5"
-                  width="12.5" height="12.5"
-                  :fill="(r + c) % 2 === 0 ? '#d8bf94' : '#7a5436'"
-                />
-              </g>
-            </g>
-            <text x="22" y="105" font-family="serif" font-size="12" fill="#fff" text-anchor="middle">♙</text>
-            <text x="97" y="22" font-family="serif" font-size="12" fill="#1a1a1a" text-anchor="middle">♛</text>
-          </svg>
+      </div>
+    </template>
+
+    <!-- ─── SHARED: Scholar's Mate banner + animated 3D table + demo panel
+         Always rendered (lives outside both view branches). The animation
+         auto-starts in created() and writes to demoBoard, so landing
+         visitors see the showcase before ever clicking 'Open board'.
+         The 'view === landing' template above closes here; the v-else
+         play branch below resumes from where this section ends. -->
+      <div v-if="!inRealGame && demoAutoplayActive" class="chScholarBar">
+        <span class="chScholarPlay" aria-hidden="true">▶</span>
+        <span class="chScholarLabel">Scholar's Mate · 4-move checkmate</span>
+        <span class="chScholarProgress">{{ Math.min(demoAutoplayIdx + 1, scholarTotalPly) }} / {{ scholarTotalPly }}</span>
+        <button class="demoBtn" @click="stopScholarMate">Stop</button>
+      </div>
+      <div v-else-if="!inRealGame && demoCheckmate" class="chMateBanner">
+        <div class="chMateIcon" aria-hidden="true">♛</div>
+        <div class="chMateLines">
+          <div class="chMateTop">CHECKMATE</div>
+          <div class="chMateSub">Scholar's Mate · Qxf7#</div>
+        </div>
+        <button class="demoBtn demoBtn--primary" @click="startScholarMate">Replay</button>
+        <button class="demoBtn" @click="resetDemo">Free play</button>
+        <button class="chMateDismiss" @click="demoCheckmate = false" aria-label="Dismiss">×</button>
+      </div>
+
+      <div class="chScene">
+        <div class="chTable">
+          <div class="chTableRail" aria-hidden="true"></div>
+          <div class="chCloth">
+            <div class="chTableBrand">CHESS · CLUB ROOM</div>
+            <div class="chBoard">
+              <div class="chFileRow">
+                <div class="chLabelCorner"></div>
+                <div v-for="f in FILES" :key="'top-' + f" class="chFileLabel">{{ f }}</div>
+                <div class="chLabelCorner"></div>
+              </div>
+              <div v-for="(row, r) in boardRanks" :key="r" class="chBoardRow">
+                <div class="chRankLabel">{{ 8 - r }}</div>
+                <div
+                  v-for="cell in row"
+                  :key="cell.idx"
+                  :class="[
+                    'chCell',
+                    cell.isLight ? 'chCell--light' : 'chCell--dark',
+                    selectedSq === cell.idx ? 'chCell--selected' : '',
+                    lastMove && (lastMove.from === cell.idx || lastMove.to === cell.idx) ? 'chCell--lastMove' : '',
+                    legalDests.has(cell.idx) && cell.piece === 0 ? 'chCell--legal' : '',
+                    legalDests.has(cell.idx) && cell.piece !== 0 ? 'chCell--legalCapture' : '',
+                    (myTurn && (cell.piece !== 0 || selectedSq != null)) ? 'chCell--tappable' : '',
+                  ]"
+                  @click="clickSq(cell)"
+                >
+                  <span
+                    v-if="cell.piece"
+                    :class="['chPiece', cell.isWhitePiece ? 'chPiece--white' : 'chPiece--black']"
+                  >{{ cell.glyph }}</span>
+                </div>
+                <div class="chRankLabel">{{ 8 - r }}</div>
+              </div>
+              <div class="chFileRow">
+                <div class="chLabelCorner"></div>
+                <div v-for="f in FILES" :key="'bot-' + f" class="chFileLabel">{{ f }}</div>
+                <div class="chLabelCorner"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
+      <div v-if="!inRealGame" class="chDemoPanel">
+        <div class="chDemoBar">
+          <div class="chDemoTurn">
+            <span class="chDemoTurnDot" :class="demoTurn === 1 ? 'chDot--white' : 'chDot--black'"></span>
+            <span class="chDemoTurnLabel">{{ demoTurnLabel }}</span>
+          </div>
+          <div class="chDemoMeta">
+            <span class="chDemoMetaLabel">Moves</span>
+            <span class="chDemoMetaValue">{{ demoHistory.length }}</span>
+          </div>
+        </div>
+
+        <div class="chCapStrip">
+          <div class="chCapSide">
+            <div class="chCapLbl">White captured</div>
+            <div class="chCapRow">
+              <span
+                v-for="(g, i) in demoCapturedWhite"
+                :key="'wc' + i"
+                class="chCapGlyph chCapGlyph--black"
+              >{{ g }}</span>
+              <span v-if="!demoCapturedWhite.length" class="chCapEmpty">—</span>
+            </div>
+          </div>
+          <div class="chCapSide">
+            <div class="chCapLbl">Black captured</div>
+            <div class="chCapRow">
+              <span
+                v-for="(g, i) in demoCapturedBlack"
+                :key="'bc' + i"
+                class="chCapGlyph chCapGlyph--white"
+              >{{ g }}</span>
+              <span v-if="!demoCapturedBlack.length" class="chCapEmpty">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="demoMovesPaired.length" class="chMoveList">
+          <div class="chMoveListHdr">Move history</div>
+          <div class="chMoveListScroll">
+            <div class="chMoveListRow chMoveListRow--head">
+              <span class="chMoveN">#</span>
+              <span class="chMoveCol">White</span>
+              <span class="chMoveCol">Black</span>
+            </div>
+            <div
+              v-for="p in demoMovesPaired"
+              :key="'mv' + p.n"
+              class="chMoveListRow"
+            >
+              <span class="chMoveN">{{ p.n }}.</span>
+              <span class="chMoveCol">{{ p.white }}</span>
+              <span class="chMoveCol">{{ p.black }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="chDemoHint">
+          <span class="demoHintDot"></span>
+          <span class="demoHintLabel">DEMO</span>
+          <span class="demoHintBody">Tap your piece, then a highlighted square. Legal moves only.</span>
+          <button class="demoBtn" :disabled="!demoHistory.length || demoAutoplayActive" @click="undoDemo">Undo</button>
+          <button class="demoBtn" @click="resetDemo">Reset board</button>
+          <button class="demoBtn" @click="startScholarMate">▶ Scholar's Mate</button>
+        </div>
+      </div>
+
+    <template v-if="view === 'landing'">
       <div class="chStatusRow">
         <div :class="['chPill', phaseTone]">
           <div class="chPillLabel">Phase</div>
@@ -953,145 +1088,9 @@ export default {
 
       <div v-if="statusBanner" class="chFinalBanner">{{ statusBanner }}</div>
 
-      <!-- ─── Scholar's Mate showcase banner ────────────────────────────
-           Three states, shown only in demo mode:
-             • during animation → progress + Stop
-             • on checkmate     → CHECKMATE + Replay / Free play
-             • idle pre-play    → handled in demo-hint row instead -->
-      <div v-if="!inRealGame && demoAutoplayActive" class="chScholarBar">
-        <span class="chScholarPlay" aria-hidden="true">▶</span>
-        <span class="chScholarLabel">Scholar's Mate · 4-move checkmate</span>
-        <span class="chScholarProgress">{{ Math.min(demoAutoplayIdx + 1, scholarTotalPly) }} / {{ scholarTotalPly }}</span>
-        <button class="demoBtn" @click="stopScholarMate">Stop</button>
-      </div>
-      <div v-else-if="!inRealGame && demoCheckmate" class="chMateBanner">
-        <div class="chMateIcon" aria-hidden="true">♛</div>
-        <div class="chMateLines">
-          <div class="chMateTop">CHECKMATE</div>
-          <div class="chMateSub">Scholar's Mate · Qxf7#</div>
-        </div>
-        <button class="demoBtn demoBtn--primary" @click="startScholarMate">Replay</button>
-        <button class="demoBtn" @click="resetDemo">Free play</button>
-        <button class="chMateDismiss" @click="demoCheckmate = false" aria-label="Dismiss">×</button>
-      </div>
-
-      <!-- ─── Tilted 3D table: scene → table → rail → cloth → board ───────
-           Mirrors the AD adTableWrap pattern so the chess board sits on a
-           burgundy felt tablecloth inside a tilted wooden table, with an
-           overhead spotlight and ambient room behind it. -->
-      <div class="chScene">
-        <div class="chTable">
-          <div class="chTableRail" aria-hidden="true"></div>
-          <div class="chCloth">
-            <div class="chTableBrand">CHESS · CLUB ROOM</div>
-            <div class="chBoard">
-              <div class="chFileRow">
-                <div class="chLabelCorner"></div>
-                <div v-for="f in FILES" :key="'top-' + f" class="chFileLabel">{{ f }}</div>
-                <div class="chLabelCorner"></div>
-              </div>
-              <div v-for="(row, r) in boardRanks" :key="r" class="chBoardRow">
-                <div class="chRankLabel">{{ 8 - r }}</div>
-                <div
-                  v-for="cell in row"
-                  :key="cell.idx"
-                  :class="[
-                    'chCell',
-                    cell.isLight ? 'chCell--light' : 'chCell--dark',
-                    selectedSq === cell.idx ? 'chCell--selected' : '',
-                    lastMove && (lastMove.from === cell.idx || lastMove.to === cell.idx) ? 'chCell--lastMove' : '',
-                    legalDests.has(cell.idx) && cell.piece === 0 ? 'chCell--legal' : '',
-                    legalDests.has(cell.idx) && cell.piece !== 0 ? 'chCell--legalCapture' : '',
-                    (myTurn && (cell.piece !== 0 || selectedSq != null)) ? 'chCell--tappable' : '',
-                  ]"
-                  @click="clickSq(cell)"
-                >
-                  <span
-                    v-if="cell.piece"
-                    :class="['chPiece', cell.isWhitePiece ? 'chPiece--white' : 'chPiece--black']"
-                  >{{ cell.glyph }}</span>
-                </div>
-                <div class="chRankLabel">{{ 8 - r }}</div>
-              </div>
-              <div class="chFileRow">
-                <div class="chLabelCorner"></div>
-                <div v-for="f in FILES" :key="'bot-' + f" class="chFileLabel">{{ f }}</div>
-                <div class="chLabelCorner"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ─── Demo: turn indicator + captures + move history ─────────────
-           Only visible while no real (contract-backed) game is loaded.
-           Powers the practice/learn flow before a wallet ever signs. -->
-      <div v-if="!inRealGame" class="chDemoPanel">
-        <div class="chDemoBar">
-          <div class="chDemoTurn">
-            <span class="chDemoTurnDot" :class="demoTurn === 1 ? 'chDot--white' : 'chDot--black'"></span>
-            <span class="chDemoTurnLabel">{{ demoTurnLabel }}</span>
-          </div>
-          <div class="chDemoMeta">
-            <span class="chDemoMetaLabel">Moves</span>
-            <span class="chDemoMetaValue">{{ demoHistory.length }}</span>
-          </div>
-        </div>
-
-        <div class="chCapStrip">
-          <div class="chCapSide">
-            <div class="chCapLbl">White captured</div>
-            <div class="chCapRow">
-              <span
-                v-for="(g, i) in demoCapturedWhite"
-                :key="'wc' + i"
-                class="chCapGlyph chCapGlyph--black"
-              >{{ g }}</span>
-              <span v-if="!demoCapturedWhite.length" class="chCapEmpty">—</span>
-            </div>
-          </div>
-          <div class="chCapSide">
-            <div class="chCapLbl">Black captured</div>
-            <div class="chCapRow">
-              <span
-                v-for="(g, i) in demoCapturedBlack"
-                :key="'bc' + i"
-                class="chCapGlyph chCapGlyph--white"
-              >{{ g }}</span>
-              <span v-if="!demoCapturedBlack.length" class="chCapEmpty">—</span>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="demoMovesPaired.length" class="chMoveList">
-          <div class="chMoveListHdr">Move history</div>
-          <div class="chMoveListScroll">
-            <div class="chMoveListRow chMoveListRow--head">
-              <span class="chMoveN">#</span>
-              <span class="chMoveCol">White</span>
-              <span class="chMoveCol">Black</span>
-            </div>
-            <div
-              v-for="p in demoMovesPaired"
-              :key="'mv' + p.n"
-              class="chMoveListRow"
-            >
-              <span class="chMoveN">{{ p.n }}.</span>
-              <span class="chMoveCol">{{ p.white }}</span>
-              <span class="chMoveCol">{{ p.black }}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="chDemoHint">
-          <span class="demoHintDot"></span>
-          <span class="demoHintLabel">DEMO</span>
-          <span class="demoHintBody">Tap your piece, then a highlighted square. Legal moves only.</span>
-          <button class="demoBtn" :disabled="!demoHistory.length || demoAutoplayActive" @click="undoDemo">Undo</button>
-          <button class="demoBtn" @click="resetDemo">Reset board</button>
-          <button class="demoBtn" @click="startScholarMate">▶ Scholar's Mate</button>
-        </div>
-      </div>
+      <!-- Scholar's Mate banner, 3D table, and demo panel now live in the
+           shared section above this v-else block, so they render on both
+           the lobby/landing AND the play views. -->
 
       <div v-if="inRealGame" class="chPlayActions">
         <div class="chPlayActionsRow">
@@ -1142,6 +1141,20 @@ export default {
 .chHeroBrand { flex: 1.4; min-width: 0; }
 .chHeroBoard { flex: 1; display: flex; align-items: center; justify-content: center; }
 .chHeroSvg { width: 100%; max-width: 180px; }
+
+/* Solo hero — used when the brand is the only thing in the hero
+   (because the animated 3D board now sits below the hero, not beside
+   it). Center the brand text so it doesn't look orphaned in a wide
+   flex row with nothing on the right. */
+.chHero--solo {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.chHero--solo .chHeroBrand {
+  flex: 0 1 auto;
+  max-width: 720px;
+}
 .chHeroEyebrow { font-size: 10px; letter-spacing: 4px; font-weight: 700; color: rgba(245,196,81,0.75); margin-bottom: 6px; }
 .chHeroTitle { font-size: clamp(20px, 4.5vw, 30px); line-height: 1.1; font-weight: 700; color: #fff; margin-bottom: 8px; }
 .chHeroSub { font-size: 13px; line-height: 1.4; color: rgba(255, 255, 255, 0.78); }

@@ -283,13 +283,13 @@ export const REVERSI_GAME_INFO = [
 ]
 
 export const WAR_GAME_INFO = [
-  'Pure-luck H2H — both players have exactly the same odds.',
+  'Speed War: best-of-3 high-card showdown. Whole match settles in one oracle call.',
   'Player A creates a game with a wager (0.1 – 5 ꜩ). Player B matches it to start.',
-  'The oracle draws one card per side. Higher rank wins the pot.',
+  'The oracle deals 6 distinct cards — three per side — in one transaction.',
+  'Each round: higher rank wins that round. Whoever wins more rounds takes the pot.',
   'Rank order: A=14, K=13, Q=12, J=11, 2–10 face value. Suits are decorative.',
-  'Settles inline — winner is paid the moment the oracle calls deal(). No claim step.',
-  'Tie → both players are refunded their wager.',
-  'Each side pays a flat 0.1 ꜩ holder fee on top of their wager. Creator can cancel an open game to refund.',
+  'Series tied (e.g. 1–1 with a wash) → both players refunded their wager.',
+  'Settles inline — no claim step. Flat 0.1 ꜩ holder fee per side; creator can cancel an open game.',
 ]
 
 // XC-2 — `default()` semantics: the Plinko contract's default
