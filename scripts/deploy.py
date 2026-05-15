@@ -303,15 +303,26 @@ def find_artifacts(out_dir: Path) -> tuple[Path, Path]:
             f"  or  {out_dir / 'storage.json'}  (raw Micheline JSON)"
         )
 
-    # Separate .tz files into code vs storage.
+    # Separate .tz files into code vs storage. SmartPy's compiler emits
+    # a flock of `step_NNN_..._params.tz` files (sample call data for
+    # each test-scenario step) alongside the actual `*_contract.tz` —
+    # we explicitly prefer the contract artifact, then fall back to the
+    # generic "everything else" pool only if no `*_contract.tz` exists
+    # (e.g. canonical hand-written `code.tz`).
     storage_tz_files = [
         p for p in all_tz
         if p.name.endswith("_storage.tz") or p.name == "storage.tz"
     ]
-    code_files = [
-        p for p in all_tz
-        if p not in storage_tz_files and "_metadata" not in p.name
-    ]
+    contract_files = [p for p in all_tz if p.name.endswith("_contract.tz")]
+    if contract_files:
+        code_files = contract_files
+    else:
+        code_files = [
+            p for p in all_tz
+            if p not in storage_tz_files
+            and "_metadata" not in p.name
+            and "_params" not in p.name
+        ]
 
     if not code_files:
         die(

@@ -63,7 +63,15 @@ export default {
       // twice — feels like a real deal instead of a perfectly aligned
       // grid. Indexed [low(card1), high(card2), target(card3)].
       dealAngles: [0, 0, 0],
-      verdict: null, // 'win' | 'pair' | 'loss' | null — sets table glow
+      verdict: null, // 'win' | 'pair' | 'loss' | 'rail' | null — sets table glow
+      // ─── Demo loop (idle landing animation) ─────────────────────────
+      // When the user lands on AD with no active game, we cycle through
+      // three pre-scripted deals so the table never reads as "empty".
+      // Each scenario ends with a different outcome — WIN, LOSS, RAIL.
+      // Stops the moment the user antes up or selects a real game.
+      demoActive: false,
+      demoStep: 0,
+      demoTimers: [],
       // Cache of the deck so the template can resolve face images by index.
       deck: [],
       // ─── Polling indicator state ───────────────────────────────────
@@ -167,6 +175,11 @@ export default {
         this.monitorContract()
       }, 6000)
     }
+
+    // Start the idle demo loop after the initial chain check has had a
+    // moment to settle. If a game is already in progress, startDemo
+    // bails out — the player picks up where they left off instead.
+    setTimeout(() => this.startDemo(), 1200)
   },
   beforeUnmount() {
     if (this.pollInterval) {
@@ -177,6 +190,7 @@ export default {
       clearInterval(this.pollCountdownInterval)
       this.pollCountdownInterval = null
     }
+    this.stopDemo()
   },
   computed: {
     // Active game record (from myGames map keyed by UI gameId).
@@ -409,6 +423,83 @@ export default {
       this.dealAngles = [0, 0, 0]
       this.verdict = null
     },
+    // ─── Demo loop ──────────────────────────────────────────────────
+    // Three pre-scripted scenarios using deck indices (rank = idx/4 + 2,
+    // suit = idx % 4). Each ends differently so the player sees the
+    // game's full outcome space before they wager a coin.
+    demoScenarios() {
+      return [
+        // WIN: 5♠, J♥ anchors → 8♦ lands inside → win
+        { low: 15, high: 38, target: 25, verdict: 'win' },
+        // LOSS: 4♣, 9♥ anchors → 2♦ falls below the low card
+        { low: 8,  high: 30, target: 1,  verdict: 'loss' },
+        // RAIL: 6♣, K♠ anchors → K♥ matches the high anchor exactly
+        { low: 16, high: 47, target: 46, verdict: 'rail' },
+      ]
+    },
+    startDemo() {
+      // Don't paint over a real game in any state, including in-flight bets.
+      if (this.activeGame || this.dealing || this.demoActive || !this.loadGame) return
+      this.demoActive = true
+      this.demoStep = 0
+      this.runDemoStep()
+    },
+    stopDemo() {
+      if (!this.demoActive && !this.demoTimers.length) return
+      this.demoActive = false
+      this.demoTimers.forEach((id) => clearTimeout(id))
+      this.demoTimers = []
+      // Wipe the table — the cards animate off, ready for real play.
+      this.firstCard = -1
+      this.secondCard = -1
+      this.lastCard = 0
+      this.verdict = null
+      this.flipped = [false, false, false]
+      this.dealAngles = [0, 0, 0]
+    },
+    runDemoStep() {
+      if (!this.demoActive) return
+      const scenarios = this.demoScenarios()
+      const s = scenarios[this.demoStep % scenarios.length]
+      const tilt = () => Number(((Math.random() - 0.5) * 18).toFixed(2))
+      const after = (ms, fn) => {
+        this.demoTimers.push(setTimeout(() => {
+          if (this.demoActive) fn()
+        }, ms))
+      }
+
+      // T0: clear the table — cards fly off if any were showing.
+      this.firstCard = -1
+      this.secondCard = -1
+      this.lastCard = 0
+      this.verdict = null
+      this.flipped = [false, false, false]
+      this.dealAngles = [0, 0, 0]
+
+      // 0.55s deal first, 0.55s gap to second, 1.3s to the reveal third
+      // — paced so each card lands clearly before the next is tossed.
+      after(550, () => {
+        this.firstCard = s.low
+        this.dealAngles = [tilt(), this.dealAngles[1], this.dealAngles[2]]
+        this.flipped = [true, this.flipped[1], this.flipped[2]]
+      })
+      after(1100, () => {
+        this.secondCard = s.high
+        this.dealAngles = [this.dealAngles[0], tilt(), this.dealAngles[2]]
+        this.flipped = [this.flipped[0], true, this.flipped[2]]
+      })
+      after(2400, () => {
+        this.lastCard = s.target
+        this.dealAngles = [this.dealAngles[0], this.dealAngles[1], tilt()]
+        this.flipped = [this.flipped[0], this.flipped[1], true]
+        this.verdict = s.verdict
+      })
+      // Hold the verdict for ~3.4s, then advance.
+      after(5800, () => {
+        this.demoStep++
+        this.runDemoStep()
+      })
+    },
     // Kept for the socket handler. CSS handles real sizing, so this just
     // exists so the listener resolves without throwing.
     resizeGameRender(_width) {
@@ -416,6 +507,9 @@ export default {
     },
     // ─── Contract interaction ────────────────────────────────────────
     async startGameBC() {
+      // First user action — kill the idle demo so its timers don't
+      // overwrite real game state mid-bet.
+      this.stopDemo()
       // Defensive: every bail path updates blockChainStatus so the user
       // never sees a button click produce zero feedback.
       if (!this.wallet) {
@@ -479,6 +573,7 @@ export default {
       }
     },
     async continueBetBC() {
+      this.stopDemo()
       if (!this.wallet) {
         this.blockChainStatus = 'Wallet not initialised — refresh the page.'
         return
@@ -723,12 +818,28 @@ export default {
         gameStatus = `Game ${this.gameId} — YOU WIN`
         this.verdict = 'win'
       } else if (status === '4') {
-        // Contract sets 4 when cardValue is outside (lowCard, highCard).
-        gameStatus = `Game ${this.gameId} — LOSS (third card hit the rail)`
-        this.verdict = 'loss'
+        // Contract sets 4 for any non-win outcome of the third card —
+        // both rail hits (third card == anchor) and generic outside-the-
+        // range losses. Derive which from the actual ranks so the UI
+        // labels them correctly: rail-hit ribbon for an exact anchor
+        // match, plain LOSS otherwise.
+        const r3 = rankOf(this.lastCard)
+        const r1 = rankOf(this.firstCard)
+        const r2 = rankOf(this.secondCard)
+        const isRail = r3 != null && (r3 === r1 || r3 === r2)
+        if (isRail) {
+          gameStatus = `Game ${this.gameId} — RAIL HIT (third card matched an anchor)`
+          this.verdict = 'rail'
+        } else {
+          gameStatus = `Game ${this.gameId} — LOSS (third card outside the range)`
+          this.verdict = 'loss'
+        }
       } else if (status === '5') {
-        // Contract sets 5 when cards 1+2 match — half ante is refunded.
-        gameStatus = `Game ${this.gameId} — PAIR DRAW (half ante refunded)`
+        // Contract sets 5 when cards 1+2 match (pair). Ante is full
+        // forfeit to the pot — no refund — per the contract's
+        // secondCard logic ("# Pair: full forfeit. Ante stays in the
+        // pot — no refund to the player, no fee skim.").
+        gameStatus = `Game ${this.gameId} — PAIR DRAWN (ante forfeit to the pot)`
         this.verdict = 'pair'
       } else {
         gameStatus = `Game ${this.gameId} — status ${status}`
@@ -768,6 +879,7 @@ export default {
     },
     // ─── Render Interface ────────────────────────────────────────────────
     async setGameId(gameId) {
+      this.stopDemo()
       this.gameId = gameId
       this.loadGameInfo()
     },
@@ -823,7 +935,7 @@ export default {
     <!-- True-odds payout preview — visible once both anchor cards are out
          (spread > 0) so the player can see what they'd win before
          clicking continueBet. Replaces the old fixed-2× payout assumption. -->
-    <div v-if="spread > 0" class="adOddsPanel">
+    <div v-if="spread > 0 && !demoActive" class="adOddsPanel">
       <div class="adOddsRow">
         <span class="adOddsLabel">Spread</span>
         <span class="adOddsValue">{{ spread }} rank{{ spread === 1 ? '' : 's' }}</span>
@@ -996,8 +1108,13 @@ export default {
           </div>
 
           <div v-if="verdict === 'win'" class="adVerdict adVerdict--win">YOU WIN</div>
-          <div v-else-if="verdict === 'pair'" class="adVerdict adVerdict--pair">PAIR · HALF BACK</div>
-          <div v-else-if="verdict === 'loss'" class="adVerdict adVerdict--loss">RAILED</div>
+          <div v-else-if="verdict === 'pair'" class="adVerdict adVerdict--pair">PAIR · ANTE LOST</div>
+          <div v-else-if="verdict === 'rail'" class="adVerdict adVerdict--rail">RAIL HIT</div>
+          <div v-else-if="verdict === 'loss'" class="adVerdict adVerdict--loss">LOST</div>
+
+          <!-- Demo badge — only shown while the idle landing loop runs.
+               Disappears the moment the player antes up. -->
+          <div v-if="demoActive" class="adDemoBadge">DEMO</div>
         </div>
       </div>
     </div>
@@ -1230,21 +1347,28 @@ export default {
   position: relative;
   transform-style: preserve-3d;
 }
-/* The "spot" on the felt — a dashed white outline showing where each
-   card will land. Always visible underneath; the dealt card slides in
-   on top of it. */
+/* The "spot" on the felt — a soft gold halo showing where each card
+   will land. Sits OUTSIDE the card footprint (inset: -8px, behind
+   the card via z-index: -1) so there is nothing under the rotating
+   card to peek through during the spin. This is exactly the geometry
+   the target slot already used; we apply it to every slot so cards 1
+   and 2 animate identically to card 3 (no blink). */
 .adCardSlot::before {
   content: '';
   position: absolute;
-  inset: 0;
-  border-radius: 9px;
-  border: 1.5px dashed rgba(255, 255, 255, 0.32);
-  background: rgba(255, 255, 255, 0.025);
-  box-shadow:
-    inset 0 0 10px rgba(0, 0, 0, 0.35),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(245, 196, 81, 0.18) 0%,
+    transparent 70%
+  );
   pointer-events: none;
+  z-index: -1;
+  opacity: 1;
+  transition: opacity 0.25s ease;
 }
+.adCardSlot:has(.adCard--flipped)::before { opacity: 0.55; }
 /* Soft contact shadow under each card — sells the "cards sitting on
    felt" feel by grounding them on the green surface. Hidden until the
    card has actually landed (the parent slot's adCard--flipped class). */
@@ -1265,21 +1389,11 @@ export default {
 }
 .adCardSlot:has(.adCard--flipped)::after { opacity: 1; }
 .adCardSlot--target {
-  /* The middle card — slightly raised + spotlit so the moment of reveal
-     reads as the moment of reveal. */
+  /* The middle card — slightly raised + spotlit so the moment of
+     reveal reads as the moment of reveal. The halo (::before) is now
+     defined uniformly on .adCardSlot, so we only override the slot
+     transform here. */
   transform: translateY(-4px) translateZ(6px);
-}
-.adCardSlot--target::before {
-  content: '';
-  position: absolute;
-  inset: -8px;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(245, 196, 81, 0.18) 0%,
-    transparent 70%
-  );
-  border-radius: 50%;
-  z-index: -1;
 }
 .adSlotLabel {
   position: absolute;
@@ -1302,49 +1416,50 @@ export default {
   position: absolute;
   inset: 0;
   transform-style: preserve-3d;
+  /* Pre-deal: just above and to the right of the slot, rotated ~80°
+     around the depth axis (Z), invisible. We DON'T use rotateY for the
+     reveal — composed with the table's rotateX(26°) tilt, the rotateY
+     180° flip puts both card faces edge-on at intermediate angles
+     (backface-visibility hides them simultaneously), so the card looks
+     like half of it disappears mid-flip. Z-axis rotation keeps the card
+     in its own plane the entire time, so it's continuously visible —
+     reads as "tossed face-up onto the table" instead of a card-magic
+     reveal. */
   transform:
-    translate3d(280%, -220%, 90px)
-    rotate(-28deg);
+    translate3d(60%, -60%, 30px)
+    rotate(-80deg);
   opacity: 0;
+  /* Opacity ramp matches the transform duration so the card doesn't
+     hit full-opacity while still mid-rotation (otherwise the rotated
+     fully-visible card briefly exposes the slot outline at its corners,
+     reading as a flash). */
   transition:
-    transform 0.85s cubic-bezier(0.22, 0.78, 0.32, 1.08),
-    opacity 0.30s ease;
+    transform 0.7s cubic-bezier(0.22, 0.78, 0.32, 1.08),
+    opacity 0.55s ease-out 0.05s;
   will-change: transform;
 }
 .adCard--flipped {
   transform:
     translate3d(0, 0, 0)
-    rotate(var(--ad-card-tilt, 0deg))
-    rotateY(180deg);
+    rotate(var(--ad-card-tilt, 0deg));
   opacity: 1;
 }
 .adCardFace {
   position: absolute;
   inset: 0;
   border-radius: 8px;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
   overflow: hidden;
   box-shadow:
     0 6px 14px rgba(0, 0, 0, 0.45),
     inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
+/* Back face is kept in the markup (so we can re-introduce a flip later
+   if we want) but hidden — the deal animation lands the card face-up
+   directly and we no longer use backface-visibility to alternate. */
 .adCardFace--back {
-  background: #fff;
-  /* Re-state border-radius and overflow on the back face so the
-     repeating-linear-gradient stripes inside .adBack are clipped to
-     the rounded card corners. (transform-style: preserve-3d on the
-     parent can otherwise let children paint outside the parent's
-     border-radius during the flip animation.) */
-  border-radius: 8px;
-  overflow: hidden;
+  display: none;
 }
 .adCardFace--front {
-  border-radius: 8px;
-  overflow: hidden;
-}
-.adCardFace--front {
-  transform: rotateY(180deg);
   background: #fff;
   display: flex;
   align-items: center;
@@ -1419,14 +1534,21 @@ export default {
   opacity: 0.7;
 }
 
-/* ─── Range bar ───────────────────────────────────────────────────────── */
+/* ─── Range bar ───────────────────────────────────────────────────────
+   Absolute-positioned so it can appear/disappear without reflowing the
+   felt — otherwise the card row would jump up by ~32px every time the
+   second card landed (range bar appears) and back down on demo reset. */
 .adRangeWrap {
-  margin-top: 28px;
-  width: 88%;
+  position: absolute;
+  bottom: 38px;       /* sits above the verdict ribbon at bottom: 10px */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 78%;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  pointer-events: none;
 }
 .adRangeText {
   font-size: 11px;
@@ -1488,6 +1610,37 @@ export default {
 .adVerdict--loss {
   color: #c4524f;
   background: rgba(196, 82, 79, 0.12);
+}
+/* Rail hit — the third card landed exactly on one of the anchors.
+   Distinct from a generic loss so the demo loop's three outcomes
+   read as visibly different. Orange, sits between gold and red. */
+.adVerdict--rail {
+  color: #ff8a3d;
+  background: rgba(255, 138, 61, 0.14);
+}
+/* Demo badge — small pill in the top-right of the felt that signals
+   "this is a preview, not your money". Auto-fades alongside the
+   demo loop the moment the player takes any real action. */
+.adDemoBadge {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: rgba(245, 196, 81, 0.85);
+  padding: 3px 8px;
+  border: 1px solid rgba(245, 196, 81, 0.45);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  animation: adDemoPulse 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes adDemoPulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
 }
 @keyframes adVerdictIn {
   from { opacity: 0; transform: translate(-50%, 8px); }

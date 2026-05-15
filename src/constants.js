@@ -199,10 +199,10 @@ export function clearStaleBeaconStorage() {
 // ── Shadownet (current testnet, primary dev target) ──
 export const ORACLE_CONTRACT_SHADOWNET             = 'KT19V1YiyPtyCbxouhyeM96SekRTVC7Gw6qq'
 export const TXL_CONTRACT_ADDRESS_SHADOWNET        = 'KT1Ro63rVDUx2x8pMChCLSySso8t6JH47oRQ'
-export const AD_CONTRACT_ADDRESS_SHADOWNET         = 'KT1URHCvuBz7nwgpnqK1XPFuBLywUfpL8S5S'
+export const AD_CONTRACT_ADDRESS_SHADOWNET         = 'KT1TN1fekL2zGheuGp1RWWojk9mF8qvRNoLp'
 export const TTT_CONTRACT_ADDRESS_SHADOWNET        = 'KT1GkvjJhHtEZfsiSJnQWCS3zZVdgfnBdqWc'
 export const OBJECT_CONTRACT_SHADOWNET             = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
-export const SQUARES_CONTRACT_ADDRESS_SHADOWNET    = 'KT1SNsuFFQ4dDuU9FNNvxUan1hqyy279WZqa'
+export const SQUARES_CONTRACT_ADDRESS_SHADOWNET    = 'KT1RSk61o7tJucxuJGJhAG1NqAzdSb9Wb54K'
 export const RNG_ORACLE_CONTRACT_ADDRESS_SHADOWNET = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
 export const REVERSI_CONTRACT_ADDRESS_SHADOWNET    = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
 export const PLINKO_CONTRACT_ADDRESS_SHADOWNET     = 'KT18z3DNXbp1cZpXJe2SkaPnCTdDJAbb7Pph'
@@ -256,12 +256,12 @@ export const NFT_INFO = [
 // (`self.data.potReserve += sp.amount`). Sending plain tez to the KT1
 // is a pot top-up, not a no-op.
 export const AD_GAME_INFO = [
-  'Choose Ace High or Ace Low and ante up 0.3 ꜩ (plus a 0.1 ꜩ 2.725K holder fee).',
-  'Two cards are dealt. If they pair, the ante is forfeit to the pot.',
+  'Ante up 0.3 ꜩ to play (0.2 ꜩ ante + 0.1 ꜩ 2.725K holder fee). Aces are always high.',
+  'Two cards are dealt. If they pair, the ante is forfeit to the pot — no refund.',
   'Otherwise, place an Acey-Duecey bet (up to 30% of the pot) that the next card lands strictly between them.',
   'Payouts are TRUE ODDS with a 5% house rake — tight spreads pay big, wide spreads pay slim:',
   '  spread 1  →  12.35× · spread 5  →  2.47× · spread 11  →  1.12×',
-  'Edge or out-of-range third card forfeits the bet.',
+  'Edge (third card matches an anchor) or out-of-range third card forfeits the bet.',
   'Win, lose, or pair — every bet keeps the pot growing.',
 ]
 

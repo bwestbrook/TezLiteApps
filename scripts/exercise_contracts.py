@@ -267,7 +267,8 @@ def exercise_war(net, client_primary, args, s: Scenario, client_secondary):
     total = wager + 100000
 
     s.note(f"→ player1.createGame(wager={tez(wager):.3f} ꜩ)")
-    op = c1.createGame(wager=wager).with_amount(total).send(min_confirmations=1)
+    # SmartPy flattens single-field record params → positional mutez.
+    op = c1.createGame(wager).with_amount(total).send(min_confirmations=1)
     game_id = int(c1.storage()["currentGameId"]) - 1
     s.note(f"  gameId = {game_id}  ({op.hash()[:14]}…)")
 
@@ -302,7 +303,8 @@ def exercise_flip_game(name, addr_var, net, client_primary, args, s, client_seco
     total = wager + 100000
 
     s.note(f"→ player1.createGame(wager={tez(wager):.3f} ꜩ)")
-    c1.createGame(wager=wager).with_amount(total).send(min_confirmations=1)
+    # SmartPy flattens single-field record params → positional mutez.
+    c1.createGame(wager).with_amount(total).send(min_confirmations=1)
     game_id = int(c1.storage()["currentGameId"]) - 1
     s.note(f"  gameId = {game_id}")
 

@@ -43,6 +43,12 @@ def main():
     PHASE_AXES_SET = 2
     PHASE_COMPLETE = 3
 
+    # Per-player-per-game cap. Mirrors MAX_BUY_PER_PLAYER_PER_GAME in
+    # src/components/squaresGame.vue — keep the two in sync. The contract
+    # is the source of truth; the UI just disables the buy button early
+    # so users don't burn gas on a doomed op.
+    PER_PLAYER_PER_GAME = 50
+
     class Squares(sp.Contract):
         def __init__(self, admin, rngOracle, txlContract):
             # Roles
@@ -149,6 +155,9 @@ def main():
                 holderFee=params.holderFee,
                 sold=sp.nat(0),
                 squares={},
+                # Per-player count, incremented in buySquare. Caps at
+                # PER_PLAYER_PER_GAME so one wallet can't sweep the board.
+                playerCounts={},
                 axisHome={},
                 axisAway={},
                 axesAssigned=False,
@@ -169,8 +178,25 @@ def main():
             assert game.phase == PHASE_SELLING, "NotSelling"
             assert params.squareIdx >= 0, "BadSquare"
             assert params.squareIdx < 100, "BadSquare"
+            # House cells are reserved for TXL holders — when one of these
+            # wins, reportQuarter's "unowned winning square" branch routes
+            # the share to txlContract. Must mirror HOUSE_SQUARES in
+            # src/components/squaresGame.vue (idx 44 = middle, idx 90 =
+            # bottom-left). On-chain enforcement plugs the gap of someone
+            # bypassing the frontend with a direct buySquare op.
+            assert params.squareIdx != 44, "HouseSquare"
+            assert params.squareIdx != 90, "HouseSquare"
             assert not (params.squareIdx in game.squares), "SquareTaken"
             assert sp.amount == game.ticketPrice + game.holderFee, "BadAmount"
+
+            # Per-player-per-game cap. UI mirrors this — but the contract
+            # is the source of truth since anyone can call buySquare
+            # directly through taquito / pytezos / a CLI op.
+            prior = sp.nat(0)
+            if sp.sender in game.playerCounts:
+                prior = game.playerCounts[sp.sender]
+            assert prior < PER_PLAYER_PER_GAME, "PlayerCapReached"
+            game.playerCounts[sp.sender] = prior + 1
 
             # Holder fee off the top → TXL contract. Ticket into the pot.
             holder = sp.contract(sp.unit, self.data.txlContract).unwrap_some(
@@ -352,3 +378,92 @@ def test():
     holder = sp.test_account("holder")
     c = main.Squares(admin, rng.address, holder.address)
     s += c
+
+
+# ─── Full game-flow simulation ──────────────────────────────────────────
+# End-to-end happy-path scenario: create → buy → close → set axes →
+# 4 quarters → claim. Also exercises the HouseSquare reverts (idx 44
+# and 90), SquareTaken, BadAmount, and the unowned-square-pays-TXL
+# branch when a house cell wins a quarter.
+#
+# Axes are set to identity (digit n maps to row/col n) so the winning
+# square per quarter is deterministic and easy to read:
+#   homeScore mod 10 = row, awayScore mod 10 = column → idx = row*10+col.
+#
+# Run via the project's compile pipeline:
+#   python -m smartpy compile src/services/smart_contract_squares_v2.py /tmp/sq_out
+# or whatever wrapper `scripts/compile.sh squares` uses.
+@sp.add_test()
+def full_game_flow():
+    s = sp.test_scenario("squares full game flow", main)
+
+    admin = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
+    rng = sp.test_account("rng")
+    txl = sp.test_account("txl")  # implicit account satisfies sp.contract(unit, _)
+    alice = sp.test_account("alice")
+    bob = sp.test_account("bob")
+    carol = sp.test_account("carol")
+    intruder = sp.test_account("intruder")
+
+    c = main.Squares(admin, rng.address, txl.address)
+    s += c
+
+    s.h1("Create game (alice — anyone can create)")
+    c.createGame(
+        name="SIM:ESPN:401871337 - CLE @ DET",
+        ticketPrice=sp.tez(1),
+        holderFee=sp.tez(0),  # zero holder fee → pot math stays clean
+        quarterWeights={0: 15, 1: 15, 2: 15, 3: 55},
+        _sender=alice.address,
+    )
+
+    s.h1("Buys: alice 47, 12 · bob 58, 23 · carol 96")
+    c.buySquare(gameId=0, squareIdx=47, _sender=alice, _amount=sp.tez(1))
+    c.buySquare(gameId=0, squareIdx=12, _sender=alice, _amount=sp.tez(1))
+    c.buySquare(gameId=0, squareIdx=58, _sender=bob,   _amount=sp.tez(1))
+    c.buySquare(gameId=0, squareIdx=23, _sender=bob,   _amount=sp.tez(1))
+    c.buySquare(gameId=0, squareIdx=96, _sender=carol, _amount=sp.tez(1))
+
+    s.h1("Reverts: HouseSquare (44 + 90), SquareTaken, BadAmount")
+    c.buySquare(
+        gameId=0, squareIdx=44, _sender=intruder, _amount=sp.tez(1),
+        _valid=False, _exception="HouseSquare",
+    )
+    c.buySquare(
+        gameId=0, squareIdx=90, _sender=intruder, _amount=sp.tez(1),
+        _valid=False, _exception="HouseSquare",
+    )
+    c.buySquare(
+        gameId=0, squareIdx=47, _sender=intruder, _amount=sp.tez(1),
+        _valid=False, _exception="SquareTaken",
+    )
+    c.buySquare(
+        gameId=0, squareIdx=11, _sender=intruder, _amount=sp.tez(2),
+        _valid=False, _exception="BadAmount",
+    )
+
+    s.h1("Admin closeSales → LOCKED")
+    c.closeSales(gameId=0, _sender=admin)
+
+    s.h1("Admin setAxes (identity) → AXES_SET")
+    identity = sp.cast({i: i for i in range(10)}, sp.map[sp.int, sp.int])
+    c.setAxes(gameId=0, axisHome=identity, axisAway=identity, _sender=admin)
+
+    s.h1("Q1 — scores 24-17 → idx 47 (alice wins 15%)")
+    c.reportQuarter(gameId=0, quarter=0, homeScore=24, awayScore=17, _sender=admin)
+
+    s.h1("Q2 — scores 35-28 → idx 58 (bob wins 15% of remaining pot)")
+    c.reportQuarter(gameId=0, quarter=1, homeScore=35, awayScore=28, _sender=admin)
+
+    s.h1("Q3 — scores 14-24 → idx 44 (HOUSE, share routes to TXL)")
+    c.reportQuarter(gameId=0, quarter=2, homeScore=14, awayScore=24, _sender=admin)
+
+    s.h1("Q4 — scores 49-36 → idx 96 (carol wins 55% of remaining pot)")
+    c.reportQuarter(gameId=0, quarter=3, homeScore=49, awayScore=36, _sender=admin)
+
+    s.h1("Claim — pull-pattern winnings")
+    c.claim(_sender=alice)
+    c.claim(_sender=bob)
+    c.claim(_sender=carol)
+    # Intruder has nothing pending.
+    c.claim(_sender=intruder, _valid=False, _exception="NothingToClaim")

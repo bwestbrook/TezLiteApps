@@ -15,6 +15,7 @@
 //   3 = COMPLETE
 
 import { getContractStorage, tzktGet } from '../services/tzkt'
+import { reduceAddress } from '@/utilities'
 import {
   ADMIN_ADDRESS,
   BLOCKCHAIN_ENABLED,
@@ -128,18 +129,25 @@ const LEAGUES = [
 // get the whole window in one request per league regardless of size.
 const DAYS_AHEAD = 3
 
-// One cell on the 10×10 board is reserved for the house. We pick idx 44
-// (row 4, col 4 — the top-left of the central 2×2). The frontend never
-// offers this cell as a random buy and the contract's reportQuarter
-// already routes "unowned winning square" payouts to txlContract, so
-// when the center wins it pays TXL holders without a contract change.
-// One consequence: max sellable squares is 99, so the contract's
-// auto-lock-at-100 trigger never fires — admin uses "Lock sales".
-const HOUSE_SQUARE_IDX = 44
+// Two cells on the 10×10 board are reserved for the house:
+//   - idx 44  (row 4, col 4 — "middle", top-left of the central 2×2)
+//   - idx 90  (row 9, col 0 — bottom-left corner)
+// The frontend never offers these as random buys, and the contract's
+// reportQuarter already routes "unowned winning square" payouts to
+// txlContract — so when either cell wins, the share pays TXL holders
+// without any contract change. Consequence: max sellable = 98, so the
+// contract's auto-lock-at-100 trigger never fires — admin uses
+// "Lock sales".
+const HOUSE_SQUARES = new Set([44, 90])
 
-// Most buyers grab a handful at a time. Cap the count per click at 50
-// so a single tx isn't excessive (and the batched op group stays small).
-const MAX_BUY_PER_CLICK = 50
+// Per-click cap on the random-buy batch — half the buyable pool with
+// the two house cells reserved (98 / 2).
+const MAX_BUY_PER_CLICK = 49
+
+// UI-side per-player cap for one game. The contract doesn't enforce
+// this — it's a fairness guard so one wallet can't sweep an entire
+// 99-square board. Tracked by counting cells owned by myAddress.
+const MAX_BUY_PER_PLAYER_PER_GAME = 50
 
 export default {
   name: 'squaresGame',
@@ -161,6 +169,15 @@ export default {
       selectedSquare: null,
       buyCount: 1,
       myAddress: '',
+      // Pool id of the most recently created card. Drives the "✓ Card
+      // created" confirmation tile that sits below the create button.
+      // The tile renders whenever this pool is the one being viewed,
+      // so revisiting via the lobby brings the tile back.
+      lastCreatedPoolId: null,
+      // Lobby pagination — `lobbyPage` is the index of the leftmost
+      // tile shown. visibleLobby slices the next two; the arrows shift
+      // this by ±1 so each click advances exactly one game.
+      lobbyPage: 0,
       // Create-game form. Anyone can start a new pool; admin still
       // owns scoring (reportQuarter) and randomization (setAxes).
       newGameName: '',
@@ -233,29 +250,75 @@ export default {
       return out
     },
     openSquareIdxs() {
-      // Indices (0..99) that no one has bought yet. The center cell
-      // (HOUSE_SQUARE_IDX) is reserved for TXL holders and never buyable.
+      // Indices (0..99) that no one has bought yet. House cells
+      // (HOUSE_SQUARES) are reserved for TXL holders and never buyable.
       const owned = this.game?.squares || {}
       const open = []
       for (let i = 0; i < 100; i++) {
-        if (i === HOUSE_SQUARE_IDX) continue
+        if (HOUSE_SQUARES.has(i)) continue
         if (!owned[i]) open.push(i)
       }
       return open
     },
-    maxBuy() {
-      // Per-click cap (MAX_BUY_PER_CLICK), then bounded by remaining open
-      // squares (which already excludes the house cell).
-      return Math.max(0, Math.min(MAX_BUY_PER_CLICK, this.openSquareIdxs.length))
+    // Expose the module-level constants so the template can reference
+    // them without hardcoding 50 in copy.
+    MAX_BUY_PER_CLICK() { return MAX_BUY_PER_CLICK },
+    MAX_BUY_PER_PLAYER_PER_GAME() { return MAX_BUY_PER_PLAYER_PER_GAME },
+    myOwnedSquaresInGame() {
+      // How many cells the current wallet already owns in this game.
+      // Drives the per-player-per-game cap (MAX_BUY_PER_PLAYER_PER_GAME).
+      if (!this.myAddress || !this.game?.squares) return 0
+      let n = 0
+      for (const owner of Object.values(this.game.squares)) {
+        if (owner === this.myAddress) n++
+      }
+      return n
     },
-    // Exposed to the template so cells can be rendered as "TXL" without
-    // hardcoding the index in the template.
-    houseIdx() {
-      return HOUSE_SQUARE_IDX
+    myRemainingAllowance() {
+      // How many more squares this wallet is allowed to buy in this game.
+      return Math.max(0, MAX_BUY_PER_PLAYER_PER_GAME - this.myOwnedSquaresInGame)
+    },
+    atPerGameLimit() {
+      return !!this.myAddress && this.myRemainingAllowance === 0
+    },
+    maxBuy() {
+      // Three caps stacked: per-tx batch size, remaining open squares,
+      // and what's left of this wallet's per-game allowance.
+      return Math.max(
+        0,
+        Math.min(
+          MAX_BUY_PER_CLICK,
+          this.openSquareIdxs.length,
+          this.myRemainingAllowance,
+        ),
+      )
     },
     // Exposed for the picker's "Showing the next N days" hint.
     DAYS_AHEAD() {
       return DAYS_AHEAD
+    },
+    // Matchup label for the just-created pool, used by the confirmation
+    // tile below the create button. Reuses the lobby's title resolution
+    // (ESPN label when the slate has the matching event, otherwise the
+    // pool name).
+    lastCreatedGameLabel() {
+      if (this.lastCreatedPoolId === null) return ''
+      const pool = this.allGames?.[this.lastCreatedPoolId]
+      if (!pool) return ''
+      const m = /\bESPN:(\d{6,})\b/.exec(pool.name || '')
+      if (m) {
+        const ev = this.espnGames.find((x) => x.id === m[1])
+        if (ev) return this.espnGameLabel(ev)
+      }
+      return this.gameButtonLabel(this.lastCreatedPoolId)
+    },
+    // Per-square price (ꜩ) of the just-created pool. Reads ticketPrice
+    // off the pool record returned from the games big_map.
+    lastCreatedPrice() {
+      if (this.lastCreatedPoolId === null) return ''
+      const pool = this.allGames?.[this.lastCreatedPoolId]
+      if (!pool) return ''
+      return (Number(pool.ticketPrice || 0) / 1_000_000).toFixed(3)
     },
     // Matchup label for whatever game the create-card form should reference.
     // Prefer the lobby selection (selectedEspnId, set by pickEspnGame on
@@ -362,6 +425,19 @@ export default {
       })
       return items
     },
+    // Two-tile sliding window into the full lobby. Clamped so it stays
+    // valid as the lobby grows or shrinks; pageLobby() updates lobbyPage.
+    visibleLobby() {
+      const maxStart = Math.max(0, this.lobby.length - 2)
+      const start = Math.max(0, Math.min(this.lobbyPage, maxStart))
+      return this.lobby.slice(start, start + 2)
+    },
+    lobbyCanPageLeft() {
+      return this.lobbyPage > 0
+    },
+    lobbyCanPageRight() {
+      return this.lobbyPage + 2 < this.lobby.length
+    },
   },
   created() {
     this.socket.on('newWallet', (w) => {
@@ -384,6 +460,26 @@ export default {
   },
   beforeUnmount() {
     if (this.pollInterval) clearInterval(this.pollInterval)
+  },
+  watch: {
+    // HTML5 `:max` on type=number is only a validation hint — users can
+    // still type 999 or paste a huge value. Clamp on every change so the
+    // input box itself reflects the real per-click + per-game cap.
+    buyCount(n) {
+      const max = this.maxBuy
+      const num = Math.floor(Number(n) || 0)
+      if (max <= 0) {
+        if (num !== 0) this.buyCount = 0
+        return
+      }
+      if (num > max) this.buyCount = max
+      else if (num < 1) this.buyCount = 1
+    },
+    // If maxBuy drops (e.g. someone else bought a square, or the user
+    // just bought 30 and only 20 are left), pull buyCount down to fit.
+    maxBuy(newMax) {
+      if (this.buyCount > newMax) this.buyCount = Math.max(1, newMax)
+    },
   },
   methods: {
     async refreshState() {
@@ -444,9 +540,16 @@ export default {
     //     so the form falls back to the pool's matchup (gridDisplayName).
     //   - "+ NEW" tile: stage that ESPN game in the form.
     selectLobbyEntry(entry) {
+      // Don't clear lastCreatedPoolId here — the "✓ Card created" tile
+      // is gated on activeGameId === lastCreatedPoolId, so it naturally
+      // hides when you switch away and reappears when you click back.
       if (entry.kind === 'pool') {
+        // User wants to ENTER an existing pool to bet — close the create
+        // form so the bet interface (grid + Buy N squares) is what they
+        // see right below the lobby instead of the form covering it.
         this.selectedEspnId = null
         this.newGameName = ''
+        this.showCreateForm = false
         this.selectGameId(entry.poolId)
         return
       }
@@ -455,14 +558,12 @@ export default {
       this.pickEspnGame(g)
       this.showCreateForm = true
     },
-    // Scroll the lobby strip by ±~70% of its visible width per click.
-    // Smooth-scroll is browser-native; no JS easing needed. Same pattern
-    // as mainBody.vue's app-nav carousel.
-    scrollLobby(dir) {
-      const strip = this.$refs.lobbyStrip
-      if (!strip) return
-      const delta = Math.max(160, Math.round(strip.clientWidth * 0.7))
-      strip.scrollBy({ left: dir * delta, behavior: 'smooth' })
+    // Slide the 2-tile lobby window by exactly one game per arrow click.
+    // No scroll — visibleLobby slices the next two entries — so the
+    // tiles always sit at exactly half the strip width with no overflow.
+    pageLobby(dir) {
+      const maxStart = Math.max(0, this.lobby.length - 2)
+      this.lobbyPage = Math.max(0, Math.min(this.lobbyPage + dir, maxStart))
     },
     // Short label for a game-selector button: the matchup (ESPN tag
     // stripped) when the pool is linked to an NBA game, else "Game #id".
@@ -805,6 +906,8 @@ export default {
         // Jump the selector bar to the just-created game.
         this.gameSelected = false
         await this.refreshState()
+        // Stash for the "✓ Card created" confirmation tile.
+        this.lastCreatedPoolId = this.activeGameId
       } catch (err) {
         console.error('createGame failed:', err)
         this.blockchainStatus = 'createGame failed — see console'
@@ -860,6 +963,10 @@ export default {
         // Jump the selector bar to the just-created card.
         this.gameSelected = false
         await this.refreshState()
+        // After refreshState the new pool is at currentGameId - 1 and is
+        // also activeGameId (because gameSelected was just cleared).
+        // Stash it so the "✓ Card created" tile renders below the panel.
+        this.lastCreatedPoolId = this.activeGameId
       } catch (err) {
         console.error('createCard failed:', err)
         this.blockchainStatus = 'createCard failed — see console'
@@ -916,6 +1023,30 @@ export default {
       // Fallback for sessions where myAddress hasn't loaded yet.
       return this.walletAddress?.endsWith(owner.slice(-4))
     },
+    // True when this 10×10 cell index is one of the TXL house cells
+    // (currently idx 44 + idx 90). Used by the grid to label / style
+    // those cells as "TXL" and to skip them in the random-buy pool.
+    isHouse(idx) {
+      return HOUSE_SQUARES.has(idx)
+    },
+    // True when the connected wallet owns at least one square in this
+    // pool — drives the "BETTING" badge on the lobby tile so the user
+    // can spot at a glance which cards they're already in.
+    isMyPool(poolId) {
+      if (!this.myAddress) return false
+      const squares = this.allGames?.[poolId]?.squares || {}
+      for (const owner of Object.values(squares)) {
+        if (owner === this.myAddress) return true
+      }
+      return false
+    },
+    // Short-form creator address for the lobby tile. Pools are global —
+    // every user sees pools created by every other user — so surface
+    // who started this one as a "by t.AbCd" line.
+    poolCreator(poolId) {
+      const creator = this.allGames?.[poolId]?.creator || ''
+      return creator ? reduceAddress(creator) : ''
+    },
   },
 }
 </script>
@@ -929,18 +1060,23 @@ export default {
     <div class="sqLobbyCarousel">
       <button
         type="button"
-        class="navArrow navArrow--left"
-        aria-label="Scroll games left"
-        @click="scrollLobby(-1)"
+        :class="['navArrow', 'navArrow--left', lobbyCanPageLeft ? '' : 'navArrow--disabled']"
+        :disabled="!lobbyCanPageLeft"
+        aria-label="Previous game"
+        @click="pageLobby(-1)"
       >‹</button>
       <div class="rowFlex sqGameBar" ref="lobbyStrip">
         <div
-          v-for="entry in lobby"
+          v-for="entry in visibleLobby"
           :key="entry.key"
           :class="[
             'actionButton',
             'sqGameBtn',
-            entry.kind === 'pool' && activeGameId === entry.poolId ? 'sqGameBtn--active' : '',
+            (entry.kind === 'pool' && activeGameId === entry.poolId) ||
+            (entry.kind === 'espn' && selectedEspnId === entry.espnId)
+              ? 'sqGameBtn--active'
+              : '',
+            entry.kind === 'pool' && isMyPool(entry.poolId) ? 'sqGameBtn--mine' : '',
           ]"
           @click="selectLobbyEntry(entry)"
         >
@@ -952,11 +1088,19 @@ export default {
             <span
               :class="['sqGameBtnTag', entry.kind === 'pool' ? 'sqGameBtnTag--pool' : 'sqGameBtnTag--new']"
             >{{ entry.kind === 'pool' ? 'POOL' : '+ NEW' }}</span>
+            <span
+              v-if="entry.kind === 'pool' && isMyPool(entry.poolId)"
+              class="sqGameBtnTag sqGameBtnTag--mine"
+            >YOU</span>
           </div>
           <div class="sqGameBtnMain">{{ entry.title }}</div>
           <div v-if="entry.date" class="sqGameBtnWhen">
             {{ formatGameDate(entry.date) }}
           </div>
+          <div
+            v-if="entry.kind === 'pool' && poolCreator(entry.poolId)"
+            class="sqGameBtnCreator"
+          >by {{ poolCreator(entry.poolId) }}</div>
         </div>
         <div v-if="!lobby.length" class="gameInfo sqGameBarEmpty">
           Loading the lobby…
@@ -964,9 +1108,10 @@ export default {
       </div>
       <button
         type="button"
-        class="navArrow navArrow--right"
-        aria-label="Scroll games right"
-        @click="scrollLobby(1)"
+        :class="['navArrow', 'navArrow--right', lobbyCanPageRight ? '' : 'navArrow--disabled']"
+        :disabled="!lobbyCanPageRight"
+        aria-label="Next game"
+        @click="pageLobby(1)"
       >›</button>
     </div>
 
@@ -1133,6 +1278,25 @@ export default {
           </div>
         </div>
       </div>
+
+      <!-- Confirmation tile after a successful create. Re-renders
+           whenever the user is viewing that pool, so navigating away
+           and back via the lobby brings the card-summary back. -->
+      <div
+        v-if="lastCreatedPoolId !== null
+          && activeGameId === lastCreatedPoolId
+          && !showCreateForm"
+        class="sqCreatedTile"
+      >
+        <div class="sqCreatedHead">✓ Card created</div>
+        <div class="sqCreatedBody">
+          <strong>{{ lastCreatedGameLabel }}</strong>
+          <span>{{ lastCreatedPrice }} ꜩ / square</span>
+        </div>
+        <div class="sqCreatedHint">
+          Your grid is loaded below — buy squares to enter.
+        </div>
+      </div>
     </div>
 
     <div v-if="!game" class="gameInfo">
@@ -1164,15 +1328,14 @@ export default {
               :key="cell.idx"
               :class="[
                 'square',
-                cell.idx === houseIdx ? 'house' : (cell.owner ? 'taken' : 'open'),
+                isHouse(cell.idx) ? 'house' : (cell.owner ? 'taken' : 'open'),
                 isMine(cell.owner) ? 'mine' : '',
               ]"
             >
-              <span v-if="cell.idx === houseIdx" class="houseLabel">TXL</span>
+              <span v-if="isHouse(cell.idx)" class="houseLabel">TXL</span>
               <span v-else-if="cell.owner" class="ownerInitial">
                 {{ cell.owner.slice(-3) }}
               </span>
-              <span v-else>{{ cell.idx }}</span>
             </td>
           </tr>
         </tbody>
@@ -1202,8 +1365,21 @@ export default {
         <div class="actionButton" @click="claimAll">Claim winnings</div>
       </div>
       <div class="sqQuickBuyHint">
-        Squares are assigned at random — up to 50 per click. The center cell
-        is the house: when it wins, the share pays TXL holders.
+        <template v-if="atPerGameLimit">
+          You own {{ myOwnedSquaresInGame }} squares — the
+          {{ MAX_BUY_PER_PLAYER_PER_GAME }}-per-game limit. No more buys
+          this game.
+        </template>
+        <template v-else-if="myOwnedSquaresInGame > 0">
+          You own {{ myOwnedSquaresInGame }} / {{ MAX_BUY_PER_PLAYER_PER_GAME }}
+          squares in this game — {{ myRemainingAllowance }} more allowed.
+          Center cell pays TXL holders when it wins.
+        </template>
+        <template v-else>
+          Squares are assigned at random — up to {{ MAX_BUY_PER_CLICK }} per click
+          and {{ MAX_BUY_PER_PLAYER_PER_GAME }} per game. Center cell pays TXL
+          holders when it wins.
+        </template>
       </div>
 
       <!-- Admin actions — score reporting + sales lock stay restricted. -->
@@ -1394,6 +1570,41 @@ export default {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+/* Confirmation tile after a successful card create. Green accent so it
+   reads as "✓ done", and sits right below where the form was. */
+.sqCreatedTile {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(74, 222, 128, 0.14), rgba(74, 222, 128, 0.04));
+  border: 1px solid rgba(74, 222, 128, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sqCreatedHead {
+  font-weight: 800;
+  color: #4ade80;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+.sqCreatedBody {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.92);
+}
+.sqCreatedBody strong {
+  color: #f5c451;
+  font-weight: 700;
+}
+.sqCreatedHint {
+  font-size: 12px;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.65);
 }
 .sqCreateField {
   display: flex;
@@ -1662,7 +1873,9 @@ export default {
 
 /* ─── Play view header ───────────────────────────────────────────────── */
 /* ─── Game-selector bar ───────────────────────────────────────────── */
-/* Lobby carousel — arrows flank the horizontally-scrolling strip. */
+/* Lobby carousel — arrows flank a 2-tile pagination strip. visibleLobby
+   slices exactly two entries; tiles split the strip width 50/50 with no
+   scrolling or overflow. */
 .sqLobbyCarousel {
   display: flex;
   align-items: center;
@@ -1672,20 +1885,22 @@ export default {
 }
 .sqGameBar {
   flex: 1;
+  min-width: 0;
   flex-wrap: nowrap;
-  overflow-x: auto;
+  overflow: hidden;
   gap: 6px;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  /* Snap so arrow scroll lands on a tile boundary. */
-  scroll-snap-type: x proximity;
-  scroll-behavior: smooth;
 }
-.sqGameBar::-webkit-scrollbar { display: none; }
-.sqGameBar > .sqGameBtn { scroll-snap-align: start; }
+.navArrow--disabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
 .sqGameBtn {
-  flex: 0 0 auto;
-  width: 200px;
+  /* Pagination: only two entries rendered at a time, each takes equal
+     half of the strip's available width. min-width: 0 lets flex shrink
+     past the content's natural width so nothing spills to the right. */
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -1693,6 +1908,13 @@ export default {
   line-height: 1.2;
   padding: 8px 10px;
   text-align: left;
+}
+/* Hover-preview state — gold-tinted border + subtle lift, lighter than
+   the active state so the currently-selected tile still wins visually. */
+.sqGameBtn:hover {
+  border-color: rgba(245, 196, 81, 0.55);
+  background: rgba(245, 196, 81, 0.06);
+  transform: translateY(-1px);
 }
 .sqGameBtnHead {
   display: flex;
@@ -1711,6 +1933,11 @@ export default {
   background: rgba(74, 222, 128, 0.18);
   color: #4ade80;
   border: 1px solid rgba(74, 222, 128, 0.45);
+}
+.sqGameBtnTag--mine {
+  background: rgba(74, 222, 128, 0.22);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.55);
 }
 .sqGameBtnTag--new {
   background: rgba(255, 255, 255, 0.06);
@@ -1734,8 +1961,34 @@ export default {
 }
 .sqGameBtn--active {
   border-color: #f5c451;
-  box-shadow: 0 0 0 1px rgba(245, 196, 81, 0.55) inset;
+  background: linear-gradient(180deg, rgba(245, 196, 81, 0.18), rgba(245, 196, 81, 0.06));
+  box-shadow:
+    0 0 0 2px rgba(245, 196, 81, 0.55),
+    0 4px 14px rgba(245, 196, 81, 0.25);
   color: #f5c451;
+  transform: translateY(-1px);
+}
+.sqGameBtn--active .sqGameBtnMain,
+.sqGameBtn--active .sqGameBtnWhen { color: #f5c451; }
+/* Tile for pools the connected wallet is betting on — green accent so
+   the user can spot at a glance which cards they're already in. */
+.sqGameBtn--mine {
+  border-color: rgba(74, 222, 128, 0.55);
+  box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.3) inset;
+}
+.sqGameBtn--mine.sqGameBtn--active {
+  /* When a "you're in" pool is also currently active, gold takes the
+     outer ring and green stays as a subtle inner accent. */
+  box-shadow:
+    0 0 0 2px rgba(245, 196, 81, 0.55),
+    0 0 0 1px rgba(74, 222, 128, 0.55) inset,
+    0 4px 14px rgba(245, 196, 81, 0.25);
+}
+.sqGameBtnCreator {
+  font-size: 10px;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.02em;
 }
 .sqGameBarEmpty { flex: 1; opacity: 0.7; }
 

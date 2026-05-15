@@ -59,6 +59,127 @@ const PHASE_TONES = {
 function nat(v) { return Number(v ?? 0) }
 function mutez(v) { return Number(v ?? 0) }
 
+// ── Piece + move helpers (demo-mode only) ──────────────────────────────────
+// Demo gives the player a realistic feel without trying to replicate the
+// full on-chain ruleset. We do PSEUDO-LEGAL movement (each piece moves the
+// way it physically can, blocked by friendly pieces, capturing enemies) —
+// no check detection, no castling, no en passant. The real contract
+// enforces the full rules on submitted moves, so demo only needs to feel
+// chess-shaped, not be chess-correct.
+
+// Codes: 1-6 white P/N/B/R/Q/K, 7-12 black p/n/b/r/q/k, 0 empty.
+function pieceSide(code) {
+  if (code >= 1 && code <= 6) return 1
+  if (code >= 7 && code <= 12) return 2
+  return 0
+}
+
+// "a1" style for move-list notation.
+function squareName(idx) {
+  return FILES[idx % 8] + (Math.floor(idx / 8) + 1)
+}
+
+// Pseudo-legal destinations for the piece at `from` on `board` (flat 64-cell
+// array indexed 0=a1, 63=h8). Returns a Set of destination indices.
+function legalTargets(board, from) {
+  const code = board[from]
+  const out = new Set()
+  if (!code) return out
+  const side = pieceSide(code)
+  const r = Math.floor(from / 8)
+  const c = from % 8
+  const onBoard = (rr, cc) => rr >= 0 && rr < 8 && cc >= 0 && cc < 8
+  const cellAt = (rr, cc) => board[rr * 8 + cc]
+  const isEmpty = (rr, cc) => onBoard(rr, cc) && cellAt(rr, cc) === 0
+  const isEnemy = (rr, cc) =>
+    onBoard(rr, cc) && cellAt(rr, cc) !== 0 && pieceSide(cellAt(rr, cc)) !== side
+  // Add a square if empty or contains an enemy (i.e. legal terminal landing).
+  const addLanding = (rr, cc) => {
+    if (!onBoard(rr, cc)) return
+    const t = cellAt(rr, cc)
+    if (t === 0 || pieceSide(t) !== side) out.add(rr * 8 + cc)
+  }
+  // Slide in a direction until blocked. Captures the blocker if enemy.
+  const ray = (dr, dc) => {
+    let rr = r + dr, cc = c + dc
+    while (onBoard(rr, cc)) {
+      const t = cellAt(rr, cc)
+      if (t === 0) { out.add(rr * 8 + cc); rr += dr; cc += dc; continue }
+      if (pieceSide(t) !== side) out.add(rr * 8 + cc)
+      break
+    }
+  }
+
+  // White pawn: forward 1, forward 2 from rank 1, diagonal captures only.
+  if (code === 1) {
+    if (isEmpty(r + 1, c)) {
+      out.add((r + 1) * 8 + c)
+      if (r === 1 && isEmpty(r + 2, c)) out.add((r + 2) * 8 + c)
+    }
+    if (isEnemy(r + 1, c - 1)) out.add((r + 1) * 8 + c - 1)
+    if (isEnemy(r + 1, c + 1)) out.add((r + 1) * 8 + c + 1)
+  } else if (code === 7) {
+    // Black pawn: same but mirrored.
+    if (isEmpty(r - 1, c)) {
+      out.add((r - 1) * 8 + c)
+      if (r === 6 && isEmpty(r - 2, c)) out.add((r - 2) * 8 + c)
+    }
+    if (isEnemy(r - 1, c - 1)) out.add((r - 1) * 8 + c - 1)
+    if (isEnemy(r - 1, c + 1)) out.add((r - 1) * 8 + c + 1)
+  } else if (code === 2 || code === 8) {
+    // Knight — 8 L-shaped jumps.
+    for (const [dr, dc] of [[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]]) {
+      addLanding(r + dr, c + dc)
+    }
+  } else if (code === 3 || code === 9) {
+    ray(1, 1); ray(1, -1); ray(-1, 1); ray(-1, -1)
+  } else if (code === 4 || code === 10) {
+    ray(1, 0); ray(-1, 0); ray(0, 1); ray(0, -1)
+  } else if (code === 5 || code === 11) {
+    ray(1, 1); ray(1, -1); ray(-1, 1); ray(-1, -1)
+    ray(1, 0); ray(-1, 0); ray(0, 1); ray(0, -1)
+  } else if (code === 6 || code === 12) {
+    // King — 8 adjacent squares. No castling in demo.
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dr || dc) addLanding(r + dr, c + dc)
+      }
+    }
+  }
+  return out
+}
+
+// Single letter for move-list display. Pawns get '' (e2-e4, exd5 style).
+const PIECE_LETTER = { 0: '', 1: '', 2: 'N', 3: 'B', 4: 'R', 5: 'Q', 6: 'K', 7: '', 8: 'N', 9: 'B', 10: 'R', 11: 'Q', 12: 'K' }
+
+// ── Scholar's Mate (4-move checkmate) — the classic teaching example ─────
+//
+//   1. e2-e4   e7-e5
+//   2. Bf1-c4  Nb8-c6
+//   3. Qd1-h5  Ng8-f6    (black blunders by allowing Qxf7)
+//   4. Qh5xf7#                ← checkmate, queen defended by the c4 bishop
+//
+// Each move is encoded as flat 0..63 indices (a1=0, h1=7, a8=56, h8=63).
+// All seven plies pass the pseudo-legal validator in legalTargets(), so the
+// same applyDemoMove path that handles user clicks can drive the animation
+// without a parallel code path.
+const SCHOLARS_MATE = [
+  { from: 12, to: 28 }, // 1. e2-e4
+  { from: 52, to: 36 }, // 1... e7-e5
+  { from:  5, to: 26 }, // 2. Bf1-c4
+  { from: 57, to: 42 }, // 2... Nb8-c6
+  { from:  3, to: 39 }, // 3. Qd1-h5
+  { from: 62, to: 45 }, // 3... Ng8-f6  (the blunder)
+  { from: 39, to: 53 }, // 4. Qh5xf7#   (mate)
+]
+// Animation cadence (ms). FLASH highlights the source square; the move
+// applies FLASH ms later and the next move starts INTERVAL after this
+// move started. Keep INTERVAL > FLASH so each ply reads as discrete.
+const SCHOLAR_FLASH_MS = 320
+const SCHOLAR_INTERVAL_MS = 1050
+const SCHOLAR_START_DELAY_MS = 700
+const SCHOLAR_MATE_DELAY_MS = 600   // extra hold on the final position before banner
+
 export default {
   name: 'chessGame',
   props: ['socket', 'wallet', 'tezos'],
@@ -84,6 +205,22 @@ export default {
       demoBoard: openingBoard(),
       demoTurn: 1,
       lastMove: null,
+      // Demo-mode capture tally per side (key = side that made the capture).
+      demoCaptured: { 1: [], 2: [] },
+      // Demo move history. Each entry stores the PRE-move snapshot so
+      // undo can rewind in one step. We deliberately don't share this
+      // stack with real-game state — on-chain moves are authoritative
+      // and unundoable.
+      demoHistory: [],
+      // Scholar's Mate auto-play animation. demoAutoplayIdx is the
+      // half-move ABOUT TO play (or just played) for progress display;
+      // demoAutoplayTimer is the active setTimeout handle so we can
+      // cancel cleanly on view-leave or user interaction.
+      demoAutoplayActive: false,
+      demoAutoplayIdx: 0,
+      demoAutoplayTimer: null,
+      demoCheckmate: false,
+      scholarTotalPly: SCHOLARS_MATE.length,
     }
   },
   computed: {
@@ -196,6 +333,37 @@ export default {
       }
       return ''
     },
+    // ── Demo-mode UX helpers ──────────────────────────────────────────
+    // Destinations for the currently-selected piece. Empty Set in real
+    // games (the contract enforces legality, we don't want to mislead
+    // by hiding castling/en-passant which aren't modeled here).
+    legalDests() {
+      if (this.inRealGame) return new Set()
+      if (this.selectedSq == null) return new Set()
+      return legalTargets(this.displayBoard, this.selectedSq)
+    },
+    demoCapturedWhite() {
+      // Pieces white has captured = black pieces taken off.
+      return this.demoCaptured[1].map((c) => GLYPH[c]).filter(Boolean)
+    },
+    demoCapturedBlack() {
+      return this.demoCaptured[2].map((c) => GLYPH[c]).filter(Boolean)
+    },
+    // History grouped into white/black pairs for two-column rendering.
+    demoMovesPaired() {
+      const pairs = []
+      for (let i = 0; i < this.demoHistory.length; i += 2) {
+        pairs.push({
+          n: Math.floor(i / 2) + 1,
+          white: this.demoHistory[i]?.notation || '',
+          black: this.demoHistory[i + 1]?.notation || '',
+        })
+      }
+      return pairs
+    },
+    demoTurnLabel() {
+      return this.demoTurn === 1 ? 'White to move' : 'Black to move'
+    },
   },
   created() {
     this.socket.on('newWallet', (w) => {
@@ -208,11 +376,29 @@ export default {
   },
   beforeUnmount() {
     if (this.pollInterval) clearInterval(this.pollInterval)
+    this.stopScholarMate()
   },
   methods: {
     setView(v) {
+      // Leaving the play view — kill any running animation so the timer
+      // doesn't fire after the board has unmounted.
+      if (this.view === 'play' && v !== 'play') {
+        this.stopScholarMate()
+      }
       this.view = v
       this.selectedSq = null
+      // Entering play in demo mode with a clean slate? Show off the
+      // 4-move-checkmate animation. Re-visits after the user has played
+      // (demoHistory non-empty) leave the board alone.
+      if (
+        v === 'play' &&
+        !this.inRealGame &&
+        this.demoHistory.length === 0 &&
+        !this.demoAutoplayActive &&
+        !this.demoCheckmate
+      ) {
+        this.$nextTick(() => this.startScholarMate())
+      }
     },
     toggleRules() {
       this.showRules = !this.showRules
@@ -298,25 +484,35 @@ export default {
       }
     },
     clickSq(cell) {
-      // ── DEMO MODE: relaxed piece movement, no rule checks ───────────
+      // ── DEMO MODE: pseudo-legal moves, turn enforced, captures tracked ──
       if (!this.inRealGame) {
+        // Any click during the Scholar's Mate showcase is a "let me take
+        // over" gesture — kill the animation and swallow this click.
+        if (this.demoAutoplayActive) {
+          this.stopScholarMate()
+          return
+        }
+        // No selection yet — pick up a piece of the side whose turn it is.
         if (this.selectedSq == null) {
           if (cell.piece === 0) return
+          if (pieceSide(cell.piece) !== this.demoTurn) return
           this.selectedSq = cell.idx
           return
         }
+        // Tap the same square — deselect.
         if (cell.idx === this.selectedSq) {
           this.selectedSq = null
           return
         }
-        const fromPiece = this.demoBoard[this.selectedSq]
-        const next = [...this.demoBoard]
-        next[this.selectedSq] = 0
-        next[cell.idx] = fromPiece
-        this.demoBoard = next
-        this.lastMove = { from: this.selectedSq, to: cell.idx }
-        this.selectedSq = null
-        this.demoTurn = this.demoTurn === 1 ? 2 : 1
+        // Tap another of your own pieces — switch the selection.
+        if (cell.piece !== 0 && pieceSide(cell.piece) === this.demoTurn) {
+          this.selectedSq = cell.idx
+          return
+        }
+        // Tap a destination — only allow if it's pseudo-legal.
+        const targets = legalTargets(this.demoBoard, this.selectedSq)
+        if (!targets.has(cell.idx)) return
+        this.applyDemoMove(this.selectedSq, cell.idx)
         return
       }
       // ── REAL GAME ───────────────────────────────────────────────────
@@ -443,10 +639,123 @@ export default {
       } catch (err) { console.error('cancelGame failed:', err) }
     },
     resetDemo() {
+      this.stopScholarMate()
       this.demoBoard = openingBoard()
       this.demoTurn = 1
       this.lastMove = null
       this.selectedSq = null
+      this.demoCaptured = { 1: [], 2: [] }
+      this.demoHistory = []
+      this.demoCheckmate = false
+    },
+    undoDemo() {
+      // Pop the last snapshot (which is the state right before that move
+      // was applied) and restore everything from it.
+      if (this.inRealGame) return
+      this.stopScholarMate()
+      const last = this.demoHistory.pop()
+      if (!last) return
+      this.demoBoard = last.prevBoard
+      this.demoTurn = last.prevTurn
+      this.demoCaptured = last.prevCaptured
+      this.lastMove = last.prevLastMove
+      this.selectedSq = null
+      this.demoCheckmate = false
+    },
+    // Shared mover used by BOTH a player click and the Scholar's Mate
+    // animation. Assumes the move is already validated as pseudo-legal —
+    // the caller is responsible for that check.
+    applyDemoMove(fromSq, toSq) {
+      const fromPiece = this.demoBoard[fromSq]
+      const captured = this.demoBoard[toSq]
+      // Auto-promote pawns reaching the back rank to queens.
+      const toRank = Math.floor(toSq / 8)
+      let placed = fromPiece
+      if (fromPiece === 1 && toRank === 7) placed = 5
+      if (fromPiece === 7 && toRank === 0) placed = 11
+
+      // Snapshot for undo: capture board+turn+captured BEFORE applying.
+      // Notation describes the move just made (e.g. "Nxe4", "e7-e8=Q").
+      const sep = captured ? 'x' : '-'
+      const promo = placed !== fromPiece ? '=' + (PIECE_LETTER[placed] || 'Q') : ''
+      const notation = `${PIECE_LETTER[fromPiece] || ''}${squareName(fromSq)}${sep}${squareName(toSq)}${promo}`
+      this.demoHistory.push({
+        prevBoard: [...this.demoBoard],
+        prevTurn: this.demoTurn,
+        prevCaptured: { 1: [...this.demoCaptured[1]], 2: [...this.demoCaptured[2]] },
+        prevLastMove: this.lastMove,
+        notation,
+      })
+
+      const next = [...this.demoBoard]
+      next[fromSq] = 0
+      next[toSq] = placed
+      if (captured) {
+        // Replace the whole object so Vue re-renders the dependent
+        // computed cleanly even when we later restore via undo.
+        this.demoCaptured = {
+          1: this.demoTurn === 1 ? [...this.demoCaptured[1], captured] : this.demoCaptured[1],
+          2: this.demoTurn === 2 ? [...this.demoCaptured[2], captured] : this.demoCaptured[2],
+        }
+      }
+      this.demoBoard = next
+      this.lastMove = { from: fromSq, to: toSq }
+      this.selectedSq = null
+      this.demoTurn = this.demoTurn === 1 ? 2 : 1
+    },
+    // ── Scholar's Mate showcase ─────────────────────────────────────────
+    // Kicks off a setTimeout-driven recursion that walks SCHOLARS_MATE one
+    // ply at a time: highlight source square → apply move → schedule next.
+    // We use chained setTimeouts (rather than setInterval) so each cycle
+    // can self-cancel cleanly if the user interrupts.
+    startScholarMate() {
+      this.stopScholarMate()
+      // Wipe to opening but DON'T call resetDemo — it calls stopScholarMate
+      // back into us; safe but noisy. Inline the reset instead.
+      this.demoBoard = openingBoard()
+      this.demoTurn = 1
+      this.lastMove = null
+      this.selectedSq = null
+      this.demoCaptured = { 1: [], 2: [] }
+      this.demoHistory = []
+      this.demoCheckmate = false
+      this.demoAutoplayActive = true
+      this.demoAutoplayIdx = 0
+      // Pause on the opening for a beat so the user reads "this is the
+      // starting position" before pieces start moving.
+      this.demoAutoplayTimer = setTimeout(() => this.playScholarMove(0), SCHOLAR_START_DELAY_MS)
+    },
+    playScholarMove(idx) {
+      if (!this.demoAutoplayActive) return
+      if (idx >= SCHOLARS_MATE.length) {
+        // Sequence done. Final hold, then reveal the checkmate banner.
+        this.demoAutoplayTimer = setTimeout(() => {
+          this.demoAutoplayActive = false
+          this.demoCheckmate = true
+          this.demoAutoplayTimer = null
+        }, SCHOLAR_MATE_DELAY_MS)
+        return
+      }
+      const move = SCHOLARS_MATE[idx]
+      this.demoAutoplayIdx = idx
+      // Flash the source square first so the eye tracks where the
+      // move comes from before the piece teleports to its target.
+      this.selectedSq = move.from
+      this.demoAutoplayTimer = setTimeout(() => {
+        if (!this.demoAutoplayActive) return
+        this.applyDemoMove(move.from, move.to)
+        this.demoAutoplayTimer = setTimeout(
+          () => this.playScholarMove(idx + 1),
+          SCHOLAR_INTERVAL_MS - SCHOLAR_FLASH_MS,
+        )
+      }, SCHOLAR_FLASH_MS)
+    },
+    stopScholarMate() {
+      if (this.demoAutoplayTimer) clearTimeout(this.demoAutoplayTimer)
+      this.demoAutoplayTimer = null
+      this.demoAutoplayActive = false
+      // Don't touch demoCheckmate here — the banner is dismissed via its
+      // own controls or by reset/replay, not by side-effect.
     },
   },
 }
@@ -644,47 +953,144 @@ export default {
 
       <div v-if="statusBanner" class="chFinalBanner">{{ statusBanner }}</div>
 
-      <div class="chBoardWrap">
-        <div class="chBoard">
-          <div class="chFileRow">
-            <div class="chLabelCorner"></div>
-            <div v-for="f in FILES" :key="'top-' + f" class="chFileLabel">{{ f }}</div>
-            <div class="chLabelCorner"></div>
-          </div>
-          <div v-for="(row, r) in boardRanks" :key="r" class="chBoardRow">
-            <div class="chRankLabel">{{ 8 - r }}</div>
-            <div
-              v-for="cell in row"
-              :key="cell.idx"
-              :class="[
-                'chCell',
-                cell.isLight ? 'chCell--light' : 'chCell--dark',
-                selectedSq === cell.idx ? 'chCell--selected' : '',
-                lastMove && (lastMove.from === cell.idx || lastMove.to === cell.idx) ? 'chCell--lastMove' : '',
-                (myTurn && (cell.piece !== 0 || selectedSq != null)) ? 'chCell--tappable' : '',
-              ]"
-              @click="clickSq(cell)"
-            >
-              <span
-                v-if="cell.piece"
-                :class="['chPiece', cell.isWhitePiece ? 'chPiece--white' : 'chPiece--black']"
-              >{{ cell.glyph }}</span>
+      <!-- ─── Scholar's Mate showcase banner ────────────────────────────
+           Three states, shown only in demo mode:
+             • during animation → progress + Stop
+             • on checkmate     → CHECKMATE + Replay / Free play
+             • idle pre-play    → handled in demo-hint row instead -->
+      <div v-if="!inRealGame && demoAutoplayActive" class="chScholarBar">
+        <span class="chScholarPlay" aria-hidden="true">▶</span>
+        <span class="chScholarLabel">Scholar's Mate · 4-move checkmate</span>
+        <span class="chScholarProgress">{{ Math.min(demoAutoplayIdx + 1, scholarTotalPly) }} / {{ scholarTotalPly }}</span>
+        <button class="demoBtn" @click="stopScholarMate">Stop</button>
+      </div>
+      <div v-else-if="!inRealGame && demoCheckmate" class="chMateBanner">
+        <div class="chMateIcon" aria-hidden="true">♛</div>
+        <div class="chMateLines">
+          <div class="chMateTop">CHECKMATE</div>
+          <div class="chMateSub">Scholar's Mate · Qxf7#</div>
+        </div>
+        <button class="demoBtn demoBtn--primary" @click="startScholarMate">Replay</button>
+        <button class="demoBtn" @click="resetDemo">Free play</button>
+        <button class="chMateDismiss" @click="demoCheckmate = false" aria-label="Dismiss">×</button>
+      </div>
+
+      <!-- ─── Tilted 3D table: scene → table → rail → cloth → board ───────
+           Mirrors the AD adTableWrap pattern so the chess board sits on a
+           burgundy felt tablecloth inside a tilted wooden table, with an
+           overhead spotlight and ambient room behind it. -->
+      <div class="chScene">
+        <div class="chTable">
+          <div class="chTableRail" aria-hidden="true"></div>
+          <div class="chCloth">
+            <div class="chTableBrand">CHESS · CLUB ROOM</div>
+            <div class="chBoard">
+              <div class="chFileRow">
+                <div class="chLabelCorner"></div>
+                <div v-for="f in FILES" :key="'top-' + f" class="chFileLabel">{{ f }}</div>
+                <div class="chLabelCorner"></div>
+              </div>
+              <div v-for="(row, r) in boardRanks" :key="r" class="chBoardRow">
+                <div class="chRankLabel">{{ 8 - r }}</div>
+                <div
+                  v-for="cell in row"
+                  :key="cell.idx"
+                  :class="[
+                    'chCell',
+                    cell.isLight ? 'chCell--light' : 'chCell--dark',
+                    selectedSq === cell.idx ? 'chCell--selected' : '',
+                    lastMove && (lastMove.from === cell.idx || lastMove.to === cell.idx) ? 'chCell--lastMove' : '',
+                    legalDests.has(cell.idx) && cell.piece === 0 ? 'chCell--legal' : '',
+                    legalDests.has(cell.idx) && cell.piece !== 0 ? 'chCell--legalCapture' : '',
+                    (myTurn && (cell.piece !== 0 || selectedSq != null)) ? 'chCell--tappable' : '',
+                  ]"
+                  @click="clickSq(cell)"
+                >
+                  <span
+                    v-if="cell.piece"
+                    :class="['chPiece', cell.isWhitePiece ? 'chPiece--white' : 'chPiece--black']"
+                  >{{ cell.glyph }}</span>
+                </div>
+                <div class="chRankLabel">{{ 8 - r }}</div>
+              </div>
+              <div class="chFileRow">
+                <div class="chLabelCorner"></div>
+                <div v-for="f in FILES" :key="'bot-' + f" class="chFileLabel">{{ f }}</div>
+                <div class="chLabelCorner"></div>
+              </div>
             </div>
-            <div class="chRankLabel">{{ 8 - r }}</div>
-          </div>
-          <div class="chFileRow">
-            <div class="chLabelCorner"></div>
-            <div v-for="f in FILES" :key="'bot-' + f" class="chFileLabel">{{ f }}</div>
-            <div class="chLabelCorner"></div>
           </div>
         </div>
       </div>
 
-      <div v-if="!inRealGame" class="demoHint">
-        <span class="demoHintDot"></span>
-        <span class="demoHintLabel">DEMO</span>
-        <span class="demoHintBody">Click a piece then a destination. No legality checks — try anything.</span>
-        <button class="demoBtn" @click="resetDemo">Reset board</button>
+      <!-- ─── Demo: turn indicator + captures + move history ─────────────
+           Only visible while no real (contract-backed) game is loaded.
+           Powers the practice/learn flow before a wallet ever signs. -->
+      <div v-if="!inRealGame" class="chDemoPanel">
+        <div class="chDemoBar">
+          <div class="chDemoTurn">
+            <span class="chDemoTurnDot" :class="demoTurn === 1 ? 'chDot--white' : 'chDot--black'"></span>
+            <span class="chDemoTurnLabel">{{ demoTurnLabel }}</span>
+          </div>
+          <div class="chDemoMeta">
+            <span class="chDemoMetaLabel">Moves</span>
+            <span class="chDemoMetaValue">{{ demoHistory.length }}</span>
+          </div>
+        </div>
+
+        <div class="chCapStrip">
+          <div class="chCapSide">
+            <div class="chCapLbl">White captured</div>
+            <div class="chCapRow">
+              <span
+                v-for="(g, i) in demoCapturedWhite"
+                :key="'wc' + i"
+                class="chCapGlyph chCapGlyph--black"
+              >{{ g }}</span>
+              <span v-if="!demoCapturedWhite.length" class="chCapEmpty">—</span>
+            </div>
+          </div>
+          <div class="chCapSide">
+            <div class="chCapLbl">Black captured</div>
+            <div class="chCapRow">
+              <span
+                v-for="(g, i) in demoCapturedBlack"
+                :key="'bc' + i"
+                class="chCapGlyph chCapGlyph--white"
+              >{{ g }}</span>
+              <span v-if="!demoCapturedBlack.length" class="chCapEmpty">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="demoMovesPaired.length" class="chMoveList">
+          <div class="chMoveListHdr">Move history</div>
+          <div class="chMoveListScroll">
+            <div class="chMoveListRow chMoveListRow--head">
+              <span class="chMoveN">#</span>
+              <span class="chMoveCol">White</span>
+              <span class="chMoveCol">Black</span>
+            </div>
+            <div
+              v-for="p in demoMovesPaired"
+              :key="'mv' + p.n"
+              class="chMoveListRow"
+            >
+              <span class="chMoveN">{{ p.n }}.</span>
+              <span class="chMoveCol">{{ p.white }}</span>
+              <span class="chMoveCol">{{ p.black }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="chDemoHint">
+          <span class="demoHintDot"></span>
+          <span class="demoHintLabel">DEMO</span>
+          <span class="demoHintBody">Tap your piece, then a highlighted square. Legal moves only.</span>
+          <button class="demoBtn" :disabled="!demoHistory.length || demoAutoplayActive" @click="undoDemo">Undo</button>
+          <button class="demoBtn" @click="resetDemo">Reset board</button>
+          <button class="demoBtn" @click="startScholarMate">▶ Scholar's Mate</button>
+        </div>
       </div>
 
       <div v-if="inRealGame" class="chPlayActions">
@@ -831,8 +1237,138 @@ export default {
 .chPotLine { font-size: 11.5px; color: rgba(255,255,255,0.7); margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.08); }
 .chPotLine strong { color: #f5c451; }
 
-/* ─── Board ─────────────────────────────────────────────────────────── */
-.chBoardWrap { display: flex; justify-content: center; margin: 8px 0 12px; }
+/* ─── Tilted 3D table (mirrors AD adTableWrap pattern) ────────────────
+   Three nested layers like AD:
+     .chScene   → the room: ambient gradients, perspective origin, spotlight
+     .chTable   → the tilted plane: rotateX so the back recedes
+     .chTableRail → lacquered wood ring around the cloth
+     .chCloth   → burgundy felt tablecloth the board rests on
+     .chBoard   → the actual 8x8 chess board, unchanged
+   We tilt the whole table (not just the board) so the rank/file labels,
+   wood frame, and felt edges all share the same vanishing point. */
+.chScene {
+  --ch-room-bg:
+    /* warm overhead spotlight */
+    radial-gradient(ellipse 60% 45% at 50% -10%, rgba(255, 220, 140, 0.28) 0%, transparent 60%),
+    /* floor vignette */
+    radial-gradient(ellipse 80% 60% at 50% 110%, rgba(0, 0, 0, 0.55) 0%, transparent 65%),
+    /* faint wood-panel verticals on the back wall */
+    repeating-linear-gradient(90deg,
+      rgba(0, 0, 0, 0.22) 0px, rgba(0, 0, 0, 0.22) 1px,
+      transparent 1px, transparent 36px),
+    /* base wall: dark walnut */
+    linear-gradient(180deg, #1a100a 0%, #2a1a10 45%, #14090a 100%);
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  margin: 8px 0 18px;
+  padding: 44px 18px 56px;
+  border-radius: 18px;
+  background: var(--ch-room-bg);
+  perspective: 1400px;
+  perspective-origin: 50% -10%;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 -40px 60px rgba(0, 0, 0, 0.55);
+}
+/* Overhead bulb glow — pure decoration, sells the spotlit table look. */
+.chScene::before {
+  content: '';
+  position: absolute;
+  top: -20px; left: 50%;
+  width: 260px; height: 260px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(255, 220, 140, 0.22) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.chTable {
+  position: relative;
+  width: clamp(320px, 92vw, 540px);
+  /* Aspect a touch taller than the board itself so cloth fringe shows
+     above and below the wood frame. */
+  aspect-ratio: 9 / 10;
+  border-radius: 22px;
+  overflow: hidden;
+  /* Strong forward tilt — same angle/origin as AD so the page reads
+     consistently. preserve-3d lets the board's hover/selection
+     transforms compose with the tilt instead of being flattened. */
+  transform: rotateX(22deg);
+  transform-origin: center bottom;
+  transform-style: preserve-3d;
+  box-shadow:
+    0 26px 44px rgba(0, 0, 0, 0.65),
+    0 10px 18px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+/* Lacquered wood ring around the cloth — three stacked gradients fake a
+   walnut frame without a texture file. Matches AD's adRail recipe. */
+.chTableRail {
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 220, 160, 0.18) 0%, transparent 38%),
+    radial-gradient(ellipse at center, transparent 56%, rgba(0, 0, 0, 0.5) 100%),
+    /* fine cross-grain */
+    repeating-linear-gradient(90deg,
+      rgba(0, 0, 0, 0.18) 0px, rgba(0, 0, 0, 0.18) 1px,
+      transparent 1px, transparent 4px),
+    /* main grain stripes, slight angle for life */
+    repeating-linear-gradient(8deg,
+      #3a2214 0px, #4a2c1a 6px, #3a2214 12px, #2a1810 18px),
+    linear-gradient(135deg, #2a1810 0%, #5a3620 50%, #1f120a 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 160, 0.20),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.55);
+}
+
+/* The tablecloth itself — burgundy felt with a hot spot under the
+   overhead light, fine fabric nap from layered radial-gradients, and
+   a gold piping inset to echo AD's felt without copying its green. */
+.chCloth {
+  position: absolute;
+  inset: 18px;
+  border-radius: 14px;
+  background:
+    radial-gradient(ellipse at 50% 30%, #6a1a25 0%, #38101a 55%, #1a0608 100%);
+  background-image:
+    /* fabric nap — two offset stipple layers */
+    radial-gradient(rgba(255, 255, 255, 0.035) 0.6px, transparent 0.6px),
+    radial-gradient(rgba(0, 0, 0, 0.10) 0.6px, transparent 0.6px),
+    radial-gradient(ellipse at 50% 30%, #6a1a25 0%, #38101a 55%, #1a0608 100%);
+  background-size: 3px 3px, 5px 5px, auto;
+  background-position: 0 0, 1px 2px, 0 0;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 3px rgba(245, 196, 81, 0.10),
+    inset 0 8px 22px rgba(0, 0, 0, 0.50),
+    inset 0 -4px 12px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 14px 14px;
+  transform-style: preserve-3d;
+}
+.chTableBrand {
+  letter-spacing: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(245, 196, 81, 0.70);
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.6),
+    0 0 12px rgba(245, 196, 81, 0.35);
+  margin-bottom: 10px;
+}
+
+/* The actual 8x8 board — same wood-frame styling as before, just with a
+   tighter shadow now that it sits on the felt instead of an empty page.
+   translateZ lifts it a hair off the cloth so the tilt reads as "board
+   sitting on cloth" rather than "board painted onto cloth". */
 .chBoard {
   display: inline-block;
   padding: 8px;
@@ -840,7 +1376,9 @@ export default {
   background: linear-gradient(135deg, #5a3a1f 0%, #2e1d0f 100%);
   box-shadow:
     inset 0 0 0 1px rgba(0, 0, 0, 0.45),
-    0 8px 22px rgba(0, 0, 0, 0.45);
+    0 10px 22px rgba(0, 0, 0, 0.55),
+    0 2px 4px rgba(0, 0, 0, 0.45);
+  transform: translateZ(6px);
 }
 .chFileRow { display: flex; align-items: center; }
 .chBoardRow { display: flex; align-items: center; }
@@ -855,13 +1393,14 @@ export default {
 .chCell {
   width: 40px; height: 40px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 28px; user-select: none; cursor: default;
+  font-size: 32px; user-select: none; cursor: default;
   position: relative;
+  transition: box-shadow 0.12s ease;
 }
 .chCell--light { background: linear-gradient(180deg, #f3dfbb 0%, #d8bf94 100%); }
 .chCell--dark { background: linear-gradient(180deg, #7a5436 0%, #5a3a1f 100%); }
 .chCell--tappable { cursor: pointer; }
-.chCell--selected { box-shadow: inset 0 0 0 3px #f5c451; }
+.chCell--selected { box-shadow: inset 0 0 0 3px #f5c451; z-index: 2; }
 .chCell--lastMove {
   background-image: linear-gradient(180deg, rgba(245, 196, 81, 0.35), rgba(245, 196, 81, 0.18));
 }
@@ -869,9 +1408,31 @@ export default {
   background-image: linear-gradient(180deg, rgba(245, 196, 81, 0.35), rgba(245, 196, 81, 0.12)),
     linear-gradient(180deg, #7a5436 0%, #5a3a1f 100%);
 }
+
+/* Legal-destination markers (demo only) ─────────────────────────────
+   .chCell--legal         empty square — soft gold dot in the centre
+   .chCell--legalCapture  enemy-occupied — red inset ring around the cell
+   Both are subtle on purpose; the gold ring on the selected source
+   piece is the loudest highlight on the board. */
+.chCell--legal::after {
+  content: '';
+  position: absolute;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: rgba(245, 196, 81, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(245, 196, 81, 0.6),
+    0 0 10px rgba(245, 196, 81, 0.3);
+  pointer-events: none;
+}
+.chCell--legalCapture {
+  box-shadow: inset 0 0 0 3px rgba(196, 82, 79, 0.85);
+}
+
 .chPiece {
   line-height: 1;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.55);
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55));
+  position: relative; z-index: 1;
 }
 .chPiece--white {
   color: #fff;
@@ -882,12 +1443,243 @@ export default {
   text-shadow: 0 0 1px #fff, 0 1px 2px rgba(0, 0, 0, 0.55);
 }
 
+/* ─── Demo panel: turn bar + captures + move history ──────────────── */
+.chDemoPanel {
+  margin: 0 4px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.chDemoBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(245, 196, 81, 0.10) 0%, rgba(245, 196, 81, 0.02) 100%);
+  border: 1px solid rgba(245, 196, 81, 0.30);
+}
+.chDemoTurn { display: flex; align-items: center; gap: 10px; }
+.chDemoTurnDot {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.chDot--white { background: linear-gradient(135deg, #ffffff 0%, #d6cfbe 100%); }
+.chDot--black { background: linear-gradient(135deg, #2a2a2a 0%, #050505 100%); }
+.chDemoTurnLabel {
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #fff;
+  font-weight: 700;
+}
+.chDemoMeta {
+  display: flex; align-items: baseline; gap: 6px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.chDemoMetaLabel {
+  font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+.chDemoMetaValue {
+  font-size: 16px; font-weight: 700; color: #f5c451;
+}
+
+/* Captures strip — taken pieces grouped by capturer side. White
+   captures black pieces (rendered dark) and vice versa. */
+.chCapStrip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.chCapSide {
+  flex: 1 1 200px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.chCapLbl {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+.chCapRow {
+  display: flex; flex-wrap: wrap; gap: 1px;
+  min-height: 26px; align-items: center; margin-top: 2px;
+}
+.chCapGlyph {
+  font-size: 20px; line-height: 1;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.55));
+}
+.chCapGlyph--white {
+  /* white = the colour of the piece glyph itself (taken-by-black are
+     white pieces) */
+  color: #fff;
+  text-shadow: 0 0 1px #000;
+}
+.chCapGlyph--black {
+  color: #1a1a1a;
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.85);
+}
+.chCapEmpty { color: rgba(255, 255, 255, 0.3); font-size: 14px; }
+
+/* Move history — two-column algebraic notation, scrollable. */
+.chMoveList {
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.chMoveListHdr {
+  padding: 6px 12px;
+  font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+  color: #f5c451;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.chMoveListScroll {
+  max-height: 180px;
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+}
+.chMoveListRow {
+  display: grid;
+  grid-template-columns: 40px 1fr 1fr;
+  padding: 3px 12px;
+  color: rgba(255, 255, 255, 0.85);
+}
+.chMoveListRow:nth-child(odd) { background: rgba(255, 255, 255, 0.02); }
+.chMoveListRow--head {
+  font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.18);
+}
+.chMoveN { color: rgba(255, 255, 255, 0.45); }
+.chMoveCol { word-break: break-all; }
+
+/* Demo hint row — narrower margin so it sits flush with the panel. */
+.chDemoHint {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 10px; border-radius: 8px;
+  background: rgba(245, 196, 81, 0.08);
+  border: 1px dashed rgba(245, 196, 81, 0.45);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+}
+.chDemoHint .demoBtn[disabled] {
+  opacity: 0.4; cursor: not-allowed;
+}
+.demoBtn--primary {
+  background: linear-gradient(135deg, rgba(245, 196, 81, 0.25), rgba(245, 196, 81, 0.10));
+  color: #fff;
+}
+
+/* ─── Scholar's Mate showcase: progress bar + mate banner ─────────── */
+.chScholarBar {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 4px 8px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(167, 139, 250, 0.18) 0%, rgba(167, 139, 250, 0.04) 100%);
+  border: 1px solid rgba(167, 139, 250, 0.45);
+  color: #fff;
+  font-size: 13px;
+}
+.chScholarPlay {
+  color: #a78bfa;
+  font-size: 14px;
+  animation: chScholarPulse 1.0s ease-in-out infinite;
+}
+@keyframes chScholarPulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+.chScholarLabel {
+  flex: 1;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.chScholarProgress {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: rgba(245, 196, 81, 0.9);
+  font-size: 12px;
+}
+
+/* Checkmate banner — gold/red trim, big serif word, pulses in. */
+.chMateBanner {
+  position: relative;
+  display: flex; align-items: center; gap: 14px;
+  margin: 0 4px 10px;
+  padding: 12px 18px;
+  border-radius: 12px;
+  background:
+    radial-gradient(ellipse at 30% 40%, rgba(245, 196, 81, 0.22) 0%, transparent 60%),
+    linear-gradient(135deg, rgba(196, 82, 79, 0.18) 0%, rgba(74, 26, 28, 0.85) 100%);
+  border: 1px solid rgba(245, 196, 81, 0.55);
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  animation: chMateIn 0.5s ease-out;
+}
+@keyframes chMateIn {
+  0%   { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.chMateIcon {
+  font-size: 36px; line-height: 1;
+  color: #ffe089;
+  text-shadow: 0 0 12px rgba(245, 196, 81, 0.7), 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+.chMateLines { flex: 1; min-width: 0; }
+.chMateTop {
+  font-family: 'EB Garamond', serif;
+  font-size: clamp(20px, 4vw, 26px);
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #ffe089;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+.chMateSub {
+  font-size: 11.5px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.75);
+  margin-top: 2px;
+}
+.chMateDismiss {
+  position: absolute;
+  top: 6px; right: 8px;
+  width: 22px; height: 22px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px; line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.chMateDismiss:hover { color: #fff; border-color: rgba(255, 255, 255, 0.45); }
+
 @media (max-width: 480px) {
-  .chCell { width: 34px; height: 34px; font-size: 24px; }
+  .chCell { width: 34px; height: 34px; font-size: 26px; }
   .chFileLabel, .chLabelCorner { width: 34px; }
   .chRankLabel { height: 34px; }
   .chHero { flex-direction: column; gap: 12px; }
   .chWagerHead { flex-direction: column; align-items: flex-start; gap: 4px; }
+  /* Soften the tilt on small screens — at narrow widths the strong
+     perspective makes the back rank crowd into the rail. */
+  .chTable { transform: rotateX(16deg); }
+  .chScene { padding: 32px 8px 40px; }
+  .chCloth { padding: 14px 8px 10px; }
+  .chTableBrand { letter-spacing: 3px; font-size: 10px; }
 }
 
 /* ─── Demo hint ─────────────────────────────────────────────────────── */
