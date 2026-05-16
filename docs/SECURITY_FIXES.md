@@ -235,6 +235,200 @@ this doc. Don't ship as a hotfix.
 
 ---
 
+## AD v3 — re-audit (post-v3)
+
+Re-pass before the mainnet origination of `smart_contractAD.py` (v3
+commit-reveal consumer). The May 2026 audit covered the v2 surface;
+this section re-verifies that the v2 hotfixes (AD-1..AD-4) carried
+forward into the v3 rewrite, and adds checks specific to the v3
+oracle-callback / commit-reveal flow. Line numbers refer to
+`src/services/smart_contractAD.py` at the v3 source level
+(no `pot`/`potReserve` literal edits shift anything in this region).
+
+### AD-1 [HIGH, carried] — `bet()` strict-equality amount check
+
+**Status**: ✓ retained in v3. Line 162:
+
+```python
+assert sp.amount == self.data.ante + self.data.fee + self.data.oracleFee, "must send ante + fee + oracleFee"
+```
+
+Strict `==`, all three terms required. The v2 tautology
+(`sp.amount == sp.amount`) is gone. Underpay no longer creates a game;
+overpay reverts before any state change.
+
+### AD-2 [MED, carried] — Reserve-guarded pot refill
+
+**Status**: ✓ retained in v3, moved to the `onRandomFulfilled` last-card
+branch. Lines 343-345:
+
+```python
+if self.data.pot < sp.mutez(124999) and self.data.potReserve >= sp.mutez(125000):
+    self.data.pot += sp.mutez(125000)
+    self.data.potReserve -= sp.mutez(125000)
+```
+
+Both sides of the conjunction are required. `potReserve >= 125000`
+guards the SUB_MUTEZ panic that would otherwise brick the oracle's
+last-card settlement (callback would revert → game stuck in status 2
+permanently). The 124999 / 125000 boundary is intentional — see the
+inline comment.
+
+### AD-3 [MED, carried] — `pruneGame`
+
+**Status**: ✓ retained in v3 with the v3 record shape. Lines 131-141.
+Admin-gated; requires `gameStatus >= 3` (3/4/5 = finished); emits the
+record pre-delete for indexers; then `del self.data.games[gameId]`.
+
+### AD-4 [LOW, carried] — `updateAdmin`
+
+**Status**: ✓ retained in v3. Lines 99-105. Admin-gated, `sp.cast` on
+`newAdmin`, single-step rotation. Same shape as v2.
+
+### AD-5 [LOW, v2 feature] — Commit-reveal randomness
+
+**Status**: ✓ subsumed by v3. The whole v3 rewrite *is* AD-5: cards now
+come from `requestRandom` → `revealCommit` → `onRandomFulfilled` against
+a v3 RandomOracle KT1, with player-controlled `userNonce` mixed into
+the seed. No trusted-tz1-oracle key remains. AD-5 should be marked
+DONE in the verification matrix.
+
+### v3-specific checks
+
+**V3-1 [HIGH check]** — `onRandomFulfilled` callback authentication.
+
+Line 254:
+
+```python
+assert sp.sender == self.data.oracleContract, "not oracle"
+```
+
+Strict equality against the storage value. `sp.sender` is the immediate
+caller, set by the protocol from the operation source — it can't be
+spoofed at the SmartPy level. The only way to deliver a fulfillment is
+to BE `self.data.oracleContract` (i.e. control that KT1). Admin can
+rotate via `updateOracleContract` if the oracle is compromised.
+
+**Finding**: ✓ correctly gated. No spoofing path under the Tezos protocol's
+sender semantics.
+
+**V3-2 [MED check]** — Replay of `onRandomFulfilled`.
+
+The oracle could theoretically deliver the same `requestId` twice (retry
+loop, or malicious double-fulfill). Mitigation lives in the gameStatus
+state machine:
+
+- Phase 0 asserts `g.gameStatus == 0` (line 261). After successful
+  phase-0 fulfillment, status → 1 (or 5 on pair). A replay with phase=0
+  hits `g.gameStatus in {1,5}`, assert reverts.
+- Phase 1 asserts `g.gameStatus == 2` (line 293). After successful
+  phase-1, status → 3 or 4. Replay reverts.
+
+**Finding**: ✓ no double-settlement window. The state-machine guard is
+sufficient because `gameStatus` is updated inside the same callback
+that consumes it.
+
+**V3-3 [MED check]** — `continueBet` accepts `sp.amount >= fee + oracleFee` (not `==`).
+
+Lines 213-214:
+
+```python
+assert sp.amount >= self.data.fee + self.data.oracleFee, "must cover fee + oracleFee"
+bet = sp.amount - self.data.fee - self.data.oracleFee
+```
+
+This is intentional and asymmetric to `bet()`: the bet size is a player
+choice, not a fixed price. The spread-aware ceiling at line 225
+(`maxPayout <= self.data.pot + bet`) is the actual safety bound — any
+bet that would let the worst-case payout exceed the pot reverts.
+
+**Concern checked**: can a "stray top-up" path bypass the spread
+ceiling? E.g. player sends a massive amount, the bet is huge, but the
+ceiling clamps the spread-implied payout. The ceiling check is
+unconditional and runs before any state change, so no — overpayment
+either fits the spread or reverts. ✓
+
+**Finding**: ✓ asymmetry is correct. The `>=` is load-bearing for the
+variable-bet UX; the ceiling check is what enforces solvency.
+
+**V3-4 [HIGH check]** — Reentrancy / state-before-send in win branch.
+
+Lines 322-329:
+
+```python
+spread = sp.as_nat(highCard - lowCard - 1)
+winAmount = sp.split_tokens(g.finalBet, 1235, spread * 100)
+if winAmount > self.data.pot:
+    winAmount = self.data.pot
+# §4.1: terminal state before sp.send.
+self.data.games[ctx.gameId].gameStatus = 3
+self.data.pot -= winAmount
+sp.send(g.player, winAmount)
+```
+
+`gameStatus = 3` is written BEFORE `sp.send(g.player, winAmount)`. A
+malicious player contract that re-enters via its `default()` would find
+`gameStatus = 3`, and any callback that asserts `gameStatus == 0` or
+`== 2` would revert. The pot is also debited before the send, so the
+re-entered code sees a consistent (smaller) pot.
+
+**Finding**: ✓ checks-effects-interactions order preserved from AD-5.
+
+**V3-5 [LOW check]** — Cross-game / pruned-game callback safety.
+
+Line 256: `assert ctx.gameId in self.data.games`. If a game was pruned
+between `requestRandom` and the oracle's eventual fulfillment, the
+fulfillment reverts cleanly rather than mis-applying to a different
+gameId. Note: AD only allows `pruneGame` on `gameStatus >= 3`, and
+those games have no outstanding oracle requests, so this is a defensive
+check rather than a regular path. ✓
+
+**V3-6 [LOW check]** — `handHashes` is a v2 leftover in storage.
+
+Lines 78, 172, 176 initialize and populate `handHashes` to empty
+strings, but no entrypoint ever writes a non-empty value (the v2
+commit-reveal that needed them is gone). Pure storage waste, not a
+security issue. **Not a fix in this batch** — leave as-is so the
+mainnet storage shape matches what `aceyDuecey.vue` already reads.
+Worth a follow-up cleanup commit post-mainnet.
+
+**V3-7 [LOW check]** — Pot underflow envelope around `cv3 == lowCard` / `cv3 == highCard`.
+
+Lines 313-314 / 332-333: `self.data.pot -= g.finalBet + self.data.ante;
+sp.send(self.data.txlContract, g.finalBet + self.data.ante)`. Could
+`pot < g.finalBet + self.data.ante` and trip SUB_MUTEZ?
+
+- `bet()` adds `ante` to pot. `continueBet()` adds `bet` (=finalBet) to
+  pot, then deducts `fee` via the auto-rake when `pot > 2 ꜩ`.
+- At settle: net pot delta since this game started is roughly
+  `+ante + finalBet - fee_or_zero`. Subtracting `ante + finalBet`
+  leaves `pot >= -fee_or_zero` for *this game's contribution*, but pot
+  started non-zero (5 ꜩ seed), so the cumulative balance stays
+  positive.
+- Worst case attempted: spread-1 max bet against the dust pot. Spread
+  ceiling caps bet at ~8.8% of pot. With 5 ꜩ seed, max bet ~0.44 ꜩ,
+  pot post-bet-and-rake ~5.54 ꜩ, settle subtracts 0.64 ꜩ → 4.9 ꜩ. No
+  underflow.
+
+**Finding**: ✓ no realistic underflow under the seeded mainnet pot.
+The spread ceiling is the load-bearing constraint; if seeded pot ever
+drops below `ante + maxBet` we'd revisit, but the auto-refill branch
+(V3-2's AD-2-carry) prevents that.
+
+### Summary
+
+No HIGH findings. AD-1..AD-4 are correctly carried forward; AD-5 is
+subsumed by the v3 commit-reveal flow. V3-specific checks all pass:
+callback gate is sound, state machine prevents double-settlement,
+checks-effects-interactions order preserved in the win branch. The
+only non-trivial residual is V3-6 (unused `handHashes` field) — leave
+for a post-mainnet cleanup so the storage shape stays predictable for
+`aceyDuecey.vue`.
+
+**Clear to proceed past task 10.**
+
+---
+
 ## Plinko (`src/services/smart_contractPlinko.py`)
 
 ### PLINKO-1 [HIGH, v2 feature] — Oracle bias is the trust model
