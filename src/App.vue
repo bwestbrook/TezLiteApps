@@ -140,7 +140,14 @@ export default {
 
       wallet.client.subscribeToEvent(BeaconEvent.ACTIVE_ACCOUNT_SET, (account) => {
         this.broadcastWallet(account)
-        this.socket.emit('walletConnection', account?.address ?? null)
+        // Skip walletConnection on disconnect — broadcastWallet already
+        // emits 'newWallet' = 'SYNC WALLET' for the null path. The
+        // server echoes whatever it receives as 'newWallet', so a null
+        // here would clobber walletAddress and break .includes() in
+        // mainBody's template (the v-if for the "Reset wallet" pill).
+        if (account?.address) {
+          this.socket.emit('walletConnection', account.address)
+        }
         this.socket.emit('updateGames')
       })
 

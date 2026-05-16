@@ -69,7 +69,7 @@ export default {
   },
   created() {
     this.socket.on('newWallet', (newWallet) => {
-      this.walletAddress = newWallet
+      this.walletAddress = typeof newWallet === 'string' ? newWallet : 'SYNC WALLET'
     })
     this.socket.on('selectGame', (game) => {
       this.selectGame(game)
