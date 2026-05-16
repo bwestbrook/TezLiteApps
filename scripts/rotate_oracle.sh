@@ -69,7 +69,15 @@ suffix    = "_" + NETWORK.upper()
 # oracle-consuming contract in this sense — so it's excluded here. The
 # oracle / txl / oracle-reference contracts are excluded for the same
 # reason. If a contract gains an oracle later, add its deploy.py id.
-GAME_IDS = ["acey-duecey", "plinko", "war", "reversi", "chess", "ttt"]
+#
+# AD is also excluded: smart_contractAD.py (v3) consumes the RandomOracle
+# KT1 via requestRandom / onRandomFulfilled, not a per-game tz1 oracle key.
+# To rotate AD's source of randomness, originate a new RandomOracle and
+# call AD's `updateOracleContract(newOracle)` (admin-gated). That's a
+# different operational flow from this script's tz1-key rotation —
+# don't add AD back to GAME_IDS or `ct.updateOracle(NEW)` will revert
+# with "unknown entrypoint."
+GAME_IDS = ["plinko", "war", "reversi", "chess", "ttt"]
 
 def address_for(spec):
     var = spec.constants_var + suffix          # e.g. AD_CONTRACT_ADDRESS_SHADOWNET
