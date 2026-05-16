@@ -237,7 +237,15 @@ export const CHESS_CONTRACT_ADDRESS      = IS_MAINNET ? CHESS_CONTRACT_ADDRESS_M
 export const WAR_CONTRACT_ADDRESS        = IS_MAINNET ? WAR_CONTRACT_ADDRESS_MAINNET        : WAR_CONTRACT_ADDRESS_SHADOWNET
 
 // ─── Addresses ───────────────────────────────────────────────────────────────
-export const ADMIN_ADDRESS = 'tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w'
+// The wallet that controls admin entrypoints on every deployed game
+// contract (oracle, AD, TTT, war, plinko, squares, …). This is the
+// address DEPLOY_MNEMONIC derives to — same key the off-chain oracle
+// worker runs with. Must match the `admin` baked into each contract's
+// initial storage; if it drifts, the UI's isAdmin checks silently fail
+// and the deployer can't admin from the web UI.
+//
+// Distinct from jamin_b's TXL-holder wallet (tz1Vq5mYKXw1dD9js26An8dXdASuzo3bfE2w).
+export const ADMIN_ADDRESS = 'tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q'
 
 // ─── Game / NFT info copy ────────────────────────────────────────────────────
 export const NFT_INFO = [
