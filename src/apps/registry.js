@@ -22,7 +22,6 @@ import browseNFTs from '../components/browseNFTs.vue'
 import aceyDuecey from '../components/aceyDuecey.vue'
 import tezTacToe from '../components/tezTacToe.vue'
 import squaresGame from '../components/squaresGame.vue'
-import reversiGame from '../components/reversiGame.vue'
 import plinkoGame from '../components/plinkoGame.vue'
 import chessGame from '../components/chessGame.vue'
 import warGame from '../components/warGame.vue'
@@ -36,7 +35,6 @@ const IMG = {
   aceyDuecey:  require('../assets/aceyDuecey.png'),
   tezTacToe:   require('../assets/tezTacToe.png'),
   squares:     require('../assets/squaresTile.svg'),
-  reversi:     require('../assets/reversiTile.svg'),
   plinko:      require('../assets/plinkoTile.svg'),
   chess:       require('../assets/chessTile.svg'),
   war:         require('../assets/warTile.svg'),
@@ -86,14 +84,6 @@ export const APPS = [
     tag: 'game',
     image: IMG.aceyDuecey,
     component: aceyDuecey,
-  },
-  {
-    id: 'reversi',
-    name: 'Reversi',
-    blurb: 'H2H pure-skill 8×8 strategy. Stake against an opponent.',
-    tag: 'game',
-    image: IMG.reversi,
-    component: reversiGame,
   },
   {
     id: 'chess',
