@@ -8,7 +8,7 @@ import {
   TXL_CONTRACT_ADDRESS,
   BLOCKCHAIN_ENABLED,
 } from '../constants'
-import { getContractStorage } from '../services/tzkt'
+import { getContractStorage, getBigmapKey, tzktGet } from '../services/tzkt'
 
 export default {
   name: 'mainBody',
@@ -28,6 +28,12 @@ export default {
       txlPoolValue: 0,
       txlShare: 0,
       txlOwnsNft: false,
+      // TXL token IDs the connected wallet owns. Populated by
+      // refreshTxlContract from the idLookUp big_map; consumed by
+      // payNftHolderBC to populate the claim(tokenIds) call. v1 didn't
+      // need this — the old payTxlHolder swept per-NFT balances the
+      // contract attributed to the sender, no input.
+      txlOwnedTokenIds: [],
       txlCashStatus: '',
       // Flashes the "Unclaimed" chip green for ~1s when the pool grows (a bet
       // somewhere sent its holder fee in). txlPoolSeeded guards the first poll
@@ -196,16 +202,25 @@ export default {
         : true
       if (ok) setNetwork(next)
     },
-    // Poll the TXL manager contract: the holder pool total (storage
-    // totalRewards), and — if a wallet is connected — that wallet's claimable
-    // share, summed from the contract's own idLookUp owner records (exactly
-    // what payTxlHolder pays out, so it matches the Cash Out button).
+    // Poll the TXL v2 manager: the holder pool total (storage
+    // totalRewards), and — if a wallet is connected — that wallet's
+    // claimable share. v2 uses a global-accumulator pattern:
+    //
+    //   accrued(token) = accPerToken - idLookUp[token].lastSeenAcc
+    //   claimable(addr) = sum(accrued(t)) over t owned by addr  +  pending[addr]
+    //
+    // We fetch the owned tokens by filtering the idLookUp big_map on
+    // value.owner == myAddress (tzkt supports that natively), then add
+    // any already-settled balance from the pending big_map.
+    //
+    // v1 used to walk an inline JS object on storage.idLookUp; v2 lifted
+    // that to a big_map so storage returns just the integer pointer. The
+    // old `for (const entry of Object.values(storage.idLookUp))` silently
+    // iterated over zero entries against the new contract.
     async refreshTxlContract() {
       const storage = await getContractStorage(TXL_CONTRACT_ADDRESS)
       if (!storage) return
       const nextPool = Number(storage.totalRewards || 0) / 1e6
-      // A bet landed its holder fee — flash the chip green. Skip the very
-      // first poll (0 → real value isn't a "bet was placed").
       if (this.txlPoolSeeded && nextPool > this.txlPoolValue) this.flashTxlPool()
       this.txlPoolValue = nextPool
       this.txlPoolSeeded = true
@@ -215,43 +230,94 @@ export default {
       if (!address) {
         this.txlOwnsNft = false
         this.txlShare = 0
+        this.txlOwnedTokenIds = []
         return
       }
-      let shareMutez = 0
-      let owns = false
-      for (const entry of Object.values(storage.idLookUp || {})) {
-        if (entry?.owner === address) {
-          owns = true
-          shareMutez += Number(entry.balance || 0)
+
+      // v2 storage shape: totalRewards/accPerToken/dust are plain values;
+      // idLookUp/pending are returned as bigmap pointer ids (integers).
+      // If the storage shape ever shifts back to inlined maps, the Number()
+      // coercion below would yield NaN and we'd safely fall through to
+      // "no share" rather than throwing.
+      const accPerToken = Number(storage.accPerToken || 0)
+      const idLookUpId = Number(storage.idLookUp)
+      const pendingId = Number(storage.pending)
+      if (!Number.isFinite(idLookUpId)) {
+        this.txlOwnsNft = false
+        this.txlShare = 0
+        this.txlOwnedTokenIds = []
+        return
+      }
+
+      // tzkt: filter the idLookUp big_map for entries whose value.owner
+      // matches us. `active=true` skips deleted entries. The 300 cap
+      // covers the worst case of a single wallet holding every TXL
+      // token (totalSupply = 271).
+      const ownedEntries = await tzktGet(
+        `/v1/bigmaps/${idLookUpId}/keys?active=true&value.owner=${address}&limit=300`,
+      )
+      let accruedMutez = 0
+      const ownedTokenIds = []
+      if (Array.isArray(ownedEntries)) {
+        for (const e of ownedEntries) {
+          const tokenId = Number(e.key)
+          if (!Number.isFinite(tokenId)) continue
+          const lastSeenAcc = Number(e.value?.lastSeenAcc || 0)
+          ownedTokenIds.push(tokenId)
+          const share = accPerToken - lastSeenAcc
+          if (share > 0) accruedMutez += share
         }
       }
-      this.txlOwnsNft = owns
-      this.txlShare = shareMutez / 1e6
+
+      // Already-settled balance for this address. settleBatch (admin) or
+      // owner-change settlement (oracle) may have parked credit here
+      // ahead of any direct claim.
+      let pendingMutez = 0
+      if (Number.isFinite(pendingId)) {
+        const pendingKey = await getBigmapKey(pendingId, address)
+        if (Array.isArray(pendingKey) && pendingKey[0]?.active) {
+          pendingMutez = Number(pendingKey[0].value || 0)
+        }
+      }
+
+      this.txlOwnedTokenIds = ownedTokenIds
+      this.txlOwnsNft = ownedTokenIds.length > 0
+      this.txlShare = (accruedMutez + pendingMutez) / 1e6
     },
-    // Claim this wallet's accrued TXL holder earnings. payTxlHolder zeroes the
-    // per-NFT balances the contract attributes to the sender and sends the sum.
+    // Claim this wallet's accrued TXL holder earnings. v2's claim()
+    // takes the list of token IDs the caller owns; the contract verifies
+    // ownership, settles the accrued share for each, and sends the
+    // caller their full pending balance. The contract caps the list at
+    // MAX_BATCH (50) per call, so chunk if the wallet owns >50 NFTs.
     async payNftHolderBC() {
       const activeAccount = await this.wallet.client.getActiveAccount()
       if (!activeAccount) {
         this.txlCashStatus = 'Sync a wallet first'
         return
       }
+      if (!this.txlOwnedTokenIds.length) {
+        this.txlCashStatus = 'No TXL tokens owned'
+        return
+      }
       this.txlCashStatus = 'Cashing out…'
       this.tezos.setWalletProvider(this.wallet)
-      await this.tezos.wallet
-        .at(TXL_CONTRACT_ADDRESS)
-        .then((contract) => contract.methodsObject.payTxlHolder().send())
-        .then((op) => op.confirmation().then(() => op.opHash))
-        .then(() => {
-          this.txlCashStatus = 'Cashed out!'
-          // Balances were just zeroed on-chain — repoll so the pool total
-          // and "Your Share" reflect the payout.
-          this.refreshTxlContract()
-        })
-        .catch((error) => {
-          console.error('payNftHolderBC failed:', error)
-          this.txlCashStatus = 'Cash out failed'
-        })
+      try {
+        const contract = await this.tezos.wallet.at(TXL_CONTRACT_ADDRESS)
+        // claim's parameter type is bare `list nat` (SmartPy unwraps the
+        // single-field record), so we use .methods.<name>(arg) — not
+        // .methodsObject which expects a keyed record.
+        const BATCH = 50
+        for (let i = 0; i < this.txlOwnedTokenIds.length; i += BATCH) {
+          const chunk = this.txlOwnedTokenIds.slice(i, i + BATCH)
+          const op = await contract.methods.claim(chunk).send()
+          await op.confirmation()
+        }
+        this.txlCashStatus = 'Cashed out!'
+        this.refreshTxlContract()
+      } catch (error) {
+        console.error('payNftHolderBC failed:', error)
+        this.txlCashStatus = 'Cash out failed'
+      }
     },
     // Pulse the "Unclaimed" chip green for ~1s. Re-arm the timer each call so
     // back-to-back increases don't leave it stuck on.
