@@ -264,7 +264,7 @@ export const NFT_INFO = [
 // (`self.data.potReserve += sp.amount`). Sending plain tez to the KT1
 // is a pot top-up, not a no-op.
 export const AD_GAME_INFO = [
-  'Ante up 0.3 ꜩ to play (0.2 ꜩ ante + 0.1 ꜩ 2.725K holder fee). Aces are always high.',
+  'Ante up 0.4 ꜩ to play (0.2 ꜩ ante + 0.1 ꜩ 2.725K holder fee + 0.1 ꜩ v3 oracle fee). Aces are always high.',
   'Two cards are dealt. If they pair, the ante is forfeit to the pot — no refund.',
   'Otherwise, place an Acey-Duecey bet (up to 30% of the pot) that the next card lands strictly between them.',
   'Payouts are TRUE ODDS with a 5% house rake — tight spreads pay big, wide spreads pay slim:',
