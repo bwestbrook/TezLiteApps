@@ -1072,30 +1072,31 @@ export default {
  
   <div class="centerBody">
     <div class="gameManagement" >
-        <div class="rowFlex">
-          <div class="gameManagement">
-            <div class="actionButton" @click="prevRank()" > &larr;  Prev Rank </div>
-            <div class="actionButton" @click="prevTxl()" >  &larr;  Prev ID </div>
-          </div>   
-            <div class="gameManagement" >      
-              <div class="gameManagement">Select New Rank </div>
-              <select class="selectBox" v-model="txlRanking" @change="getNftDataRank()">
-                <option v-for="(key, value) in txlRevRankings" :key="key" :value="value"> {{ value}} </option>
-              </select>
-            </div>           
-          <div class="gameManagement"> 
-            <div class="gameManagement" >Select New ID </div>
-            <select class="selectBox" v-model="txlId" @change="getNftDataId()">
-              <option v-for="(key, value) in idLookUp" :key="key" :value="value"> {{ value}} </option>
+        <div class="browserPanel">
+          <div class="browserPanelRow">
+            <div class="browserPanelLabel">Rank</div>
+            <div class="actionButton browserPanelBtn" @click="prevRank()"> &larr; Prev </div>
+            <select class="selectBox browserPanelSelect" v-model="txlRanking" @change="getNftDataRank()">
+              <option v-for="(key, value) in txlRevRankings" :key="key" :value="value"> {{ value }} </option>
             </select>
-          </div> 
-          <div class="gameManagement"> 
-            <div class="actionButton" @click="nextRank()" > Next Rank  &rarr; </div>
-            <div class="actionButton" @click="nextTxl()" > Next ID  &rarr; </div>
+            <div class="actionButton browserPanelBtn" @click="nextRank()"> Next &rarr; </div>
+          </div>
+          <div class="browserPanelRow">
+            <div class="browserPanelLabel">ID</div>
+            <div class="actionButton browserPanelBtn" @click="prevTxl()"> &larr; Prev </div>
+            <select class="selectBox browserPanelSelect" v-model="txlId" @change="getNftDataId()">
+              <option v-for="(key, value) in idLookUp" :key="key" :value="value"> {{ value }} </option>
+            </select>
+            <div class="actionButton browserPanelBtn" @click="nextTxl()"> Next &rarr; </div>
+          </div>
+          <div class="browserPanelDivider"></div>
+          <div class="browserPanelChips">
+            <div class="txlRank"> Rank: {{ txlRanking }} </div>
+            <div class="txlRank"> ID: {{ txlId }} </div>
+            <div class="txlRank" v-for="(key, value) in txlData" :key="key" :value="value"> {{ value }}: {{ key }} </div>
           </div>
         </div>
-        </div>
-        <div class="rowFlex">  
+        <div class="rowFlex">
           <div class="actionButton" @click="selectRandom"> Select Random TXL </div>
           <div class="actionButton" @click="checkThisOnObjkt(txlId)"> Buy {{ txlId.toString() }} On All Objkt.com </div>
           <div class="actionButton" @click="browseAllOnObjkt"> Browse On All Objkt.com </div>
@@ -1137,21 +1138,64 @@ export default {
           <div class="gameInfo"> Random TXL in {{ countDownSeconds }} </div>
           <div class="actionButton" @click="togglePauseRandom"> {{pauseState}} Random </div>
         </div>
-        <div class="rowFlex">
-          <div class="txlRank"> Rank: {{ txlRanking }}</div>
-          <div class="txlRank"> ID: {{ txlId }}</div>
-          <div class="txlRank" v-for="(key, value) in txlData" :key="key" :value="value"> {{ value }}: {{ key }} </div>
-        </div>
         <div class="rowFlex" v-if="distinctHolders">
           <div class="txlRank"> Holders: {{ distinctHolders }}</div>
           <div class="txlRank"> Listed on objkt: {{ onMarketplace }}</div>
           <div class="txlRank" v-if="topHolderLabel"> Top holder: {{ topHolderLabel }}</div>
         </div>
       </div>
-    
+  </div>
 </template>
 
 <style scoped>
+/* Consolidated panel: rank + ID navigation and trait chips in one frame.
+   Replaces the prior split layout (top nav rowFlex + bottom chip rowFlex). */
+.browserPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  margin: 4px 0;
+  border: 1px solid var(--ad-border-soft);
+  border-radius: var(--ad-r-md);
+  background: var(--ad-bg-elev-0, transparent);
+}
+.browserPanelRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+}
+.browserPanelLabel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  min-width: 56px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--ad-text-2, var(--ad-text-1));
+  text-transform: uppercase;
+}
+.browserPanelBtn { flex: 1; }
+.browserPanelSelect { flex: 2; min-width: 120px; }
+.browserPanelDivider {
+  height: 1px;
+  background: var(--ad-border-faint);
+  margin: 2px 0;
+}
+.browserPanelChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+}
+@media (max-width: 480px) {
+  .browserPanel { padding: 8px; gap: 6px; }
+  .browserPanelLabel { min-width: 44px; font-size: 11px; padding: 0 6px; }
+}
 /* Full-width band around the spinning card — anchors the owner badge to the
    right edge of the content, not the narrow centered card. */
 .cardArea {

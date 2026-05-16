@@ -50,6 +50,10 @@ const RIM_INSET = 0.22
 const FIXED_PITCH = 0.52
 const DEFAULT_YAW = -0.42
 const DRAG_SENSITIVITY = 0.011   // radians of yaw per pixel dragged
+// Constant turntable spin: 360° per 20 seconds. Drag pauses the spin
+// for as long as the pointer is down, then it resumes from wherever
+// the user left it.
+const SPIN_RAD_PER_S = (2 * Math.PI) / 20
 
 function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3) }
 
@@ -103,6 +107,13 @@ export default {
       // pitch is fixed; only yaw changes (turntable rotation).
       pitch: FIXED_PITCH,
       yaw: DEFAULT_YAW,
+      // Continuous-spin bookkeeping. spinAnchorYaw + spinT0 define the
+      // line yaw(t) = spinAnchorYaw + (now − spinT0) × SPIN_RAD_PER_S.
+      // Drag pauses the loop (spinFrame == 0) and re-anchors on release
+      // so the spin resumes from the dragged-to angle.
+      spinAnchorYaw: DEFAULT_YAW,
+      spinT0: 0,
+      spinFrame: 0,
       drag: null,   // { startX, startYaw } while dragging
     }
   },
@@ -270,9 +281,9 @@ export default {
       }
       const { xBits, zBits, rows, t0, totalDurationS } = this.ball
       const elapsed = (performance.now() - t0) / 1000
-      // animateBall() seeds the total duration onto the ball so any
-      // changes there (slowdown factor, per-row tuning, …) stay in
-      // sync with the read side.
+      // animateBall() seeds the total duration onto the ball so the
+      // read side here stays in lockstep with whatever slowdown / tuning
+      // the writer chooses.
       const totalDuration = totalDurationS
       const tNorm = Math.min(1, elapsed / totalDuration)
       const SETTLE = 0.6     // fall from last peg into the rim opening
@@ -346,10 +357,15 @@ export default {
     this.refresh()
     this.startPolling()
   },
+  mounted() {
+    // Kick off the constant turntable spin once the component is live.
+    this.startSpin()
+  },
   beforeUnmount() {
     if (this.pollInterval) clearInterval(this.pollInterval)
     if (this.pollCountdownInterval) clearInterval(this.pollCountdownInterval)
     if (this.animationFrame) cancelAnimationFrame(this.animationFrame)
+    if (this.spinFrame) cancelAnimationFrame(this.spinFrame)
   },
   methods: {
     // World coords for lattice point (c,e) at pyramid depth `d`. The
@@ -380,7 +396,9 @@ export default {
     // Pointer events cover mouse + touch. We capture the pointer so the
     // drag keeps tracking even if it leaves the SVG. Only horizontal
     // movement matters — it spins the board about its vertical axis.
+    // Drag pauses the constant spin; release re-anchors and resumes.
     onBoardPointerDown(ev) {
+      this.stopSpin()
       this.drag = { startX: ev.clientX, startYaw: this.yaw }
       try { ev.target.setPointerCapture(ev.pointerId) } catch (_e) { /* noop */ }
     },
@@ -394,9 +412,31 @@ export default {
     onBoardPointerUp(ev) {
       this.drag = null
       try { ev.target.releasePointerCapture(ev.pointerId) } catch (_e) { /* noop */ }
+      // Resume the constant spin from wherever the user dragged to.
+      this.startSpin()
     },
     resetCamera() {
       this.yaw = DEFAULT_YAW
+      // Re-anchor so the spin continues smoothly from the reset angle.
+      this.startSpin()
+    },
+    // Drive the constant turntable rotation. yaw advances at
+    // SPIN_RAD_PER_S until stopSpin() — drag uses that pause window
+    // to take exclusive control of yaw.
+    startSpin() {
+      if (this.spinFrame) cancelAnimationFrame(this.spinFrame)
+      this.spinAnchorYaw = this.yaw
+      this.spinT0 = performance.now()
+      const tick = () => {
+        const elapsed = (performance.now() - this.spinT0) / 1000
+        this.yaw = this.spinAnchorYaw + elapsed * SPIN_RAD_PER_S
+        this.spinFrame = requestAnimationFrame(tick)
+      }
+      this.spinFrame = requestAnimationFrame(tick)
+    },
+    stopSpin() {
+      if (this.spinFrame) cancelAnimationFrame(this.spinFrame)
+      this.spinFrame = 0
     },
     // Full-rainbow colour per ring: red at the centre ring, sweeping
     // through orange/yellow/green/blue to magenta at the corners. Every
@@ -522,11 +562,9 @@ export default {
       this.resetBall()
     },
     // Stop the rAF loop and clear all ball state back to "no ball".
-    // If a drop is mid-flight when this fires (row-switch button), the
-    // spin gets restored to whatever yaw it started from so the camera
-    // doesn't end mid-rotation against the new row geometry.
+    // Yaw isn't touched here — the constant turntable spin runs
+    // independently and keeps going across row-switches.
     resetBall() {
-      if (this.ball?.startYaw != null) this.yaw = this.ball.startYaw
       cancelAnimationFrame(this.animationFrame)
       this.animationFrame = 0
       this.ball = null
@@ -538,42 +576,28 @@ export default {
       const finalZ = zBits.reduce((a, b) => a + b, 0)
       this.ballLanded = false
       const t0 = performance.now()
-      // 20% slowdown vs the previous timing — duration ×= 1.25. The
-      // wider window lets the 360° stage spin (driven below in the
-      // rAF tick) breathe across all row sizes:
-      //   8 rows  → 3.40s → 4.25s
-      //   12 rows → 4.60s → 5.75s
-      //   16 rows → 5.80s → 7.25s
+      // 20% slowdown vs the previous timing — duration ×= 1.25. Per-row
+      // total now lands at:
+      //   8 rows  → 4.25s
+      //   12 rows → 5.75s
+      //   16 rows → 7.25s
+      // The continuous turntable spin (driven by startSpin()) runs
+      // independently across all of this; the drop animation only
+      // touches ball position, not yaw.
       const totalDurationS = (0.30 * rows + 0.6 + 0.4) * 1.25
-      // Anchor the camera's starting yaw so we can drive a smooth full
-      // revolution over the fall and snap back to the same orientation
-      // when the animation ends.
-      const startYaw = this.yaw
-      this.ball = {
-        rows, xBits, zBits, finalX, finalZ,
-        t0, totalDurationS, startYaw,
-      }
+      this.ball = { rows, xBits, zBits, finalX, finalZ, t0, totalDurationS }
       this.ballSettleAt = t0 + totalDurationS * 1000
       const tick = () => {
         if (!this.ball) return
         this.ballTick++
-        // Drive a single 360° turntable rotation over the fall. progress
-        // is clamped to 1 so the spin doesn't overshoot during the
-        // ballSettleAt+500ms touchdown grace window.
-        const elapsedS = (performance.now() - t0) / 1000
-        const progress = Math.min(1, elapsedS / totalDurationS)
-        this.yaw = startYaw + progress * 2 * Math.PI
         const pos = this.ballPosition
         if (pos?.done) {
           if (performance.now() > this.ballSettleAt + 500) {
             // Touchdown: stop the rAF loop but keep `this.ball` set so
             // the ball stays parked in its bin. Flipping ballLanded
-            // lights the winning cell. Snap yaw back to its anchor —
-            // visually identical to startYaw + 2π, but a clean value
-            // for any subsequent drag math.
+            // lights the winning cell.
             this.ballLanded = true
             this.animationFrame = 0
-            this.yaw = startYaw
             return
           }
         }
