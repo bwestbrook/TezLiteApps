@@ -550,9 +550,14 @@ def originate(spec: ContractSpec, code_tz: Path, storage_tz: Path, network: str,
     ensure_revealed(client)
 
     log(f"Originating {spec.id}…")
-    op = client.origination(script={"code": code_micheline, "storage": storage_micheline})
-    if spec.initial_balance_tez > 0:
-        op = op.with_amount(int(spec.initial_balance_tez * 1_000_000))
+    # Pytezos's client.origination() takes `balance` (mutez int) directly —
+    # the older OperationGroup.with_amount() shim is gone, so set it at
+    # build time. Zero is the default when initial_balance_tez is 0.0.
+    balance_mutez = int(spec.initial_balance_tez * 1_000_000)
+    op = client.origination(
+        script={"code": code_micheline, "storage": storage_micheline},
+        balance=balance_mutez,
+    )
     op = op.autofill().sign().inject(_async=False, min_confirmations=1)
 
     address = extract_originated_address(op)
