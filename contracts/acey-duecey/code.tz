@@ -44,7 +44,7 @@ code
                 CONTRACT unit; # option (contract unit) : list operation : @parameter%bet : @storage
                 IF_NONE
                   {
-                    PUSH int 171; # int : list operation : @parameter%bet : @storage
+                    PUSH int 167; # int : list operation : @parameter%bet : @storage
                     FAILWITH;   # FAILED
                   }
                   {}; # @some : list operation : @parameter%bet : @storage
@@ -164,7 +164,7 @@ code
                 GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @parameter%continueBet : @storage
                 IF_NONE
                   {
-                    PUSH int 214; # int : @parameter%continueBet : @storage
+                    PUSH int 210; # int : @parameter%continueBet : @storage
                     FAILWITH;   # FAILED
                   }
                   {}; # @some : @parameter%continueBet : @storage
@@ -216,14 +216,14 @@ code
                 SUB_MUTEZ;  # option mutez : mutez : @some : @parameter%continueBet : @storage
                 IF_NONE
                   {
-                    PUSH int 218; # int : mutez : @some : @parameter%continueBet : @storage
+                    PUSH int 214; # int : mutez : @some : @parameter%continueBet : @storage
                     FAILWITH;   # FAILED
                   }
                   {}; # @some : mutez : @some : @parameter%continueBet : @storage
                 SUB_MUTEZ;  # option mutez : @some : @parameter%continueBet : @storage
                 IF_NONE
                   {
-                    PUSH int 218; # int : @some : @parameter%continueBet : @storage
+                    PUSH int 214; # int : @some : @parameter%continueBet : @storage
                     FAILWITH;   # FAILED
                   }
                   {}; # @some : @some : @parameter%continueBet : @storage
@@ -234,7 +234,7 @@ code
                 GET;        # option int : @some : @some : @parameter%continueBet : @storage
                 IF_NONE
                   {
-                    PUSH int 222; # int : @some : @some : @parameter%continueBet : @storage
+                    PUSH int 218; # int : @some : @some : @parameter%continueBet : @storage
                     FAILWITH;   # FAILED
                   }
                   {}; # @some : @some : @some : @parameter%continueBet : @storage
@@ -245,7 +245,7 @@ code
                 GET;        # option int : @some : @some : @some : @parameter%continueBet : @storage
                 IF_NONE
                   {
-                    PUSH int 223; # int : @some : @some : @some : @parameter%continueBet : @storage
+                    PUSH int 219; # int : @some : @some : @some : @parameter%continueBet : @storage
                     FAILWITH;   # FAILED
                   }
                   {}; # @some : @some : @some : @some : @parameter%continueBet : @storage
@@ -264,7 +264,7 @@ code
                     GET;        # option int : @some : @some : @parameter%continueBet : @storage
                     IF_NONE
                       {
-                        PUSH int 225; # int : @some : @some : @parameter%continueBet : @storage
+                        PUSH int 221; # int : @some : @some : @parameter%continueBet : @storage
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : @some : @some : @parameter%continueBet : @storage
@@ -275,7 +275,7 @@ code
                     GET;        # option int : @some : @some : @some : @parameter%continueBet : @storage
                     IF_NONE
                       {
-                        PUSH int 226; # int : @some : @some : @some : @parameter%continueBet : @storage
+                        PUSH int 222; # int : @some : @some : @some : @parameter%continueBet : @storage
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : @some : @some : @some : @parameter%continueBet : @storage
@@ -290,7 +290,7 @@ code
                 ISNAT;      # option nat : @some : @some : @some : @some : @parameter%continueBet : @storage
                 IF_NONE
                   {
-                    PUSH int 227; # int : @some : @some : @some : @some : @parameter%continueBet : @storage
+                    PUSH int 223; # int : @some : @some : @some : @some : @parameter%continueBet : @storage
                     FAILWITH;   # FAILED
                   }
                   {}; # @some : @some : @some : @some : @some : @parameter%continueBet : @storage
@@ -304,7 +304,7 @@ code
                 EDIV;       # option (pair mutez mutez) : @some : @some : @some : @some : @some : @parameter%continueBet : @storage
                 IF_NONE
                   {
-                    PUSH int 228; # int : @some : @some : @some : @some : @some : @parameter%continueBet : @storage
+                    PUSH int 224; # int : @some : @some : @some : @some : @some : @parameter%continueBet : @storage
                     FAILWITH;   # FAILED
                   }
                   {
@@ -337,7 +337,7 @@ code
                 GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : mutez : @some : @some : @some : @some : @some : @parameter%continueBet
                 IF_NONE
                   {
-                    PUSH int 231; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : mutez : @some : @some : @some : @some : @some : @parameter%continueBet
+                    PUSH int 227; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : mutez : @some : @some : @some : @some : @some : @parameter%continueBet
                     FAILWITH;   # FAILED
                   }
                   {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : mutez : @some : @some : @some : @some : @some : @parameter%continueBet
@@ -358,7 +358,7 @@ code
                 GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : mutez : @some : @some : @some : @some : @some : @parameter%continueBet
                 IF_NONE
                   {
-                    PUSH int 232; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : mutez : @some : @some : @some : @some : @some : @parameter%continueBet
+                    PUSH int 228; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : mutez : @some : @some : @some : @some : @some : @parameter%continueBet
                     FAILWITH;   # FAILED
                   }
                   {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : mutez : @some : @some : @some : @some : @some : @parameter%continueBet
@@ -382,7 +382,7 @@ code
                 CONTRACT unit; # option (contract unit) : list operation : mutez : @some : @some : @some : @some : @some : @parameter%continueBet : @storage
                 IF_NONE
                   {
-                    PUSH int 234; # int : list operation : mutez : @some : @some : @some : @some : @some : @parameter%continueBet : @storage
+                    PUSH int 230; # int : list operation : mutez : @some : @some : @some : @some : @some : @parameter%continueBet : @storage
                     FAILWITH;   # FAILED
                   }
                   {}; # @some : list operation : mutez : @some : @some : @some : @some : @some : @parameter%continueBet : @storage
@@ -409,7 +409,7 @@ code
                     SUB_MUTEZ;  # option mutez : @storage : list operation : mutez : @some : @some : @some : @some : @some : @parameter%continueBet
                     IF_NONE
                       {
-                        PUSH int 236; # int : @storage : list operation : mutez : @some : @some : @some : @some : @some : @parameter%continueBet
+                        PUSH int 232; # int : @storage : list operation : mutez : @some : @some : @some : @some : @some : @parameter%continueBet
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : @storage : list operation : mutez : @some : @some : @some : @some : @some : @parameter%continueBet
@@ -542,7 +542,7 @@ code
                 GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @some : @parameter%onRandomFulfilled : @storage
                 IF_NONE
                   {
-                    PUSH int 261; # int : @some : @parameter%onRandomFulfilled : @storage
+                    PUSH int 257; # int : @some : @parameter%onRandomFulfilled : @storage
                     FAILWITH;   # FAILED
                   }
                   {}; # @some : @some : @parameter%onRandomFulfilled : @storage
@@ -616,7 +616,7 @@ code
                     EDIV;       # option (pair nat nat) : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                     IF_NONE
                       {
-                        PUSH int 279; # int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled : @storage
+                        PUSH int 275; # int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                         FAILWITH;   # FAILED
                       }
                       {
@@ -631,7 +631,7 @@ code
                     EDIV;       # option (pair nat nat) : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                     IF_NONE
                       {
-                        PUSH int 280; # int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled : @storage
+                        PUSH int 276; # int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                         FAILWITH;   # FAILED
                       }
                       {
@@ -657,7 +657,7 @@ code
                     GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
                     IF_NONE
                       {
-                        PUSH int 283; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
+                        PUSH int 279; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
@@ -683,7 +683,7 @@ code
                     GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
                     IF_NONE
                       {
-                        PUSH int 284; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
+                        PUSH int 280; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
@@ -709,7 +709,7 @@ code
                     GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
                     IF_NONE
                       {
-                        PUSH int 285; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
+                        PUSH int 281; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
@@ -735,7 +735,7 @@ code
                     GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
                     IF_NONE
                       {
-                        PUSH int 286; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
+                        PUSH int 282; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
@@ -761,7 +761,7 @@ code
                     GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
                     IF_NONE
                       {
-                        PUSH int 287; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
+                        PUSH int 283; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : int : int : nat : nat : nat : @some : @some : @parameter%onRandomFulfilled
@@ -795,7 +795,7 @@ code
                         GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : @some
                         IF_NONE
                           {
-                            PUSH int 290; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : @some
+                            PUSH int 286; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : @some
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : @some
@@ -840,7 +840,7 @@ code
                         GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : @some
                         IF_NONE
                           {
-                            PUSH int 293; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : @some
+                            PUSH int 289; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : @some
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : @some
@@ -893,7 +893,7 @@ code
                     EDIV;       # option (pair nat nat) : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                     IF_NONE
                       {
-                        PUSH int 301; # int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
+                        PUSH int 297; # int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                         FAILWITH;   # FAILED
                       }
                       {
@@ -916,7 +916,7 @@ code
                     GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : nat : @some : @some : @parameter%onRandomFulfilled
                     IF_NONE
                       {
-                        PUSH int 303; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : nat : @some : @some : @parameter%onRandomFulfilled
+                        PUSH int 299; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : nat : @some : @some : @parameter%onRandomFulfilled
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : nat : @some : @some : @parameter%onRandomFulfilled
@@ -942,7 +942,7 @@ code
                     GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : nat : @some : @some : @parameter%onRandomFulfilled
                     IF_NONE
                       {
-                        PUSH int 304; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : nat : @some : @some : @parameter%onRandomFulfilled
+                        PUSH int 300; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : nat : @some : @some : @parameter%onRandomFulfilled
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : nat : @some : @some : @parameter%onRandomFulfilled
@@ -968,7 +968,7 @@ code
                     GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : nat : @some : @some : @parameter%onRandomFulfilled
                     IF_NONE
                       {
-                        PUSH int 305; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : nat : @some : @some : @parameter%onRandomFulfilled
+                        PUSH int 301; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : nat : @some : @some : @parameter%onRandomFulfilled
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : int : int : nat : @some : @some : @parameter%onRandomFulfilled
@@ -987,7 +987,7 @@ code
                     GET;        # option int : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                     IF_NONE
                       {
-                        PUSH int 307; # int : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
+                        PUSH int 303; # int : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
@@ -998,7 +998,7 @@ code
                     GET;        # option int : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                     IF_NONE
                       {
-                        PUSH int 308; # int : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
+                        PUSH int 304; # int : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
@@ -1017,7 +1017,7 @@ code
                         GET;        # option int : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                         IF_NONE
                           {
-                            PUSH int 310; # int : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
+                            PUSH int 306; # int : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
@@ -1028,7 +1028,7 @@ code
                         GET;        # option int : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                         IF_NONE
                           {
-                            PUSH int 311; # int : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
+                            PUSH int 307; # int : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
@@ -1064,7 +1064,7 @@ code
                         GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled
                         IF_NONE
                           {
-                            PUSH int 315; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled
+                            PUSH int 311; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled
@@ -1097,7 +1097,7 @@ code
                         SUB_MUTEZ;  # option mutez : @storage : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled
                         IF_NONE
                           {
-                            PUSH int 317; # int : @storage : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled
+                            PUSH int 313; # int : @storage : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : @storage : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled
@@ -1109,7 +1109,7 @@ code
                         CONTRACT unit; # option (contract unit) : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                         IF_NONE
                           {
-                            PUSH int 318; # int : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
+                            PUSH int 314; # int : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
@@ -1133,7 +1133,7 @@ code
                         GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled
                         IF_NONE
                           {
-                            PUSH int 319; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled
+                            PUSH int 315; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled
@@ -1172,7 +1172,7 @@ code
                         ISNAT;      # option nat : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                         IF_NONE
                           {
-                            PUSH int 326; # int : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
+                            PUSH int 322; # int : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
@@ -1187,7 +1187,7 @@ code
                         EDIV;       # option (pair mutez mutez) : @some : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                         IF_NONE
                           {
-                            PUSH int 327; # int : @some : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
+                            PUSH int 323; # int : @some : list operation : @some : @some : int : int : nat : @some : @some : @parameter%onRandomFulfilled : @storage
                             FAILWITH;   # FAILED
                           }
                           {
@@ -1235,7 +1235,7 @@ code
                         GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : mutez : list operation : @some : int : @some : @some : @parameter%onRandomFulfilled
                         IF_NONE
                           {
-                            PUSH int 331; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : mutez : list operation : @some : int : @some : @some : @parameter%onRandomFulfilled
+                            PUSH int 327; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : mutez : list operation : @some : int : @some : @some : @parameter%onRandomFulfilled
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : mutez : list operation : @some : int : @some : @some : @parameter%onRandomFulfilled
@@ -1253,7 +1253,7 @@ code
                         SUB_MUTEZ;  # option mutez : @storage : mutez : list operation : @some : int : @some : @some : @parameter%onRandomFulfilled
                         IF_NONE
                           {
-                            PUSH int 332; # int : @storage : mutez : list operation : @some : int : @some : @some : @parameter%onRandomFulfilled
+                            PUSH int 328; # int : @storage : mutez : list operation : @some : int : @some : @some : @parameter%onRandomFulfilled
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : @storage : mutez : list operation : @some : int : @some : @some : @parameter%onRandomFulfilled
@@ -1266,7 +1266,7 @@ code
                         CONTRACT unit; # option (contract unit) : list operation : mutez : @some : int : @some : @some : @parameter%onRandomFulfilled : @storage
                         IF_NONE
                           {
-                            PUSH int 333; # int : list operation : mutez : @some : int : @some : @some : @parameter%onRandomFulfilled : @storage
+                            PUSH int 329; # int : list operation : mutez : @some : int : @some : @some : @parameter%onRandomFulfilled : @storage
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : list operation : mutez : @some : int : @some : @some : @parameter%onRandomFulfilled : @storage
@@ -1309,7 +1309,7 @@ code
                         SUB_MUTEZ;  # option mutez : @storage : list operation : @some : int : @some : @some
                         IF_NONE
                           {
-                            PUSH int 336; # int : @storage : list operation : @some : int : @some : @some
+                            PUSH int 332; # int : @storage : list operation : @some : int : @some : @some
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : @storage : list operation : @some : int : @some : @some
@@ -1321,7 +1321,7 @@ code
                         CONTRACT unit; # option (contract unit) : list operation : @some : int : @some : @some : @storage
                         IF_NONE
                           {
-                            PUSH int 337; # int : list operation : @some : int : @some : @some : @storage
+                            PUSH int 333; # int : list operation : @some : int : @some : @some : @storage
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : list operation : @some : int : @some : @some : @storage
@@ -1345,7 +1345,7 @@ code
                         GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : list operation : @some : int : @some
                         IF_NONE
                           {
-                            PUSH int 338; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : list operation : @some : int : @some
+                            PUSH int 334; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : list operation : @some : int : @some
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : list operation : @some : int : @some
@@ -1382,7 +1382,7 @@ code
                         GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : list operation
                         IF_NONE
                           {
-                            PUSH int 340; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : list operation
+                            PUSH int 336; # int : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : list operation
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : nat : map nat (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @storage : list operation
@@ -1437,7 +1437,7 @@ code
                         SUB_MUTEZ;  # option mutez : @storage : list operation
                         IF_NONE
                           {
-                            PUSH int 349; # int : @storage : list operation
+                            PUSH int 345; # int : @storage : list operation
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : @storage : list operation
@@ -1474,7 +1474,7 @@ code
                 GET;        # option (pair (mutez %finalBet) (pair (nat %gameStatus) (pair (map %hand nat int) (pair (map %handHashes nat string) (pair (map %handValue nat int) (pair (nat %pendingFirstCardsReq) (pair (nat %pendingLastCardReq) (pair (address %player) (bytes %userNonce))))))))) : @parameter%pruneGame : @storage
                 IF_NONE
                   {
-                    PUSH int 142; # int : @parameter%pruneGame : @storage
+                    PUSH int 138; # int : @parameter%pruneGame : @storage
                     FAILWITH;   # FAILED
                   }
                   {}; # @some : @parameter%pruneGame : @storage

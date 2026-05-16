@@ -41,7 +41,7 @@ code
                     GET;        # option (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @parameter%fulfillRandom : @storage
                     IF_NONE
                       {
-                        PUSH int 349; # int : @parameter%fulfillRandom : @storage
+                        PUSH int 344; # int : @parameter%fulfillRandom : @storage
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : @parameter%fulfillRandom : @storage
@@ -65,7 +65,7 @@ code
                     GET;        # option (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @some : @parameter%fulfillRandom : @storage
                     IF_NONE
                       {
-                        PUSH int 352; # int : @some : @parameter%fulfillRandom : @storage
+                        PUSH int 347; # int : @some : @parameter%fulfillRandom : @storage
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : @some : @parameter%fulfillRandom : @storage
@@ -144,7 +144,7 @@ code
                                 GET;        # option nat : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
                                 IF_NONE
                                   {
-                                    PUSH int 379; # int : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                    PUSH int 374; # int : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
                                     FAILWITH;   # FAILED
                                   }
                                   {}; # @some : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
@@ -171,7 +171,7 @@ code
                             EDIV;       # option (pair nat nat) : list nat : nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
                             IF_NONE
                               {
-                                PUSH int 380; # int : list nat : nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                PUSH int 375; # int : list nat : nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
                                 FAILWITH;   # FAILED
                               }
                               {
@@ -357,7 +357,7 @@ code
                 GET;        # option (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%pruneCommit : @storage
                 IF_NONE
                   {
-                    PUSH int 494; # int : @parameter%pruneCommit : @storage
+                    PUSH int 489; # int : @parameter%pruneCommit : @storage
                     FAILWITH;   # FAILED
                   }
                   {}; # @some : @parameter%pruneCommit : @storage
@@ -412,7 +412,7 @@ code
                     GET;        # option (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @parameter%pruneRequest : @storage
                     IF_NONE
                       {
-                        PUSH int 482; # int : @parameter%pruneRequest : @storage
+                        PUSH int 477; # int : @parameter%pruneRequest : @storage
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : @parameter%pruneRequest : @storage
@@ -514,7 +514,7 @@ code
                     GET;        # option (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%requestRandom : @storage
                     IF_NONE
                       {
-                        PUSH int 301; # int : @parameter%requestRandom : @storage
+                        PUSH int 296; # int : @parameter%requestRandom : @storage
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : @parameter%requestRandom : @storage
@@ -657,7 +657,7 @@ code
                 GET;        # option (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%revealCommit : @storage
                 IF_NONE
                   {
-                    PUSH int 255; # int : @parameter%revealCommit : @storage
+                    PUSH int 250; # int : @parameter%revealCommit : @storage
                     FAILWITH;   # FAILED
                   }
                   {}; # @some : @parameter%revealCommit : @storage
@@ -699,7 +699,7 @@ code
                 GET;        # option (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
                 IF_NONE
                   {
-                    PUSH int 259; # int : nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
+                    PUSH int 254; # int : nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
                     FAILWITH;   # FAILED
                   }
                   {}; # @some : nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
@@ -857,7 +857,7 @@ code
                     CONTRACT unit; # option (contract unit) : @storage
                     IF_NONE
                       {
-                        PUSH int 434; # int : @storage
+                        PUSH int 429; # int : @storage
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : @storage
