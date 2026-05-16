@@ -1,7 +1,57 @@
 <script>
 import { toRaw } from 'vue'
-import { AD_CONTRACT_ADDRESS, AD_GAME_INFO, BLOCKCHAIN_ENABLED } from '../constants'
-import { getContractStorage } from '../services/tzkt'
+import { AD_CONTRACT_ADDRESS, AD_GAME_INFO, BLOCKCHAIN_ENABLED, ORACLE_CONTRACT } from '../constants'
+import { getContractStorage, tzktGet } from '../services/tzkt'
+
+// v3 randomness helpers — generate the 32-byte player nonce that mixes
+// into the oracle's seed, and pick a bindable commitId from the live
+// commit log. See docs/V3_COMMIT_REVEAL.md.
+
+function generateUserNonceHex() {
+  // 32 random bytes, returned as a `0x…` hex string suitable for sp.bytes.
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  return '0x' + Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+function isUnrevealedPreimage(raw) {
+  // tzkt encodes sp.bytes as a hex string. Empty bytes = '' or '0x'.
+  return raw == null || raw === '' || raw === '0x'
+}
+
+async function pickEligibleCommitId() {
+  // Query the live oracle storage + chain head, return the most-recent
+  // unrevealed commitId whose age >= minCommitAge. Throws if none are
+  // eligible — the committer should keep COMMITS_TO_KEEP_AHEAD around,
+  // so this is a transient state during a fresh deploy or worker outage.
+  const [storage, head] = await Promise.all([
+    getContractStorage(ORACLE_CONTRACT),
+    tzktGet('/v1/head'),
+  ])
+  if (!storage) throw new Error('cannot reach oracle contract')
+  if (!head) throw new Error('cannot reach tzkt head')
+  const commitLog = storage.commitLog || {}
+  const minCommitAge = Number(storage.minCommitAge ?? 1)
+  const level = Number(head.level ?? 0)
+  let bestCid = null
+  let bestPostedAt = -1
+  for (const [cidStr, entry] of Object.entries(commitLog)) {
+    const cid = Number(cidStr)
+    if (!isUnrevealedPreimage(entry?.revealedPreimage)) continue
+    const postedAt = Number(entry?.postedAtBlock ?? 0)
+    if (level - postedAt < minCommitAge) continue
+    if (postedAt > bestPostedAt) {
+      bestPostedAt = postedAt
+      bestCid = cid
+    }
+  }
+  if (bestCid === null) {
+    throw new Error(
+      'no eligible commits — the oracle worker may be behind. Try again in a few blocks.',
+    )
+  }
+  return bestCid
+}
 
 // Deck index ↔ rank/suit helpers. Indices are 0..51:
 //   rank = Math.floor(i / 4) + 2   (2..14, where 11=J 12=Q 13=K 14=A)
@@ -42,8 +92,14 @@ export default {
       secondCard: -1,
       lastCard: 0,
       potBalance: 0,
-      ante: 0.2, // ꜩ — matches AD storage's `ante` (200000 mutez)
-      fee: 0.1,  // ꜩ — matches AD storage's `fee`  (100000 mutez)
+      ante: 0.2,     // ꜩ — matches AD storage's `ante` (200000 mutez)
+      fee: 0.1,      // ꜩ — matches AD storage's `fee`  (100000 mutez)
+      oracleFee: 0.1, // ꜩ — matches AD storage's `oracleFee` (100000 mutez)
+      // v3 — most-recently-generated player nonce + bound commitId. Shown
+      // in the status panel so the player can confirm they contributed
+      // entropy. See docs/V3_COMMIT_REVEAL.md.
+      lastUserNonceHex: '',
+      lastCommitId: null,
       thisBet: 0.1,
       myPendingGames: {},
       myOldGames: {},
@@ -575,18 +631,37 @@ export default {
         return
       }
 
-      // The contract expects `ante + fee` ꜩ. Both come from data() and
-      // mirror the on-chain storage values. We log the exact amount to
-      // console so it's easy to verify what Taquito is signing.
-      const totalBetTez = Number(this.ante) + Number(this.fee)
+      // v3: AD's bet() now takes (userNonce, commitId) and requires
+      // sp.amount == ante + fee + oracleFee. We mix 32 bytes of player
+      // entropy into the oracle's seed so the operator can't pre-pick a
+      // preimage that favors this game. commitId binds to a still-sealed
+      // commit that's already on chain — the player's signing tx is
+      // committing to a commitment made before this tx existed.
+      const userNonceHex = generateUserNonceHex()
+      this.lastUserNonceHex = userNonceHex
+      let commitId
+      try {
+        commitId = await pickEligibleCommitId()
+      } catch (e) {
+        this.blockChainStatus = `Cannot start bet: ${e.message}`
+        console.warn('[AD] startGameBC: pickEligibleCommitId failed', e)
+        return
+      }
+      this.lastCommitId = commitId
+
+      const totalBetTez = Number(this.ante) + Number(this.fee) + Number(this.oracleFee)
       const totalBetStr = totalBetTez.toFixed(6)
       console.log(
-        `[AD] startGameBC: bet() with amount ${totalBetStr} ꜩ to`,
+        `[AD] startGameBC: bet(commitId=${commitId}, userNonce=${userNonceHex.slice(0, 14)}…) ` +
+        `with amount ${totalBetStr} ꜩ to`,
         AD_CONTRACT_ADDRESS,
       )
 
       this.loadGame = false
-      this.blockChainStatus = `Submitting bet (${totalBetStr} ꜩ)…`
+      this.blockChainStatus = (
+        `Submitting bet (${totalBetStr} ꜩ; commit ${commitId}; ` +
+        `your entropy: ${userNonceHex.slice(2, 10)}…)…`
+      )
       this.resetGame()
       const n_games = Object.keys(toRaw(this.myGames)).length + 1
       this.gameId = n_games
@@ -594,10 +669,11 @@ export default {
 
       try {
         const contract = await this.tezos.wallet.at(AD_CONTRACT_ADDRESS)
-        // Deployed AD's `bet` entrypoint takes no parameters now —
-        // Aces are always high. Just send the ante + fee.
-        const op = await contract.methods
-          .bet()
+        // v3 bet(userNonce: bytes, commitId: nat). Use methodsObject to
+        // pass by name and avoid Taquito's positional Michelson layout
+        // ambiguity. The oracle fee is forwarded inside the contract.
+        const op = await contract.methodsObject
+          .bet({ userNonce: userNonceHex, commitId })
           .send({ amount: totalBetStr })
         this.blockChainStatus = `Bet broadcast — waiting for confirmation (${op.opHash.slice(0, 12)}…)`
         console.log('[AD] startGameBC: op injected', op.opHash)
@@ -639,23 +715,41 @@ export default {
         return
       }
 
-      // Entrypoint is continueBet(nat %gameId). Amount is your bet up to
-      // the pot; the holder fee (0.1ꜩ) is added on top because the
-      // contract subtracts it from sp.amount before crediting the pot.
+      // v3: continueBet takes (gameId, userNonce, commitId) and requires
+      // sp.amount == bet + fee + oracleFee. Fresh nonce per request — the
+      // last card is independent of the bet-time deal entropy.
       const gameBcId = Number(this.myGames[this.gameId].gameId)
-      const totalBetTez = Number(this.thisBet) + Number(this.fee)
+      const userNonceHex = generateUserNonceHex()
+      this.lastUserNonceHex = userNonceHex
+      let commitId
+      try {
+        commitId = await pickEligibleCommitId()
+      } catch (e) {
+        this.blockChainStatus = `Cannot continue: ${e.message}`
+        console.warn('[AD] continueBetBC: pickEligibleCommitId failed', e)
+        return
+      }
+      this.lastCommitId = commitId
+
+      const totalBetTez = Number(this.thisBet) + Number(this.fee) + Number(this.oracleFee)
       const totalBetStr = totalBetTez.toFixed(6)
       console.log(
-        `[AD] continueBetBC: continueBet(${gameBcId}) with amount ${totalBetStr} ꜩ`,
+        `[AD] continueBetBC: continueBet(gameId=${gameBcId}, commitId=${commitId}, ` +
+        `userNonce=${userNonceHex.slice(0, 14)}…) with amount ${totalBetStr} ꜩ`,
       )
 
-      this.blockChainStatus = `Submitting Acey-Duecey bet (${totalBetStr} ꜩ)…`
+      this.blockChainStatus = (
+        `Submitting AD bet (${totalBetStr} ꜩ; commit ${commitId}; ` +
+        `your entropy: ${userNonceHex.slice(2, 10)}…)…`
+      )
       this.needsLastCard = true
       this.useWalletProvider()
 
       try {
         const contract = await this.tezos.wallet.at(AD_CONTRACT_ADDRESS)
-        const op = await contract.methods.continueBet(gameBcId).send({ amount: totalBetStr })
+        const op = await contract.methodsObject
+          .continueBet({ gameId: gameBcId, userNonce: userNonceHex, commitId })
+          .send({ amount: totalBetStr })
         this.blockChainStatus = `Bet broadcast — waiting for confirmation (${op.opHash.slice(0, 12)}…)`
         await op.confirmation()
         this.gameId = Number(this.gameId)
@@ -1043,6 +1137,18 @@ export default {
         <span class="adStatusDetail">
           #{{ gameId }} · status {{ activeGame.gameStatus }}
           · pot {{ potBalance }} ꜩ
+        </span>
+      </div>
+      <!-- v3 — most recent entropy contribution from this client. Hover
+           for the trust-model summary; full nonce + bound commit are
+           visible on-chain via tzkt for post-hoc audit. -->
+      <div v-if="lastUserNonceHex" class="adStatusRow adStatusRow--detail">
+        <span class="adStatusLabel">YOUR&nbsp;ENTROPY</span>
+        <span
+          class="adStatusDetail"
+          :title="'Your 32 random bytes mix into the oracle’s seed alongside its commit-revealed preimage — neither the operator nor you alone can bias the result.'"
+        >
+          {{ lastUserNonceHex.slice(0, 18) }}… · commit&nbsp;{{ lastCommitId }}
         </span>
       </div>
     </div>

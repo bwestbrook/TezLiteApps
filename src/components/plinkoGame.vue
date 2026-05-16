@@ -26,8 +26,46 @@ import {
   PLINKO_GAME_INFO,
   PLINKO_MULTIPLIERS,
   BLOCKCHAIN_ENABLED,
+  ORACLE_CONTRACT,
 } from '../constants'
-import { getContractStorage } from '../services/tzkt'
+import { getContractStorage, tzktGet } from '../services/tzkt'
+
+// v3 randomness helpers — player nonce + commit selection. See
+// docs/V3_COMMIT_REVEAL.md.
+function generateUserNonceHex() {
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  return '0x' + Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+function isUnrevealedPreimage(raw) {
+  return raw == null || raw === '' || raw === '0x'
+}
+async function pickEligibleCommitId() {
+  const [storage, head] = await Promise.all([
+    getContractStorage(ORACLE_CONTRACT),
+    tzktGet('/v1/head'),
+  ])
+  if (!storage) throw new Error('cannot reach oracle contract')
+  if (!head) throw new Error('cannot reach tzkt head')
+  const commitLog = storage.commitLog || {}
+  const minCommitAge = Number(storage.minCommitAge ?? 1)
+  const level = Number(head.level ?? 0)
+  let bestCid = null
+  let bestPostedAt = -1
+  for (const [cidStr, entry] of Object.entries(commitLog)) {
+    if (!isUnrevealedPreimage(entry?.revealedPreimage)) continue
+    const postedAt = Number(entry?.postedAtBlock ?? 0)
+    if (level - postedAt < minCommitAge) continue
+    if (postedAt > bestPostedAt) {
+      bestPostedAt = postedAt
+      bestCid = Number(cidStr)
+    }
+  }
+  if (bestCid === null) {
+    throw new Error('no eligible commits — the oracle worker may be behind. Try again shortly.')
+  }
+  return bestCid
+}
 
 const ROW_OPTIONS = [8, 12, 16]
 const RISK_LABELS = { 0: 'Low', 1: 'Medium', 2: 'High' }
@@ -81,8 +119,13 @@ export default {
       risk: 0,
       bet: 0.1,
       fee: 0.1,
+      oracleFee: 0.1,    // v3 — forwarded by the contract to the oracle
       minBet: 0.1,
       maxBet: 10.0,
+      // v3 — surfaced in the status panel so the player can confirm they
+      // contributed entropy. Truncated for display.
+      lastUserNonceHex: '',
+      lastCommitId: null,
       potBalance: 0,
       reserveBalance: 0,
       myAddress: '',
@@ -632,16 +675,37 @@ export default {
         this.blockchainStatus = 'Connect your wallet first (click the SYNC WALLET button).'
         return
       }
-      const totalTez = Number(this.bet) + Number(this.fee)
+      // v3: play() now takes (rows, risk, userNonce, commitId) and the
+      // amount must cover bet + fee + oracleFee. The bits driving the
+      // ball's path are derived in onRandomFulfilled from the player's
+      // nonce + the oracle's commit-revealed preimage — the operator
+      // can't pre-pick a preimage that favors a specific landing bin.
+      const userNonceHex = generateUserNonceHex()
+      this.lastUserNonceHex = userNonceHex
+      let commitId
+      try {
+        commitId = await pickEligibleCommitId()
+      } catch (e) {
+        this.blockchainStatus = `Cannot drop: ${e.message}`
+        console.warn('[plinko] pickEligibleCommitId failed', e)
+        return
+      }
+      this.lastCommitId = commitId
+      const totalTez = Number(this.bet) + Number(this.fee) + Number(this.oracleFee)
       const totalStr = totalTez.toFixed(6)
       this.dropping = true
-      this.blockchainStatus = `Submitting drop (${totalStr} ꜩ)… check your wallet to approve.`
+      this.blockchainStatus = (
+        `Submitting drop (${totalStr} ꜩ; commit ${commitId}; ` +
+        `your entropy: ${userNonceHex.slice(2, 10)}…)…`
+      )
       try {
         this.useWalletProvider()
         const contract = await this.tezos.wallet.at(PLINKO_CONTRACT_ADDRESS)
         const op = await contract.methodsObject.play({
           rows: this.rows,
           risk: this.risk,
+          userNonce: userNonceHex,
+          commitId,
         }).send({ amount: totalStr })
         this.blockchainStatus = `Broadcast — waiting for confirmation (${op.opHash.slice(0, 12)}…)`
         await op.confirmation()
@@ -855,6 +919,12 @@ export default {
         <span class="metaPill">{{ pollHint }}</span>
         <span class="metaPill">pot {{ potBalance }} ꜩ</span>
         <span class="metaPill">reserve {{ reserveBalance }} ꜩ</span>
+        <!-- v3 — entropy receipt. Hover for the trust-model summary. -->
+        <span
+          v-if="lastUserNonceHex"
+          class="metaPill"
+          :title="'Your 32 random bytes mix into the oracle’s seed alongside its commit-revealed preimage — neither the operator nor you alone can bias the result.'"
+        >entropy {{ lastUserNonceHex.slice(2, 10) }}… · commit {{ lastCommitId }}</span>
       </div>
     </div>
 
