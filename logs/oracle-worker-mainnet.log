@@ -56,3 +56,50 @@
 [2m[14:14:47][0m   [randomness] submitting  req   3 → fulfillRandom (bound commit 5 already revealed)
 [2m[14:14:51][0m [32m✓[0m   confirmed — ooKePXNER1QqqJBtUMwt2f6FASjiABAEpqkWQ6334WQTFSy5RGs
 [2m[14:14:51][0m     https://tzkt.io/ooKePXNER1QqqJBtUMwt2f6FASjiABAEpqkWQ6334WQTFSy5RGs
+[2m[14:16:37][0m   [randomness] submitting  revealCommit(6)  (unblocks req 4 + others bound to this commit)
+[2m[14:16:39][0m [32m✓[0m   confirmed — opRpzQRU337Wjzp5X3gYD8T3FikXAppfjMsm1RJNHxCn1RVN2tC
+[2m[14:16:39][0m     https://tzkt.io/opRpzQRU337Wjzp5X3gYD8T3FikXAppfjMsm1RJNHxCn1RVN2tC
+[2m[14:16:44][0m   [oracle-committer] submitting  postCommit hash=0x3aa809c993…  (expected cid 7, 2 unrevealed)
+[2m[14:16:52][0m [32m✓[0m   confirmed — oo6oApf7hSXrc9MMCAniHHdBMhiJihHvBWjMBDskz7KSVqfajhm
+[2m[14:16:52][0m     https://tzkt.io/oo6oApf7hSXrc9MMCAniHHdBMhiJihHvBWjMBDskz7KSVqfajhm
+[2m[14:16:52][0m   [randomness] submitting  req   4 → fulfillRandom (bound commit 6 already revealed)
+[2m[14:17:04][0m [32m✓[0m   confirmed — oofmDq7Vuwy9LzCDa6UwCJZP9mhoqnMtdkKN9GhZuLRqj8zR7Ya
+[2m[14:17:04][0m     https://tzkt.io/oofmDq7Vuwy9LzCDa6UwCJZP9mhoqnMtdkKN9GhZuLRqj8zR7Ya
+[2m[14:17:54][0m   [randomness] submitting  revealCommit(7)  (unblocks req 5 + others bound to this commit)
+[2m[14:18:03][0m [32m✓[0m   confirmed — ooqJ79te4N4vNj21BDjB8JWKiSGXytgEnD7MshunLGjCRqSJAPL
+[2m[14:18:03][0m     https://tzkt.io/ooqJ79te4N4vNj21BDjB8JWKiSGXytgEnD7MshunLGjCRqSJAPL
+[2m[14:18:08][0m   [oracle-committer] submitting  postCommit hash=0x9a6db28503…  (expected cid 8, 2 unrevealed)
+[2m[14:18:16][0m [32m✓[0m   confirmed — ooB4gBx9BBAJ6nWoyKe66HzXzM4E1cuSQjQHjQnwBjLRdA2syib
+[2m[14:18:16][0m     https://tzkt.io/ooB4gBx9BBAJ6nWoyKe66HzXzM4E1cuSQjQHjQnwBjLRdA2syib
+[2m[14:18:16][0m   [randomness] submitting  req   5 → fulfillRandom (bound commit 7 already revealed)
+[2m[14:18:27][0m [32m✓[0m   confirmed — opRwfzJPhZGYvB2pjL5gzQYTHsejsLiWGD7aRWWqQJUpwHNFM4T
+[2m[14:18:27][0m     https://tzkt.io/opRwfzJPhZGYvB2pjL5gzQYTHsejsLiWGD7aRWWqQJUpwHNFM4T
+[2m[14:18:38][0m   [randomness] submitting  revealCommit(8)  (unblocks req 6 + others bound to this commit)
+[2m[14:18:45][0m [32m✓[0m   confirmed — ooERs7w515HgEFWk1jrxkALWDe4FcU7UC3hpxDYk3yrii7dXX9H
+[2m[14:18:45][0m     https://tzkt.io/ooERs7w515HgEFWk1jrxkALWDe4FcU7UC3hpxDYk3yrii7dXX9H
+[2m[14:18:50][0m   [oracle-committer] submitting  postCommit hash=0x3bebced20f…  (expected cid 9, 2 unrevealed)
+[2m[14:18:57][0m [32m✓[0m   confirmed — onkKBGJx8fJm6ve6CpoKfGmd8kXT61V7QEtkC37aJtZu6bfj8tA
+[2m[14:18:57][0m     https://tzkt.io/onkKBGJx8fJm6ve6CpoKfGmd8kXT61V7QEtkC37aJtZu6bfj8tA
+[2m[14:18:57][0m   [randomness] submitting  req   6 → fulfillRandom (bound commit 8 already revealed)
+[2m[14:19:03][0m [32m✓[0m   confirmed — oo8vwf9vWhX9kksjGJAe4My2EhdUeRecsQjxVek54gotKQfyBrJ
+[2m[14:19:03][0m     https://tzkt.io/oo8vwf9vWhX9kksjGJAe4My2EhdUeRecsQjxVek54gotKQfyBrJ
+[2m[14:20:29][0m   [randomness] submitting  revealCommit(9)  (unblocks req 7 + others bound to this commit)
+[2m[14:20:34][0m [32m✓[0m   confirmed — ooiBA4YfS9mCXRDPRKbXtECeobQvoeH8Ab74KDorfyWL7Y8XfUL
+[2m[14:20:34][0m     https://tzkt.io/ooiBA4YfS9mCXRDPRKbXtECeobQvoeH8Ab74KDorfyWL7Y8XfUL
+[2m[14:20:39][0m   [oracle-committer] submitting  postCommit hash=0xdcdf3452b3…  (expected cid 10, 2 unrevealed)
+[2m[14:20:41][0m [31m✗[0m   submit failed: ({'id': 'failure',
+  'kind': 'temporary',
+  'msg': 'Error while validating injected operation '
+         'opSp2aMC7VjpKp1EqsXXo5PejsHZvc73T2ychQFaQRDTBAP9Ehm:\n'
+         'Error:\n'
+         '  The op
+[2m[14:20:41][0m   [randomness] submitting  req   7 → fulfillRandom (bound commit 9 already revealed)
+[2m[14:20:42][0m [31m✗[0m   submit failed: ({'id': 'failure',
+  'kind': 'temporary',
+  'msg': 'Error while validating injected operation '
+         'oooT68kgu5Yu8u4ZSKgw7upNNsR1FqC1gJ5YobYEWsmzYju1M4k:\n'
+         'Error:\n'
+         '  The op
+[2m[14:20:47][0m   [randomness] submitting  req   7 → fulfillRandom (bound commit 9 already revealed)
+[2m[14:20:58][0m [32m✓[0m   confirmed — onfCgYBzSMBmodcgfafQf4MzRrV57LD4VsGUkVJjaibgDSaRhqj
+[2m[14:20:58][0m     https://tzkt.io/onfCgYBzSMBmodcgfafQf4MzRrV57LD4VsGUkVJjaibgDSaRhqj

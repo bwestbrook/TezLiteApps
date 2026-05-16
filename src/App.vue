@@ -9,7 +9,6 @@ import { reduceAddress } from './utilities'
 import {
   APP_NAME,
   ADMIN_ADDRESS,
-  BEACON_MATRIX_NODES,
   DEFAULT_GAME_SIZE,
   NODE_URL,
   SOCKET_URL,
@@ -111,21 +110,16 @@ export default {
       // SDK already knows the RPC, but we pass it explicitly anyway so
       // the dApp and the wallet are always agreeing on the same chain.
       const network = getBeaconNetwork()
-      // Override Beacon's default Matrix relay list. The default
-      // beacon-server-2.papers.tech hostname doesn't resolve from some
-      // ISPs and the SDK waits ~45s on it before failing over. We give
-      // it a known-good list up front so it skips that timeout.
-      //
-      // @airgap/beacon-sdk@4.x types matrixNodes as a per-region object
-      //   { EUROPE: string[], NORTH_AMERICA: string[], ... }
-      // Passing a flat array makes the SDK iterate string characters as
-      // hostnames — that's where the `https://a/`, `https://h/` errors
-      // come from. Pass the right shape, with our overrides in EUROPE
-      // (papers.tech's primary cluster).
+      // No matrixNodes override. Beacon-sdk 4.8.x ships a current
+      // regional list (papers.tech + octez.io hosts). A previous
+      // override pinned EUROPE to a hand-picked 4-host papers.tech
+      // subset using the wrong region key — wallets were probing the
+      // full default set (including beacon-node-*.octez.io) and posting
+      // responses to servers we weren't listening on, surfacing in
+      // Temple as "No server responded".
       const wallet = new BeaconWallet({
         name: APP_NAME,
         network,
-        matrixNodes: { EUROPE: BEACON_MATRIX_NODES },
       })
       this.wallet = wallet
 
