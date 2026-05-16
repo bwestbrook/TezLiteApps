@@ -931,6 +931,153 @@ ship and bake on shadownet.
 
 ---
 
+## Squares (`src/services/smart_contract_squares_v2.py`)
+
+Audit pass added May 2026 ahead of mainnet origination (the May 2026
+batch above only covered AD / Plinko / TTT). Severities are HIGH (block
+mainnet), MED (track + plan a follow-up), LOW (acknowledged), INFO
+(reference). **No HIGH findings.** Squares is clear to ship on the v2
+trust model — `SQ-1` and `SQ-2` are the items to watch first.
+
+### SQ-1 [MED] — `setAxes` trusts the daemon to emit a real permutation
+
+**File**: `src/services/smart_contract_squares_v2.py`, the `setAxes`
+entrypoint (around lines 272-289).
+
+Validation is only `0 in axisHome / 9 in axisHome` (same for `axisAway`).
+A malformed or malicious permutation gets accepted as-is. Two failure
+modes:
+
+1. **Stuck game** — admin sends a map missing some 0..9 keys, e.g.
+   `{0: 5, 9: 5}`. `reportQuarter`'s `for i in range(10):
+   if game.axisHome[i] == homeDigit:` does a direct lookup that raises
+   when the key is absent. The game wedges in `PHASE_AXES_SET` with no
+   refund path (refundUnsold rejects `GameTooFar`). Players' tez is
+   stranded.
+2. **Insider win** — admin colludes by issuing a permutation
+   correlated with their own pre-buys. Admin sees the full
+   `squares` map before calling `setAxes`, so they can deterministically
+   route quarter winners to squares they own.
+
+This is the *documented* trust model for v2 — the off-chain daemon
+(`scripts/oracle_worker.py` `SquaresHandler`) holds the admin key and
+is trusted to (a) generate the permutation from entropy uncorrelated
+with the buys, and (b) actually send a valid `[0..9]` permutation. The
+contract already plumbs `rngOracle` through storage so a future v3 can
+move to commit-reveal axis randomisation behind an admin updater
+(`updateRngOracle`) without a redeploy.
+
+**Mitigation track** (post-mainnet, not blocking):
+- Tighten `setAxes` on-chain: require all 10 keys present + values are
+  a permutation of 0..9 (cheap; two unrolled 10-iteration loops).
+- Move to commit-reveal: admin commits `hash(salt || permutation)`
+  before `closeSales`; reveals after with `(salt, permutation)`; the
+  hash binds them to a permutation chosen before they could see the
+  full buy list. Same pattern as the Plinko v2 redesign at the bottom
+  of this doc.
+
+**Acceptance for v2**: documented as the trust assumption in the
+contract's docstring (lines 1-23) and `setAxes` body comment (line
+278-279). No code change required for this batch.
+
+### SQ-2 [MED] — `refundUnsold` is O(100); gas budget unverified at sellout
+
+**File**: `smart_contract_squares_v2.py`, `refundUnsold` (lines 382-401).
+
+The entrypoint unrolls `for i in range(100)` and, for each owned cell,
+writes a `pending` big_map entry. Worst case is 98 owned cells across
+~98 distinct buyers, which is ~98 big_map UPDATEs + the per-iteration
+MEM check on `game.squares`. Whether that fits inside Tezos' per-op
+gas budget (~1.04 Mgas) and storage budget (~60 KB) at the worst-case
+fill has not been measured.
+
+**Empirical verification required before mainnet**:
+
+```
+# 1. Originate a fresh shadownet game and buy it out across as many
+#    distinct buyers as practical (emulate_squares.py uses 2; a stress
+#    harness could spin up 8-10 disposable wallets via
+#    scripts/new_test_wallet.py to be more representative).
+# 2. Pause the live reportQuarter path (the worker, or just don't
+#    setAxes) so the game sits in PHASE_LOCKED, refundUnsold-eligible.
+# 3. Admin calls refundUnsold(gameId=N). Observe the receipt:
+.venv/bin/python - <<'PY'
+from pytezos import pytezos, Key
+import os, pathlib
+for raw in pathlib.Path('.env').read_text().splitlines():
+    if '=' in raw and not raw.strip().startswith('#'):
+        k, v = raw.split('=', 1)
+        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+key = Key.from_mnemonic(os.environ['DEPLOY_MNEMONIC'].split())
+p = pytezos.using(shell='https://rpc.shadownet.teztnets.com', key=key)
+addr = '<SQUARES_CONTRACT_ADDRESS_SHADOWNET>'
+op = p.contract(addr).refundUnsold(gameId=0).send(min_confirmations=1)
+print('consumed_milligas:', op.opg_result['contents'][0]['metadata']
+      ['operation_result']['consumed_milligas'])
+print('paid_storage_size_diff:', op.opg_result['contents'][0]['metadata']
+      ['operation_result']['paid_storage_size_diff'])
+PY
+```
+
+If `consumed_milligas` lands above ~800_000 (80% of the per-op limit) at
+worst-case fill, escalate to **HIGH** and chunk the refund:
+
+**Proposed fix (only if test fails)**: split into
+`refundUnsoldRange(gameId, fromIdx, toIdx)` so admin can refund in
+batches of e.g. 20-30 cells per op. No player impact — each batch
+credits the same `pending` entries, and `claim()` works irrespective of
+which op credited it.
+
+### SQ-3 [LOW] — `createGame` is unmetered; storage-bloat DoS is self-paying
+
+`createGame` is open to anyone (by design — the docstring calls this
+out) and takes no fee. Each call writes a non-trivial game record into
+the `games` big_map (record + nested maps + 9-slot `quarterReported`
+initialiser). A motivated attacker could spam many empty games to
+bloat the big_map.
+
+Why this is LOW: `games` IS a big_map, so storage cost is paid by the
+caller per insertion via Tezos' storage-burn mechanism (~250 µꜩ/byte).
+Spamming 1 000 empty games would cost the attacker on the order of
+ones-of-ꜩ for no payoff — the per-call burn IS the rate limiter. No
+honest user is affected; the chain doesn't notice.
+
+**Mitigation** (only if we ever see abuse): add a small required
+`amount` on `createGame` that routes to the TXL distributor (same path
+as `holderFee`), or gate the entrypoint behind admin pre-approval. Not
+in v2.
+
+### SQ-4 [LOW] — `currentGameId` overflow at realistic volume
+
+The audit prompt asked. Confirmed safe: `sp.nat` compiles to
+Michelson's `nat`, which is arbitrary-precision unsigned. At any
+realistic event volume (e.g. 200 pools/year) the counter never gets
+close to anything interesting. No action.
+
+### SQ-5 [LOW] — house cells hardcoded as indices 44 + 90
+
+`buySquare` rejects `squareIdx ∈ {44, 90}` via two literal asserts
+(lines 216-217). The set has to be kept in lockstep with `HOUSE_SQUARES`
+in `src/components/squaresGame.vue`. If the UI ever introduces a third
+house cell, the contract must be redeployed — there's no admin
+entrypoint to update the set.
+
+Acceptable today (the cells were chosen visually for the centre+
+bottom-left and aren't expected to change). If you ever want a
+configurable house-cell list, lift it to storage with an admin updater.
+
+### SQ-6 [INFO] — `paused` is intentionally selective
+
+`paused` gates `createGame`, `buySquare`, and `reportQuarter`. It does
+NOT gate `closeSales`, `setAxes`, `refundUnsold`, `claim`, or the admin
+updaters. Intentional: a circuit-breaker should halt **new** game
+inflow and **scoring**, but leave admin able to operationally manage
+locked games (close + refund) and leave already-credited winners able
+to withdraw their `pending` balance. Document in the incident-runbook
+when one is written.
+
+---
+
 ## Verification matrix
 
 After all HIGH/MED fixes deploy, run:
