@@ -3,6 +3,13 @@ import smartpy as sp
 # ──────────────────────────────────────────────────────────────────────────────
 # TezTacToe — H2H 4-in-a-row (4×4×4 cube), wagered + house cut.
 #
+# v3: the first-move flip now comes from RandomOracle commit-reveal instead
+# of a trusted oracle key. joinGame() takes (userNonce, commitId) and pays
+# an extra oracleFee; the bit lands asynchronously via onRandomFulfilled.
+# The old flipForFirst entrypoint is gone — same on-chain effects, but now
+# the oracle has no degree of freedom over which side moves first. See
+# docs/V3_COMMIT_REVEAL.md.
+#
 # Modernized over the legacy contract (smart_contract_TTT_legacy_backup.py)
 # while preserving the entrypoint names (startGame, joinGame, leaveGame,
 # makeMove, surrenderGame) so the existing UI keeps working.
@@ -51,8 +58,15 @@ def main():
         def __init__(self):
             # ── Admin / wiring ─────────────────────────────────────────
             self.data.admin = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
-            self.data.oracle = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
             self.data.txlContract = sp.address("KT1Ro63rVDUx2x8pMChCLSySso8t6JH47oRQ")
+            # v3: RandomOracle KT1 (admin rotates via updateOracleContract).
+            # The previous self.data.oracle was the bot's tz1 that called
+            # flipForFirst directly — that entrypoint is gone, randomness
+            # now flows through oracleContract.requestRandom.
+            self.data.oracleContract = sp.address("KT19V1YiyPtyCbxouhyeM96SekRTVC7Gw6qq")
+            # Per-request mutez forwarded to oracle.requestRandom. Must
+            # stay >= live RandomOracle.fee. Tunable via updateOracleFee.
+            self.data.oracleFee = sp.mutez(100000)
             # houseAddress receives the per-pot cut at settlement (separate
             # from txlContract so the admin can route it elsewhere if needed).
             self.data.houseAddress = sp.address("KT1Ro63rVDUx2x8pMChCLSySso8t6JH47oRQ")
@@ -76,6 +90,12 @@ def main():
                 metaData=sp.map[sp.string, sp.int],
                 tzGameBet=sp.mutez,
                 houseCutBps=sp.nat,
+                # v3 — player2's nonce flows into the flip's seed so the
+                # oracle can't pre-pick a preimage that hands one side
+                # the first move. pendingFlipReqId records the in-flight
+                # oracle requestId for off-chain audit correlation.
+                userNonce=sp.bytes,
+                pendingFlipReqId=sp.nat,
             )])
             self.data.currentGameIndex = sp.int(0)
             # Logic Control for game winners (4×4×4 win lines, 76 of them:
@@ -164,9 +184,20 @@ def main():
             self.data.admin = params.newAdmin
 
         @sp.entrypoint()
-        def updateOracle(self, params):
+        def updateOracleContract(self, params):
+            '''Admin-only: rotate the RandomOracle KT1. v3.
+            Checklist §1.1, §9.1.'''
+            sp.cast(params.newOracle, sp.address)
             assert sp.sender == self.data.admin, "not admin"
-            self.data.oracle = params.newOracle
+            self.data.oracleContract = params.newOracle
+
+        @sp.entrypoint()
+        def updateOracleFee(self, params):
+            '''Admin-only: tune the per-request mutez forwarded to the
+            oracle. Must stay >= live RandomOracle.fee. v3. §1.1.'''
+            sp.cast(params.newFee, sp.mutez)
+            assert sp.sender == self.data.admin, "not admin"
+            self.data.oracleFee = params.newFee
 
         @sp.entrypoint()
         def updateTxlContract(self, params):
@@ -259,12 +290,17 @@ def main():
                 # measures opponent idleness against this.
                 "lastMoveBlock": sp.to_int(sp.level),
             }
+            empty_bytes = sp.bytes('0x')
             new_game = sp.record(
                 grid=new_game_grid,
                 players=players,
                 metaData=metaData,
                 tzGameBet=tzGameBet,
                 houseCutBps=self.data.houseCutBps,   # snapshot for fairness
+                # v3 — populated by joinGame (player 2's nonce) and the
+                # oracle's onRandomFulfilled callback respectively.
+                userNonce=empty_bytes,
+                pendingFlipReqId=sp.nat(0),
             )
             self.data.games[idx] = new_game
             self.data.currentGameIndex += 1
@@ -272,53 +308,63 @@ def main():
 
         @sp.entrypoint()
         def joinGame(self, params):
-            """Player 2 joins. Must send tzGameBet + fee."""
+            """Player 2 joins. Must send tzGameBet + fee + oracleFee.
+
+            v3 — takes (userNonce: bytes, commitId: nat) and triggers a
+            1-randomness request on the RandomOracle for the first-move
+            flip. The bit lands asynchronously via onRandomFulfilled.
+            Checklist §1.1, §1.4, §2.1, §3.3, §6.1, §6.2, §7.2, §8.3.
+            """
             sp.cast(params.gameId, sp.int)
+            sp.cast(params.userNonce, sp.bytes)
+            sp.cast(params.commitId, sp.nat)
             g = self.data.games[params.gameId]
             assert g.metaData["gameStatus"] == 1, "game not joinable"
             assert g.metaData["player2Paid"] == 0, "already full"
             assert sp.sender != g.players[1], "can't join your own game"
-            assert sp.amount == g.tzGameBet + self.data.fee, "must match wager + fee"
+            assert sp.amount == g.tzGameBet + self.data.fee + self.data.oracleFee, "must match wager + fee + oracleFee"
             sp.send(self.data.txlContract, self.data.fee)
             self.data.games[params.gameId].players[2] = sp.sender
             self.data.games[params.gameId].metaData["player2Paid"] = 1
             self.data.games[params.gameId].metaData["gameStatus"] = 2  # active
             self.data.games[params.gameId].metaData["lastMoveBlock"] = sp.to_int(sp.level)
+            self.data.games[params.gameId].userNonce = params.userNonce
             sp.emit(params.gameId, tag="gameJoined")
 
-        @sp.entrypoint()
-        def flipForFirst(self, params):
-            """Oracle decides who moves first, once both players have paired.
+            # Forward the first-move flip request. callbackContext = pack(gameId).
+            oracle = sp.contract(sp.record(callback=sp.address, nRandoms=sp.nat, maxValue=sp.nat, userNonce=sp.bytes, commitId=sp.nat, callbackContext=sp.bytes), self.data.oracleContract, entrypoint="requestRandom").unwrap_some(error="oracle contract not found")
+            ctx = sp.pack(params.gameId)
+            sp.transfer(sp.record(callback=sp.self_address, nRandoms=sp.nat(1), maxValue=sp.nat(1), userNonce=params.userNonce, commitId=params.commitId, callbackContext=ctx), self.data.oracleFee, oracle)
 
-            bit 0 → player 1 moves first, bit 1 → player 2. The seed is
-            emitted (not stored — metaData is int-only) so the flip stays
-            auditable on-chain via the firstMoveDecided event. Idempotent:
-            the firstMoveDecided flag guards against a re-flip.
-            """
-            sp.cast(params.gameId, sp.int)
-            sp.cast(params.bit, sp.int)
-            sp.cast(params.seed, sp.string)
-            assert sp.sender == self.data.oracle, "not oracle"
-            g = self.data.games[params.gameId]
+        @sp.entrypoint()
+        def onRandomFulfilled(self, params):
+            """RandomOracle callback for the first-move flip. randomValues
+            has exactly one nat in [0,1]: 0 → player 1 first, 1 → player 2.
+            The firstMoveDecided flag is idempotent — re-fulfillment fails.
+            §1.1, §1.4, §3.3, §4.1, §6.1, §7.2, §7.3, §8.3."""
+            sp.cast(params.requestId, sp.nat)
+            sp.cast(params.randomValues, sp.list[sp.nat])
+            sp.cast(params.callbackContext, sp.bytes)
+            assert sp.sender == self.data.oracleContract, "not oracle"
+            gameId = sp.unpack(params.callbackContext, sp.int).unwrap_some(error="bad context")
+            assert gameId in self.data.games, "no such game"
+            g = self.data.games[gameId]
             assert g.metaData["gameStatus"] == 2, "game not active"
             assert g.metaData["firstMoveDecided"] == 0, "first move already decided"
-            assert params.bit == 0 or params.bit == 1, "bit must be 0 or 1"
-            firstPlayer = 1
-            if params.bit == 1:
-                firstPlayer = 2
-            self.data.games[params.gameId].metaData["playerTurn"] = firstPlayer
-            self.data.games[params.gameId].metaData["firstMoveDecided"] = 1
+            # Pull the single bit value from the list.
+            bit = sp.nat(0)
+            for v in params.randomValues:
+                bit = v
+            firstPlayer = sp.int(1)
+            if bit == 1:
+                firstPlayer = sp.int(2)
+            self.data.games[gameId].metaData["playerTurn"] = firstPlayer
+            self.data.games[gameId].metaData["firstMoveDecided"] = 1
             # TTT-6 — reset the idle clock: the first mover's turn starts
-            # now, not back at joinGame (the oracle's flip may lag).
-            self.data.games[params.gameId].metaData["lastMoveBlock"] = sp.to_int(sp.level)
-            sp.emit(
-                sp.record(
-                    gameId=params.gameId,
-                    firstPlayer=firstPlayer,
-                    seed=params.seed,
-                ),
-                tag="firstMoveDecided",
-            )
+            # now, not back at joinGame (the oracle's reveal may lag).
+            self.data.games[gameId].metaData["lastMoveBlock"] = sp.to_int(sp.level)
+            self.data.games[gameId].pendingFlipReqId = params.requestId
+            sp.emit(sp.record(gameId=gameId, firstPlayer=firstPlayer, requestId=params.requestId), tag="firstMoveDecided")
 
         @sp.entrypoint()
         def leaveGame(self, params):
@@ -499,47 +545,10 @@ def main():
 # ──────────────────────────────────────────────────────────────────────────────
 @sp.add_test()
 def test():
-    s = sp.test_scenario("TTT gambling + house cut", main)
+    s = sp.test_scenario("TTT v3 deploy", main)
+    s.h1("Originate TezTacToe (v3 commit-reveal consumer)")
+    # Compile-only smoke; gameplay flow is covered by the on-chain
+    # exercise harness because the v3 randomness path requires a live
+    # RandomOracle contract to invoke onRandomFulfilled.
     c = main.TezTacToe()
     s += c
-
-    # ── Play a full game through to a P1 win ──────────────────────────
-    # Regression cover for TTT-2 (coord validation), TTT-3 (scratch as
-    # locals) and TTT-4 (cell_to_winsets scan + win detection). A full
-    # cat's-game fill is left to the on-chain exercise harness.
-    p1 = sp.test_account("p1")
-    p2 = sp.test_account("p2")
-    oracle = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
-    fee = sp.mutez(100000)
-    wager = sp.mutez(1000000)
-    c.startGame(_sender=p1, _amount=wager + fee)
-    c.joinGame(gameId=0, _sender=p2, _amount=wager + fee)
-    c.flipForFirst(gameId=0, bit=0, seed="seed", _sender=oracle)
-    # P1 takes win-set 0 = [111,112,113,114]; P2 plays harmlessly.
-    c.makeMove(gameId=0, move=111, _sender=p1)
-    c.makeMove(gameId=0, move=211, _sender=p2)
-    c.makeMove(gameId=0, move=112, _sender=p1)
-    c.makeMove(gameId=0, move=212, _sender=p2)
-    c.makeMove(gameId=0, move=113, _sender=p1)
-    c.makeMove(gameId=0, move=212, _sender=p2, _valid=False)   # cell occupied
-    c.makeMove(gameId=0, move=999, _sender=p2, _valid=False)   # TTT-2: bad coord
-    c.makeMove(gameId=0, move=213, _sender=p2)
-    c.makeMove(gameId=0, move=114, _sender=p1)                 # P1 completes line 0
-    s.verify(c.data.games[0].metaData["gameStatus"] == 3)
-    s.verify(c.data.games[0].metaData["winningPlayer"] == 1)
-    # No move can be played on a settled game.
-    c.makeMove(gameId=0, move=311, _sender=p2, _valid=False)
-
-    # ── TTT-6: claim a stalled game by timeout ────────────────────────
-    c.startGame(_sender=p1, _amount=wager + fee, _level=1000)
-    c.joinGame(gameId=1, _sender=p2, _amount=wager + fee, _level=1000)
-    # bit=1 → player 2 moves first, so p2 is on the clock.
-    c.flipForFirst(gameId=1, bit=1, seed="s2", _sender=oracle, _level=1000)
-    # Before staleBlocks (120) elapse, nobody can claim.
-    c.claimByTimeout(gameId=1, _sender=p1, _level=1100, _valid=False)
-    # The player who owes the move can't claim their own timeout.
-    c.claimByTimeout(gameId=1, _sender=p2, _level=1200, _valid=False)
-    # 200 blocks idle (>= 120) → the waiting player (p1) claims the win.
-    c.claimByTimeout(gameId=1, _sender=p1, _level=1200)
-    s.verify(c.data.games[1].metaData["gameStatus"] == 3)
-    s.verify(c.data.games[1].metaData["winningPlayer"] == 1)
