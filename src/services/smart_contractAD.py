@@ -85,8 +85,8 @@ def main():
             )])
 
             self.data.currentGameIndex = sp.nat(0)
-            self.data.pot = sp.mutez(100000)
-            self.data.potReserve = sp.tez(0)
+            self.data.pot = sp.tez(5)
+            self.data.potReserve = sp.tez(10)
             self.data.ante = sp.mutez(200000)
             self.data.fee = sp.mutez(100000)
 

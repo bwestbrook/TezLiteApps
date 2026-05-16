@@ -90,6 +90,11 @@ CONTRACTS: dict[str, ContractSpec] = {
         id="acey-duecey",
         source=SOURCES_DIR / "smart_contractAD.py",
         constants_var="AD_CONTRACT_ADDRESS",
+        # Pot seed at origination. self.data.pot (5 ꜩ) + potReserve (10 ꜩ)
+        # in __init__ must match this — bookkeeping vs L1 balance agree.
+        # default() is NOT triggered by origination, so the initial balance
+        # is credited only at the L1 level, not added to potReserve again.
+        initial_balance_tez=15.0,
     ),
     "ttt": ContractSpec(
         id="ttt",
