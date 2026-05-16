@@ -1,259 +1,1190 @@
-{
-    storage
-        (pair
-            (map %idLookUp
-                int
-                (pair
-                    (mutez %balance)
-                    (address %owner)))
-            (pair
-                (address %oracle)
-                (mutez %totalRewards)));
-    parameter
-        (or
-            (unit %default)
-            (or
-                (unit %payTxlHolder)
-                (pair %updateOwner
-                    (address %address)
-                    (int %txlId))));
-    code
-        {
-            UNPAIR;
+parameter (or (or (or (unit %acceptAdmin) (or (list %batchUpdateOwner (pair (address %newOwner) (nat %txlId))) (list %claim nat))) (or (unit %default) (or (unit %pause) (address %proposeAdmin)))) (or (or (list %pushPayouts address) (or (list %settleBatch nat) (address %sweepDust))) (or (unit %unpause) (or (address %updateOracle) (pair %updateOwner (address %newOwner) (nat %txlId))))));
+storage   (pair (mutez %accPerToken) (pair (nat %activeSupply) (pair (address %admin) (pair (address %burnSentinel) (pair (mutez %dust) (pair (big_map %idLookUp nat (pair (mutez %lastSeenAcc) (address %owner))) (pair (address %oracle) (pair (bool %paused) (pair (big_map %pending address mutez) (pair (option %pendingAdmin address) (pair (mutez %totalRewards) (nat %totalSupply))))))))))));
+code
+  {
+    UNPAIR;     # @parameter : @storage
+    IF_LEFT
+      {
+        IF_LEFT
+          {
             IF_LEFT
-                {
-                    NIL operation;
-                    AMOUNT;
-                    EMIT %TXLFunded mutez;
-                    CONS;
-                    DIG 2;
-                    DUP;
-                    GET 4;
-                    AMOUNT;
-                    ADD;
-                    UPDATE 4;
-                    DUG 2;
-                    PUSH nat 271;
-                    PUSH nat 1;
-                    AMOUNT;
-                    MUL;
-                    EDIV;
-                    IF_NONE
-                        {
-                            PUSH int 329;
-                            FAILWITH
-                        }
-                        {
-                        };
-                    CAR;
-                    DUP 4;
-                    CAR;
+              {
+                DROP;       # @storage
+                # == acceptAdmin ==
+                # proposed = self.data.pendingAdmin.unwrap_some( # @storage
+                DUP;        # @storage : @storage
+                GET 19;     # option address : @storage
+                IF_NONE
+                  {
+                    PUSH string "noPendingAdmin"; # string : @storage
+                    FAILWITH;   # FAILED
+                  }
+                  {}; # @some : @storage
+                # assert sp.sender == proposed, "notProposedAdmin" # @some : @storage
+                DUP;        # @some : @some : @storage
+                SENDER;     # @sender : @some : @some : @storage
+                COMPARE;    # int : @some : @storage
+                EQ;         # bool : @some : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "notProposedAdmin"; # string : @some : @storage
+                    FAILWITH;   # FAILED
+                  }; # @some : @storage
+                # self.data.admin = proposed # @some : @storage
+                UPDATE 5;   # @storage
+                # self.data.pendingAdmin = sp.cast(None, sp.option[sp.address]) # @storage
+                NONE address; # option address : @storage
+                UPDATE 19;  # @storage
+                NIL operation; # list operation : @storage
+              }
+              {
+                IF_LEFT
+                  {
+                    # == batchUpdateOwner ==
+                    # assert sp.sender == self.data.oracle, "notOracle" # @parameter%batchUpdateOwner : @storage
+                    DUP 2;      # @storage : @parameter%batchUpdateOwner : @storage
+                    GET 13;     # address : @parameter%batchUpdateOwner : @storage
+                    SENDER;     # @sender : address : @parameter%batchUpdateOwner : @storage
+                    COMPARE;    # int : @parameter%batchUpdateOwner : @storage
+                    EQ;         # bool : @parameter%batchUpdateOwner : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "notOracle"; # string : @parameter%batchUpdateOwner : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%batchUpdateOwner : @storage
+                    # assert sp.len(params.updates) <= MAX_BATCH, "batchTooLarge" # @parameter%batchUpdateOwner : @storage
+                    PUSH nat 50; # nat : @parameter%batchUpdateOwner : @storage
+                    DUP 2;      # @parameter%batchUpdateOwner : nat : @parameter%batchUpdateOwner : @storage
+                    SIZE;       # nat : nat : @parameter%batchUpdateOwner : @storage
+                    COMPARE;    # int : @parameter%batchUpdateOwner : @storage
+                    LE;         # bool : @parameter%batchUpdateOwner : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "batchTooLarge"; # string : @parameter%batchUpdateOwner : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%batchUpdateOwner : @storage
+                    # burn = self.data.burnSentinel # @parameter%batchUpdateOwner : @storage
+                    DUP 2;      # @storage : @parameter%batchUpdateOwner : @storage
+                    GET 7;      # address : @parameter%batchUpdateOwner : @storage
+                    # for u in params.updates: # address : @parameter%batchUpdateOwner : @storage
+                    NIL operation; # list operation : address : @parameter%batchUpdateOwner : @storage
+                    DUP 3;      # @parameter%batchUpdateOwner : list operation : address : @parameter%batchUpdateOwner : @storage
                     ITER
-                        {
-                            CAR;
-                            DIG 4;
-                            DUP;
-                            CAR;
-                            DUP;
-                            DIG 3;
-                            DUP;
-                            DUG 2;
-                            GET;
+                      {
+                        # newIsBurn = u.newOwner == burn # pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                        DUP 3;      # address : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                        DUP 2;      # pair (address %newOwner) (nat %txlId) : address : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                        CAR;        # address : address : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                        COMPARE;    # int : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                        EQ;         # bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                        # if u.txlId in self.data.idLookUp: # bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                        DUP 6;      # @storage : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                        GET 11;     # big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                        DUP 3;      # pair (address %newOwner) (nat %txlId) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                        CDR;        # nat : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                        MEM;        # bool : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                        IF
+                          {
+                            # entry = self.data.idLookUp[u.txlId] # bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                            DUP 6;      # @storage : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                            GET 11;     # big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                            DUP 3;      # pair (address %newOwner) (nat %txlId) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                            CDR;        # nat : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                            GET;        # option (pair (mutez %lastSeenAcc) (address %owner)) : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
                             IF_NONE
-                                {
-                                    PUSH int 332;
-                                    FAILWITH
-                                }
-                                {
-                                };
-                            DUP;
-                            CAR;
-                            DUP 6;
-                            ADD;
-                            UPDATE 1;
-                            SOME;
-                            SWAP;
-                            UPDATE;
-                            UPDATE 1;
-                            DUG 3
-                        };
-                    DROP;
-                    SWAP;
-                    DROP
-                }
-                {
-                    IF_LEFT
-                        {
-                            PUSH mutez 0;
-                            PUSH int 0;
-                            NIL operation;
-                            SENDER;
-                            EMIT address;
-                            CONS;
-                            DUP 5;
-                            CAR;
-                            ITER
-                                {
-                                    CAR;
-                                    SENDER;
-                                    DUP 7;
-                                    CAR;
-                                    DUP 3;
-                                    GET;
+                              {
+                                PUSH int 378; # int : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                FAILWITH;   # FAILED
+                              }
+                              {}; # @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                            # oldOwner = entry.owner # @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                            DUP;        # @some : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                            CDR;        # address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                            # if oldOwner != u.newOwner: # address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                            DUP 4;      # pair (address %newOwner) (nat %txlId) : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                            CAR;        # address : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                            DUP 2;      # address : address : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                            COMPARE;    # int : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                            NEQ;        # bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                            IF
+                              {
+                                # oldIsBurn = oldOwner == burn # address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                DUP 6;      # address : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                DUP 2;      # address : address : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                COMPARE;    # int : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                EQ;         # bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                # if not oldIsBurn: # bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                DUP;        # bool : bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                IF
+                                  {
+                                    DIG 2;      # @some : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                    DROP;       # bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                  }
+                                  {
+                                    # share = self.data.accPerToken - entry.lastSeenAcc # bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                    DUP 3;      # @some : bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                    CAR;        # mutez : bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                    DUP 10;     # @storage : mutez : bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                    CAR;        # mutez : mutez : bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                    SUB_MUTEZ;  # option mutez : bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
                                     IF_NONE
-                                        {
-                                            PUSH int 312;
-                                            FAILWITH
-                                        }
-                                        {
-                                        };
-                                    CDR;
-                                    COMPARE;
-                                    EQ;
+                                      {
+                                        PUSH int 383; # int : bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                        FAILWITH;   # FAILED
+                                      }
+                                      {}; # @some : bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                    # if share > sp.mutez(0): # @some : bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                    PUSH mutez 0; # mutez : @some : bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                    DUP 2;      # @some : mutez : @some : bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                    COMPARE;    # int : @some : bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                    GT;         # bool : @some : bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
                                     IF
-                                        {
-                                            DIG 2;
-                                            DROP;
-                                            DIG 2;
-                                            DUP 5;
-                                            CAR;
-                                            DUP 3;
-                                            GET;
-                                            IF_NONE
-                                                {
-                                                    PUSH int 313;
-                                                    FAILWITH
-                                                }
-                                                {
-                                                };
-                                            CAR;
-                                            ADD;
-                                            DUG 2;
-                                            DIG 4;
-                                            DUP;
-                                            CAR;
-                                            DUP;
-                                            DIG 3;
-                                            DUP;
-                                            DUG 2;
-                                            GET;
-                                            IF_NONE
-                                                {
-                                                    PUSH int 314;
-                                                    FAILWITH
-                                                }
-                                                {
-                                                };
-                                            PUSH mutez 0;
-                                            UPDATE 1;
-                                            SOME;
-                                            SWAP;
-                                            UPDATE;
-                                            UPDATE 1;
-                                            DUG 3;
-                                            PUSH int 1;
-                                            SWAP
-                                        }
-                                        {
-                                            DROP
-                                        }
-                                };
-                            DIG 3;
-                            DROP;
-                            PUSH int 1;
-                            DIG 2;
-                            COMPARE;
-                            EQ;
+                                      {
+                                        DIG 3;      # @some : @some : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                        DROP;       # @some : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                        # current = self.data.pending.get( # @some : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                        DUP 9;      # @storage : @some : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                        GET 17;     # big_map address mutez : @some : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                        DUP 4;      # address : big_map address mutez : @some : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                        GET;        # option mutez : @some : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                        IF_NONE
+                                          {
+                                            PUSH mutez 0; # mutez : @some : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                          }
+                                          {}; # mutez : @some : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                        # self.data.pending[oldOwner] = current + share # mutez : @some : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                        DIG 9;      # @storage : mutez : @some : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        DUP;        # @storage : @storage : mutez : @some : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        GET 17;     # big_map address mutez : @storage : mutez : @some : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        DIG 3;      # @some : big_map address mutez : @storage : mutez : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        DIG 3;      # mutez : @some : big_map address mutez : @storage : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        ADD;        # mutez : big_map address mutez : @storage : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        SOME;       # option mutez : big_map address mutez : @storage : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        DUP 5;      # address : option mutez : big_map address mutez : @storage : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        UPDATE;     # big_map address mutez : @storage : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        UPDATE 17;  # @storage : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        DUG 7;      # bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                      }
+                                      {
+                                        DROP;       # bool : address : @some : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                        DIG 2;      # @some : bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                        DROP;       # bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                      }; # bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                  }; # bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                # if oldIsBurn: # bool : address : bool : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                IF
+                                  {
+                                    SWAP;       # bool : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                    # if not newIsBurn: # bool : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                    IF
+                                      {}
+                                      {
+                                        # self.data.activeSupply += sp.nat(1) # address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                        DIG 5;      # @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        DUP;        # @storage : @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        GET 3;      # nat : @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        PUSH nat 1; # nat : nat : @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        ADD;        # nat : @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        UPDATE 3;   # @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        DUG 5;      # address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                      }; # address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                  }
+                                  {
+                                    SWAP;       # bool : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                    # if newIsBurn: # bool : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                    IF
+                                      {
+                                        # self.data.activeSupply = sp.as_nat( # address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                        PUSH nat 1; # nat : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                        DUP 7;      # @storage : nat : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                        GET 3;      # nat : nat : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                        SUB;        # int : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                        ISNAT;      # option nat : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                        IF_NONE
+                                          {
+                                            PUSH int 394; # int : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                            FAILWITH;   # FAILED
+                                          }
+                                          {}; # @some : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                        DIG 6;      # @storage : @some : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        SWAP;       # @some : @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        UPDATE 3;   # @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                        DUG 5;      # address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                      }
+                                      {}; # address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                  }; # address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                # self.data.idLookUp[u.txlId] = sp.record( # address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                DUP 6;      # @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                DUP;        # @storage : @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                GET 11;     # big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                DUP 4;      # pair (address %newOwner) (nat %txlId) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                CAR;        # address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                DIG 8;      # @storage : address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                CAR;        # mutez : address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                PAIR;       # pair mutez address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                SOME;       # option (pair mutez address) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                DUP 5;      # pair (address %newOwner) (nat %txlId) : option (pair mutez address) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                CDR;        # nat : option (pair mutez address) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                UPDATE;     # big_map nat (pair mutez address) : @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                UPDATE 11;  # @storage : address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                                DUG 5;      # address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                # sp.emit( # address : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                DIG 2;      # list operation : address : pair (address %newOwner) (nat %txlId) : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                DUP 3;      # pair (address %newOwner) (nat %txlId) : list operation : address : pair (address %newOwner) (nat %txlId) : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                CDR;        # nat : list operation : address : pair (address %newOwner) (nat %txlId) : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                DIG 2;      # address : nat : list operation : pair (address %newOwner) (nat %txlId) : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                DIG 3;      # pair (address %newOwner) (nat %txlId) : address : nat : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                CAR;        # address : address : nat : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                PAIR 3;     # pair address (pair address nat) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                EMIT %ownerChanged (pair (address %newOwner) (pair (address %oldOwner) (nat %txlId))); # operation : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                                CONS;       # list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                              }
+                              {
+                                DROP 4;     # list operation : address : @parameter%batchUpdateOwner : @storage
+                              }; # list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                          }
+                          {
+                            # if not newIsBurn: # bool : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
                             IF
-                                {
-                                    DUP 2;
-                                    EMIT mutez;
-                                    CONS;
-                                    SENDER;
-                                    CONTRACT unit;
-                                    IF_NONE
-                                        {
-                                            PUSH int 318;
-                                            FAILWITH
-                                        }
-                                        {
-                                        };
-                                    DUP 3;
-                                    UNIT;
-                                    TRANSFER_TOKENS;
-                                    CONS;
-                                    DIG 2;
-                                    DUP;
-                                    GET 4;
-                                    DIG 3;
-                                    SWAP;
-                                    SUB_MUTEZ;
-                                    IF_NONE
-                                        {
-                                            PUSH int 319;
-                                            FAILWITH
-                                        }
-                                        {
-                                        };
-                                    UPDATE 4;
-                                    SWAP
-                                }
-                                {
-                                    SWAP;
-                                    DROP;
-                                    PUSH string "notTXLOwner";
-                                    EMIT %notTXLOwner string;
-                                    CONS
-                                }
-                        }
-                        {
-                            DUP 2;
-                            GET 3;
-                            SENDER;
-                            COMPARE;
-                            EQ;
+                              {}
+                              {
+                                # self.data.activeSupply += sp.nat(1) # pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                                DIG 4;      # @storage : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner
+                                DUP;        # @storage : @storage : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner
+                                GET 3;      # nat : @storage : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner
+                                PUSH nat 1; # nat : nat : @storage : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner
+                                ADD;        # nat : @storage : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner
+                                UPDATE 3;   # @storage : pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner
+                                DUG 4;      # pair (address %newOwner) (nat %txlId) : list operation : address : @parameter%batchUpdateOwner : @storage
+                              }; # pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                            # self.data.idLookUp[u.txlId] = sp.record( # pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                            DUP 5;      # @storage : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                            DUP;        # @storage : @storage : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                            GET 11;     # big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                            DUP 3;      # pair (address %newOwner) (nat %txlId) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                            CAR;        # address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                            DIG 7;      # @storage : address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                            CAR;        # mutez : address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                            PAIR;       # pair mutez address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                            SOME;       # option (pair mutez address) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                            DUP 4;      # pair (address %newOwner) (nat %txlId) : option (pair mutez address) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                            CDR;        # nat : option (pair mutez address) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                            UPDATE;     # big_map nat (pair mutez address) : @storage : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                            UPDATE 11;  # @storage : pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId))
+                            DUG 4;      # pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                            # sp.emit( # pair (address %newOwner) (nat %txlId) : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                            EMIT %ownerRegistered (pair (address %newOwner) (nat %txlId)); # operation : list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                            CONS;       # list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                          }; # list operation : address : list (pair (address %newOwner) (nat %txlId)) : @storage
+                      }; # list operation : address : @parameter%batchUpdateOwner : @storage
+                    SWAP;       # address : list operation : @parameter%batchUpdateOwner : @storage
+                    DROP;       # list operation : @parameter%batchUpdateOwner : @storage
+                    SWAP;       # @parameter%batchUpdateOwner : list operation : @storage
+                    DROP;       # list operation : @storage
+                  }
+                  {
+                    # == claim ==
+                    # assert not self.data.paused, "paused" # @parameter%claim : @storage
+                    DUP 2;      # @storage : @parameter%claim : @storage
+                    GET 15;     # bool : @parameter%claim : @storage
+                    IF
+                      {
+                        PUSH string "paused"; # string : @parameter%claim : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @parameter%claim : @storage
+                    # assert sp.len(params.tokenIds) <= MAX_BATCH, "batchTooLarge" # @parameter%claim : @storage
+                    PUSH nat 50; # nat : @parameter%claim : @storage
+                    DUP 2;      # @parameter%claim : nat : @parameter%claim : @storage
+                    SIZE;       # nat : nat : @parameter%claim : @storage
+                    COMPARE;    # int : @parameter%claim : @storage
+                    LE;         # bool : @parameter%claim : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "batchTooLarge"; # string : @parameter%claim : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%claim : @storage
+                    # for token_id in params.tokenIds: # @parameter%claim : @storage
+                    DUP;        # @parameter%claim : @parameter%claim : @storage
+                    ITER
+                      {
+                        # assert token_id in self.data.idLookUp, "unknownToken" # nat : @parameter%claim : @storage
+                        DUP 3;      # @storage : nat : @parameter%claim : @storage
+                        GET 11;     # big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : nat : @parameter%claim : @storage
+                        DUP 2;      # nat : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : nat : @parameter%claim : @storage
+                        MEM;        # bool : nat : @parameter%claim : @storage
+                        IF
+                          {}
+                          {
+                            PUSH string "unknownToken"; # string : nat : @parameter%claim : @storage
+                            FAILWITH;   # FAILED
+                          }; # nat : @parameter%claim : @storage
+                        # entry = self.data.idLookUp[token_id] # nat : @parameter%claim : @storage
+                        DUP 3;      # @storage : nat : @parameter%claim : @storage
+                        GET 11;     # big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : nat : @parameter%claim : @storage
+                        DUP 2;      # nat : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : nat : @parameter%claim : @storage
+                        GET;        # option (pair (mutez %lastSeenAcc) (address %owner)) : nat : @parameter%claim : @storage
+                        IF_NONE
+                          {
+                            PUSH int 489; # int : nat : @parameter%claim : @storage
+                            FAILWITH;   # FAILED
+                          }
+                          {}; # @some : nat : @parameter%claim : @storage
+                        # assert entry.owner == sp.sender, "notOwner" # @some : nat : @parameter%claim : @storage
+                        SENDER;     # @sender : @some : nat : @parameter%claim : @storage
+                        DUP 2;      # @some : @sender : @some : nat : @parameter%claim : @storage
+                        CDR;        # address : @sender : @some : nat : @parameter%claim : @storage
+                        COMPARE;    # int : @some : nat : @parameter%claim : @storage
+                        EQ;         # bool : @some : nat : @parameter%claim : @storage
+                        IF
+                          {}
+                          {
+                            PUSH string "notOwner"; # string : @some : nat : @parameter%claim : @storage
+                            FAILWITH;   # FAILED
+                          }; # @some : nat : @parameter%claim : @storage
+                        # share = self.data.accPerToken - entry.lastSeenAcc # @some : nat : @parameter%claim : @storage
+                        DUP;        # @some : @some : nat : @parameter%claim : @storage
+                        CAR;        # mutez : @some : nat : @parameter%claim : @storage
+                        DUP 5;      # @storage : mutez : @some : nat : @parameter%claim : @storage
+                        CAR;        # mutez : mutez : @some : nat : @parameter%claim : @storage
+                        SUB_MUTEZ;  # option mutez : @some : nat : @parameter%claim : @storage
+                        IF_NONE
+                          {
+                            PUSH int 491; # int : @some : nat : @parameter%claim : @storage
+                            FAILWITH;   # FAILED
+                          }
+                          {}; # @some : @some : nat : @parameter%claim : @storage
+                        # if share > sp.mutez(0): # @some : @some : nat : @parameter%claim : @storage
+                        PUSH mutez 0; # mutez : @some : @some : nat : @parameter%claim : @storage
+                        DUP 2;      # @some : mutez : @some : @some : nat : @parameter%claim : @storage
+                        COMPARE;    # int : @some : @some : nat : @parameter%claim : @storage
+                        GT;         # bool : @some : @some : nat : @parameter%claim : @storage
+                        IF
+                          {
+                            SWAP;       # @some : @some : nat : @parameter%claim : @storage
+                            DROP;       # @some : nat : @parameter%claim : @storage
+                            # current = self.data.pending.get( # @some : nat : @parameter%claim : @storage
+                            DUP 4;      # @storage : @some : nat : @parameter%claim : @storage
+                            GET 17;     # big_map address mutez : @some : nat : @parameter%claim : @storage
+                            SENDER;     # @sender : big_map address mutez : @some : nat : @parameter%claim : @storage
+                            GET;        # option mutez : @some : nat : @parameter%claim : @storage
+                            IF_NONE
+                              {
+                                PUSH mutez 0; # mutez : @some : nat : @parameter%claim : @storage
+                              }
+                              {}; # mutez : @some : nat : list nat : @storage
+                            # self.data.pending[sp.sender] = current + share # mutez : @some : nat : list nat : @storage
+                            DIG 4;      # @storage : mutez : @some : nat : list nat
+                            DUP;        # @storage : @storage : mutez : @some : nat : list nat
+                            GET 17;     # big_map address mutez : @storage : mutez : @some : nat : list nat
+                            DIG 3;      # @some : big_map address mutez : @storage : mutez : nat : list nat
+                            DIG 3;      # mutez : @some : big_map address mutez : @storage : nat : list nat
+                            ADD;        # mutez : big_map address mutez : @storage : nat : list nat
+                            SOME;       # option mutez : big_map address mutez : @storage : nat : list nat
+                            SENDER;     # @sender : option mutez : big_map address mutez : @storage : nat : list nat
+                            UPDATE;     # big_map address mutez : @storage : nat : list nat
+                            UPDATE 17;  # @storage : nat : list nat
+                            DUG 2;      # nat : list nat : @storage
+                            # self.data.idLookUp[token_id] = sp.record( # nat : list nat : @storage
+                            DUP 3;      # @storage : nat : list nat : @storage
+                            DUP;        # @storage : @storage : nat : list nat : @storage
+                            GET 11;     # big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : nat : list nat : @storage
+                            SENDER;     # @sender : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : nat : list nat : @storage
+                            DIG 5;      # @storage : @sender : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : nat : list nat
+                            CAR;        # mutez : @sender : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : nat : list nat
+                            PAIR;       # pair mutez @sender : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : nat : list nat
+                            SOME;       # option (pair mutez @sender) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : nat : list nat
+                            DIG 3;      # nat : option (pair mutez @sender) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : list nat
+                            UPDATE;     # big_map nat (pair mutez address) : @storage : list nat
+                            UPDATE 11;  # @storage : list nat
+                            SWAP;       # list nat : @storage
+                          }
+                          {
+                            DROP 3;     # @parameter%claim : @storage
+                          }; # list nat : @storage
+                      }; # @parameter%claim : @storage
+                    DROP;       # @storage
+                    # assert sp.sender in self.data.pending, "nothingToClaim" # @storage
+                    DUP;        # @storage : @storage
+                    GET 17;     # big_map address mutez : @storage
+                    SENDER;     # @sender : big_map address mutez : @storage
+                    MEM;        # bool : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "nothingToClaim"; # string : @storage
+                        FAILWITH;   # FAILED
+                      }; # @storage
+                    # amount = self.data.pending[sp.sender] # @storage
+                    DUP;        # @storage : @storage
+                    GET 17;     # big_map address mutez : @storage
+                    SENDER;     # @sender : big_map address mutez : @storage
+                    GET;        # option mutez : @storage
+                    IF_NONE
+                      {
+                        PUSH int 505; # int : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @storage
+                    # assert amount > sp.mutez(0), "nothingToClaim" # @some : @storage
+                    PUSH mutez 0; # mutez : @some : @storage
+                    DUP 2;      # @some : mutez : @some : @storage
+                    COMPARE;    # int : @some : @storage
+                    GT;         # bool : @some : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "nothingToClaim"; # string : @some : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @storage
+                    SWAP;       # @storage : @some
+                    # del self.data.pending[sp.sender] # @storage : @some
+                    DUP;        # @storage : @storage : @some
+                    GET 17;     # big_map address mutez : @storage : @some
+                    NONE mutez; # option mutez : big_map address mutez : @storage : @some
+                    SENDER;     # @sender : option mutez : big_map address mutez : @storage : @some
+                    UPDATE;     # big_map address mutez : @storage : @some
+                    UPDATE 17;  # @storage : @some
+                    SWAP;       # @some : @storage
+                    # sp.send(sp.sender, amount) # @some : @storage
+                    NIL operation; # list operation : @some : @storage
+                    SENDER;     # @sender : list operation : @some : @storage
+                    CONTRACT unit; # option (contract unit) : list operation : @some : @storage
+                    IF_NONE
+                      {
+                        PUSH int 508; # int : list operation : @some : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : list operation : @some : @storage
+                    DUP 3;      # @some : @some : list operation : @some : @storage
+                    UNIT;       # unit : @some : @some : list operation : @some : @storage
+                    TRANSFER_TOKENS; # operation : list operation : @some : @storage
+                    CONS;       # list operation : @some : @storage
+                    # sp.emit( # list operation : @some : @storage
+                    SENDER;     # @sender : list operation : @some : @storage
+                    DIG 2;      # @some : @sender : list operation : @storage
+                    PAIR;       # pair @some @sender : list operation : @storage
+                    EMIT %claimed (pair (mutez %amount) (address %who)); # operation : list operation : @storage
+                    CONS;       # list operation : @storage
+                  }; # list operation : @storage
+              }; # list operation : @storage
+          }
+          {
+            IF_LEFT
+              {
+                DROP;       # @storage
+                # == default ==
+                # assert not self.data.paused, "paused" # @storage
+                DUP;        # @storage : @storage
+                GET 15;     # bool : @storage
+                IF
+                  {
+                    PUSH string "paused"; # string : @storage
+                    FAILWITH;   # FAILED
+                  }
+                  {}; # @storage
+                # assert sp.amount > sp.mutez(0), "zeroAmount" # @storage
+                PUSH mutez 0; # mutez : @storage
+                AMOUNT;     # @amount : mutez : @storage
+                COMPARE;    # int : @storage
+                GT;         # bool : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "zeroAmount"; # string : @storage
+                    FAILWITH;   # FAILED
+                  }; # @storage
+                # assert self.data.activeSupply > sp.nat(0), "noActiveHolders" # @storage
+                PUSH nat 0; # nat : @storage
+                DUP 2;      # @storage : nat : @storage
+                GET 3;      # nat : nat : @storage
+                COMPARE;    # int : @storage
+                GT;         # bool : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "noActiveHolders"; # string : @storage
+                    FAILWITH;   # FAILED
+                  }; # @storage
+                # ed = sp.ediv(sp.amount, self.data.activeSupply).unwrap_some( # @storage
+                DUP;        # @storage : @storage
+                GET 3;      # nat : @storage
+                AMOUNT;     # @amount : nat : @storage
+                EDIV;       # option (pair mutez mutez) : @storage
+                IF_NONE
+                  {
+                    PUSH string "divError"; # string : @storage
+                    FAILWITH;   # FAILED
+                  }
+                  {}; # @some : @storage
+                SWAP;       # @storage : @some
+                # self.data.accPerToken += sp.fst(ed) # @storage : @some
+                DUP;        # @storage : @storage : @some
+                CAR;        # mutez : @storage : @some
+                DUP 3;      # @some : mutez : @storage : @some
+                CAR;        # mutez : mutez : @storage : @some
+                ADD;        # mutez : @storage : @some
+                UPDATE 1;   # @storage : @some
+                # self.data.dust += sp.snd(ed) # @storage : @some
+                DUP;        # @storage : @storage : @some
+                GET 9;      # mutez : @storage : @some
+                DUP 3;      # @some : mutez : @storage : @some
+                CDR;        # mutez : mutez : @storage : @some
+                ADD;        # mutez : @storage : @some
+                UPDATE 9;   # @storage : @some
+                # self.data.totalRewards += sp.amount # @storage : @some
+                DUP;        # @storage : @storage : @some
+                GET 21;     # mutez : @storage : @some
+                AMOUNT;     # @amount : mutez : @storage : @some
+                ADD;        # mutez : @storage : @some
+                UPDATE 21;  # @storage : @some
+                SWAP;       # @some : @storage
+                # sp.emit( # @some : @storage
+                NIL operation; # list operation : @some : @storage
+                SWAP;       # @some : list operation : @storage
+                UNPAIR;     # mutez : mutez : list operation : @storage
+                SWAP;       # mutez : mutez : list operation : @storage
+                AMOUNT;     # @amount : mutez : mutez : list operation : @storage
+                PAIR 3;     # pair @amount (pair mutez mutez) : list operation : @storage
+                EMIT %deposit (pair (mutez %amount) (pair (mutez %dust) (mutez %perToken))); # operation : list operation : @storage
+                CONS;       # list operation : @storage
+              }
+              {
+                IF_LEFT
+                  {
+                    DROP;       # @storage
+                    # == pause ==
+                    # assert sp.sender == self.data.admin, "notAdmin" # @storage
+                    DUP;        # @storage : @storage
+                    GET 5;      # address : @storage
+                    SENDER;     # @sender : address : @storage
+                    COMPARE;    # int : @storage
+                    EQ;         # bool : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "notAdmin"; # string : @storage
+                        FAILWITH;   # FAILED
+                      }; # @storage
+                    # self.data.paused = True # @storage
+                    PUSH bool True; # bool : @storage
+                    UPDATE 15;  # @storage
+                  }
+                  {
+                    # == proposeAdmin ==
+                    # assert sp.sender == self.data.admin, "notAdmin" # @parameter%proposeAdmin : @storage
+                    DUP 2;      # @storage : @parameter%proposeAdmin : @storage
+                    GET 5;      # address : @parameter%proposeAdmin : @storage
+                    SENDER;     # @sender : address : @parameter%proposeAdmin : @storage
+                    COMPARE;    # int : @parameter%proposeAdmin : @storage
+                    EQ;         # bool : @parameter%proposeAdmin : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "notAdmin"; # string : @parameter%proposeAdmin : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%proposeAdmin : @storage
+                    # self.data.pendingAdmin = sp.Some(params.newAdmin) # @parameter%proposeAdmin : @storage
+                    SOME;       # option address : @storage
+                    UPDATE 19;  # @storage
+                  }; # @storage
+                NIL operation; # list operation : @storage
+              }; # list operation : @storage
+          }; # list operation : @storage
+      }
+      {
+        IF_LEFT
+          {
+            IF_LEFT
+              {
+                # == pushPayouts ==
+                # assert sp.sender == self.data.admin, "notAdmin" # @parameter%pushPayouts : @storage
+                DUP 2;      # @storage : @parameter%pushPayouts : @storage
+                GET 5;      # address : @parameter%pushPayouts : @storage
+                SENDER;     # @sender : address : @parameter%pushPayouts : @storage
+                COMPARE;    # int : @parameter%pushPayouts : @storage
+                EQ;         # bool : @parameter%pushPayouts : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "notAdmin"; # string : @parameter%pushPayouts : @storage
+                    FAILWITH;   # FAILED
+                  }; # @parameter%pushPayouts : @storage
+                # assert not self.data.paused, "paused" # @parameter%pushPayouts : @storage
+                DUP 2;      # @storage : @parameter%pushPayouts : @storage
+                GET 15;     # bool : @parameter%pushPayouts : @storage
+                IF
+                  {
+                    PUSH string "paused"; # string : @parameter%pushPayouts : @storage
+                    FAILWITH;   # FAILED
+                  }
+                  {}; # @parameter%pushPayouts : @storage
+                # assert sp.len(params.recipients) <= MAX_BATCH, "batchTooLarge" # @parameter%pushPayouts : @storage
+                PUSH nat 50; # nat : @parameter%pushPayouts : @storage
+                DUP 2;      # @parameter%pushPayouts : nat : @parameter%pushPayouts : @storage
+                SIZE;       # nat : nat : @parameter%pushPayouts : @storage
+                COMPARE;    # int : @parameter%pushPayouts : @storage
+                LE;         # bool : @parameter%pushPayouts : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "batchTooLarge"; # string : @parameter%pushPayouts : @storage
+                    FAILWITH;   # FAILED
+                  }; # @parameter%pushPayouts : @storage
+                # for addr in params.recipients: # @parameter%pushPayouts : @storage
+                NIL operation; # list operation : @parameter%pushPayouts : @storage
+                DUP 2;      # @parameter%pushPayouts : list operation : @parameter%pushPayouts : @storage
+                ITER
+                  {
+                    # if addr in self.data.pending: # address : list operation : @parameter%pushPayouts : @storage
+                    DUP 4;      # @storage : address : list operation : @parameter%pushPayouts : @storage
+                    GET 17;     # big_map address mutez : address : list operation : @parameter%pushPayouts : @storage
+                    DUP 2;      # address : big_map address mutez : address : list operation : @parameter%pushPayouts : @storage
+                    MEM;        # bool : address : list operation : @parameter%pushPayouts : @storage
+                    IF
+                      {
+                        # amount = self.data.pending[addr] # address : list operation : @parameter%pushPayouts : @storage
+                        DUP 4;      # @storage : address : list operation : @parameter%pushPayouts : @storage
+                        GET 17;     # big_map address mutez : address : list operation : @parameter%pushPayouts : @storage
+                        DUP 2;      # address : big_map address mutez : address : list operation : @parameter%pushPayouts : @storage
+                        GET;        # option mutez : address : list operation : @parameter%pushPayouts : @storage
+                        IF_NONE
+                          {
+                            PUSH int 467; # int : address : list operation : @parameter%pushPayouts : @storage
+                            FAILWITH;   # FAILED
+                          }
+                          {}; # @some : address : list operation : @parameter%pushPayouts : @storage
+                        # if amount > sp.mutez(0): # @some : address : list operation : @parameter%pushPayouts : @storage
+                        PUSH mutez 0; # mutez : @some : address : list operation : @parameter%pushPayouts : @storage
+                        DUP 2;      # @some : mutez : @some : address : list operation : @parameter%pushPayouts : @storage
+                        COMPARE;    # int : @some : address : list operation : @parameter%pushPayouts : @storage
+                        GT;         # bool : @some : address : list operation : @parameter%pushPayouts : @storage
+                        IF
+                          {
+                            # del self.data.pending[addr] # @some : address : list operation : @parameter%pushPayouts : @storage
+                            DIG 4;      # @storage : @some : address : list operation : @parameter%pushPayouts
+                            DUP;        # @storage : @storage : @some : address : list operation : @parameter%pushPayouts
+                            GET 17;     # big_map address mutez : @storage : @some : address : list operation : @parameter%pushPayouts
+                            NONE mutez; # option mutez : big_map address mutez : @storage : @some : address : list operation : @parameter%pushPayouts
+                            DUP 5;      # address : option mutez : big_map address mutez : @storage : @some : address : list operation : @parameter%pushPayouts
+                            UPDATE;     # big_map address mutez : @storage : @some : address : list operation : @parameter%pushPayouts
+                            UPDATE 17;  # @storage : @some : address : list operation : @parameter%pushPayouts
+                            DUG 4;      # @some : address : list operation : @parameter%pushPayouts : @storage
+                            # sp.send(addr, amount) # @some : address : list operation : @parameter%pushPayouts : @storage
+                            DIG 2;      # list operation : @some : address : @parameter%pushPayouts : @storage
+                            DUP 3;      # address : list operation : @some : address : @parameter%pushPayouts : @storage
+                            CONTRACT unit; # option (contract unit) : list operation : @some : address : @parameter%pushPayouts : @storage
+                            IF_NONE
+                              {
+                                PUSH int 470; # int : list operation : @some : address : @parameter%pushPayouts : @storage
+                                FAILWITH;   # FAILED
+                              }
+                              {}; # @some : list operation : @some : address : @parameter%pushPayouts : @storage
+                            DUP 3;      # @some : @some : list operation : @some : address : @parameter%pushPayouts : @storage
+                            UNIT;       # unit : @some : @some : list operation : @some : address : @parameter%pushPayouts : @storage
+                            TRANSFER_TOKENS; # operation : list operation : @some : address : @parameter%pushPayouts : @storage
+                            CONS;       # list operation : @some : address : @parameter%pushPayouts : @storage
+                            # sp.emit( # list operation : @some : address : @parameter%pushPayouts : @storage
+                            DUG 2;      # @some : address : list operation : @parameter%pushPayouts : @storage
+                            PAIR;       # pair @some address : list operation : @parameter%pushPayouts : @storage
+                            EMIT %pushed (pair (mutez %amount) (address %recipient)); # operation : list operation : @parameter%pushPayouts : @storage
+                            CONS;       # list operation : @parameter%pushPayouts : @storage
+                          }
+                          {
+                            DROP 2;     # list operation : @parameter%pushPayouts : @storage
+                          }; # list operation : list address : @storage
+                      }
+                      {
+                        DROP;       # list operation : @parameter%pushPayouts : @storage
+                      }; # list operation : list address : @storage
+                  }; # list operation : @parameter%pushPayouts : @storage
+                SWAP;       # @parameter%pushPayouts : list operation : @storage
+                DROP;       # list operation : @storage
+              }
+              {
+                IF_LEFT
+                  {
+                    # == settleBatch ==
+                    # assert sp.sender == self.data.admin, "notAdmin" # @parameter%settleBatch : @storage
+                    DUP 2;      # @storage : @parameter%settleBatch : @storage
+                    GET 5;      # address : @parameter%settleBatch : @storage
+                    SENDER;     # @sender : address : @parameter%settleBatch : @storage
+                    COMPARE;    # int : @parameter%settleBatch : @storage
+                    EQ;         # bool : @parameter%settleBatch : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "notAdmin"; # string : @parameter%settleBatch : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%settleBatch : @storage
+                    # assert not self.data.paused, "paused" # @parameter%settleBatch : @storage
+                    DUP 2;      # @storage : @parameter%settleBatch : @storage
+                    GET 15;     # bool : @parameter%settleBatch : @storage
+                    IF
+                      {
+                        PUSH string "paused"; # string : @parameter%settleBatch : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @parameter%settleBatch : @storage
+                    # assert sp.len(params.tokenIds) <= MAX_BATCH, "batchTooLarge" # @parameter%settleBatch : @storage
+                    PUSH nat 50; # nat : @parameter%settleBatch : @storage
+                    DUP 2;      # @parameter%settleBatch : nat : @parameter%settleBatch : @storage
+                    SIZE;       # nat : nat : @parameter%settleBatch : @storage
+                    COMPARE;    # int : @parameter%settleBatch : @storage
+                    LE;         # bool : @parameter%settleBatch : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "batchTooLarge"; # string : @parameter%settleBatch : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%settleBatch : @storage
+                    # for token_id in params.tokenIds: # @parameter%settleBatch : @storage
+                    DUP;        # @parameter%settleBatch : @parameter%settleBatch : @storage
+                    ITER
+                      {
+                        # assert token_id in self.data.idLookUp, "unknownToken" # nat : @parameter%settleBatch : @storage
+                        DUP 3;      # @storage : nat : @parameter%settleBatch : @storage
+                        GET 11;     # big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : nat : @parameter%settleBatch : @storage
+                        DUP 2;      # nat : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : nat : @parameter%settleBatch : @storage
+                        MEM;        # bool : nat : @parameter%settleBatch : @storage
+                        IF
+                          {}
+                          {
+                            PUSH string "unknownToken"; # string : nat : @parameter%settleBatch : @storage
+                            FAILWITH;   # FAILED
+                          }; # nat : @parameter%settleBatch : @storage
+                        # entry = self.data.idLookUp[token_id] # nat : @parameter%settleBatch : @storage
+                        DUP 3;      # @storage : nat : @parameter%settleBatch : @storage
+                        GET 11;     # big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : nat : @parameter%settleBatch : @storage
+                        DUP 2;      # nat : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : nat : @parameter%settleBatch : @storage
+                        GET;        # option (pair (mutez %lastSeenAcc) (address %owner)) : nat : @parameter%settleBatch : @storage
+                        IF_NONE
+                          {
+                            PUSH int 437; # int : nat : @parameter%settleBatch : @storage
+                            FAILWITH;   # FAILED
+                          }
+                          {}; # @some : nat : @parameter%settleBatch : @storage
+                        # if entry.owner != self.data.burnSentinel: # @some : nat : @parameter%settleBatch : @storage
+                        DUP 4;      # @storage : @some : nat : @parameter%settleBatch : @storage
+                        GET 7;      # address : @some : nat : @parameter%settleBatch : @storage
+                        DUP 2;      # @some : address : @some : nat : @parameter%settleBatch : @storage
+                        CDR;        # address : address : @some : nat : @parameter%settleBatch : @storage
+                        COMPARE;    # int : @some : nat : @parameter%settleBatch : @storage
+                        NEQ;        # bool : @some : nat : @parameter%settleBatch : @storage
+                        IF
+                          {
+                            # share = self.data.accPerToken - entry.lastSeenAcc # @some : nat : @parameter%settleBatch : @storage
+                            DUP;        # @some : @some : nat : @parameter%settleBatch : @storage
+                            CAR;        # mutez : @some : nat : @parameter%settleBatch : @storage
+                            DUP 5;      # @storage : mutez : @some : nat : @parameter%settleBatch : @storage
+                            CAR;        # mutez : mutez : @some : nat : @parameter%settleBatch : @storage
+                            SUB_MUTEZ;  # option mutez : @some : nat : @parameter%settleBatch : @storage
+                            IF_NONE
+                              {
+                                PUSH int 439; # int : @some : nat : @parameter%settleBatch : @storage
+                                FAILWITH;   # FAILED
+                              }
+                              {}; # @some : @some : nat : @parameter%settleBatch : @storage
+                            # if share > sp.mutez(0): # @some : @some : nat : @parameter%settleBatch : @storage
+                            PUSH mutez 0; # mutez : @some : @some : nat : @parameter%settleBatch : @storage
+                            DUP 2;      # @some : mutez : @some : @some : nat : @parameter%settleBatch : @storage
+                            COMPARE;    # int : @some : @some : nat : @parameter%settleBatch : @storage
+                            GT;         # bool : @some : @some : nat : @parameter%settleBatch : @storage
                             IF
-                                {
-                                    SWAP;
-                                    DUP;
-                                    CAR;
-                                    DUP;
-                                    DUP 4;
-                                    CDR;
-                                    DUP;
-                                    DUG 2;
-                                    GET;
+                              {
+                                # current = self.data.pending.get( # @some : @some : nat : @parameter%settleBatch : @storage
+                                DUP 5;      # @storage : @some : @some : nat : @parameter%settleBatch : @storage
+                                GET 17;     # big_map address mutez : @some : @some : nat : @parameter%settleBatch : @storage
+                                DUP 3;      # @some : big_map address mutez : @some : @some : nat : @parameter%settleBatch : @storage
+                                CDR;        # address : big_map address mutez : @some : @some : nat : @parameter%settleBatch : @storage
+                                GET;        # option mutez : @some : @some : nat : @parameter%settleBatch : @storage
+                                IF_NONE
+                                  {
+                                    PUSH mutez 0; # mutez : @some : @some : nat : @parameter%settleBatch : @storage
+                                  }
+                                  {}; # mutez : @some : @some : nat : list nat : @storage
+                                # self.data.pending[entry.owner] = current + share # mutez : @some : @some : nat : list nat : @storage
+                                DIG 5;      # @storage : mutez : @some : @some : nat : list nat
+                                DUP;        # @storage : @storage : mutez : @some : @some : nat : list nat
+                                GET 17;     # big_map address mutez : @storage : mutez : @some : @some : nat : list nat
+                                DIG 3;      # @some : big_map address mutez : @storage : mutez : @some : nat : list nat
+                                DIG 3;      # mutez : @some : big_map address mutez : @storage : @some : nat : list nat
+                                ADD;        # mutez : big_map address mutez : @storage : @some : nat : list nat
+                                SOME;       # option mutez : big_map address mutez : @storage : @some : nat : list nat
+                                DUP 4;      # @some : option mutez : big_map address mutez : @storage : @some : nat : list nat
+                                CDR;        # address : option mutez : big_map address mutez : @storage : @some : nat : list nat
+                                UPDATE;     # big_map address mutez : @storage : @some : nat : list nat
+                                UPDATE 17;  # @storage : @some : nat : list nat
+                                DUG 3;      # @some : nat : list nat : @storage
+                                # self.data.idLookUp[token_id] = sp.record( # @some : nat : list nat : @storage
+                                DUP 4;      # @storage : @some : nat : list nat : @storage
+                                DUP;        # @storage : @storage : @some : nat : list nat : @storage
+                                GET 11;     # big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : @some : nat : list nat : @storage
+                                DIG 2;      # @some : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : nat : list nat : @storage
+                                CDR;        # address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : nat : list nat : @storage
+                                DIG 5;      # @storage : address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : nat : list nat
+                                CAR;        # mutez : address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : nat : list nat
+                                PAIR;       # pair mutez address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : nat : list nat
+                                SOME;       # option (pair mutez address) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : nat : list nat
+                                DIG 3;      # nat : option (pair mutez address) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : list nat
+                                UPDATE;     # big_map nat (pair mutez address) : @storage : list nat
+                                UPDATE 11;  # @storage : list nat
+                                SWAP;       # list nat : @storage
+                              }
+                              {
+                                DROP 3;     # @parameter%settleBatch : @storage
+                              }; # list nat : @storage
+                          }
+                          {
+                            DROP 2;     # @parameter%settleBatch : @storage
+                          }; # list nat : @storage
+                      }; # @parameter%settleBatch : @storage
+                    DROP;       # @storage
+                    NIL operation; # list operation : @storage
+                  }
+                  {
+                    # == sweepDust ==
+                    # assert sp.sender == self.data.admin, "notAdmin" # @parameter%sweepDust : @storage
+                    DUP 2;      # @storage : @parameter%sweepDust : @storage
+                    GET 5;      # address : @parameter%sweepDust : @storage
+                    SENDER;     # @sender : address : @parameter%sweepDust : @storage
+                    COMPARE;    # int : @parameter%sweepDust : @storage
+                    EQ;         # bool : @parameter%sweepDust : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "notAdmin"; # string : @parameter%sweepDust : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%sweepDust : @storage
+                    # amount = self.data.dust # @parameter%sweepDust : @storage
+                    DUP 2;      # @storage : @parameter%sweepDust : @storage
+                    GET 9;      # mutez : @parameter%sweepDust : @storage
+                    # assert amount > sp.mutez(0), "noDust" # mutez : @parameter%sweepDust : @storage
+                    PUSH mutez 0; # mutez : mutez : @parameter%sweepDust : @storage
+                    DUP 2;      # mutez : mutez : mutez : @parameter%sweepDust : @storage
+                    COMPARE;    # int : mutez : @parameter%sweepDust : @storage
+                    GT;         # bool : mutez : @parameter%sweepDust : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "noDust"; # string : mutez : @parameter%sweepDust : @storage
+                        FAILWITH;   # FAILED
+                      }; # mutez : @parameter%sweepDust : @storage
+                    # self.data.dust = sp.mutez(0) # mutez : @parameter%sweepDust : @storage
+                    DIG 2;      # @storage : mutez : @parameter%sweepDust
+                    PUSH mutez 0; # mutez : @storage : mutez : @parameter%sweepDust
+                    UPDATE 9;   # @storage : mutez : @parameter%sweepDust
+                    DUG 2;      # mutez : @parameter%sweepDust : @storage
+                    # sp.send(params.recipient, amount) # mutez : @parameter%sweepDust : @storage
+                    NIL operation; # list operation : mutez : @parameter%sweepDust : @storage
+                    DUP 3;      # @parameter%sweepDust : list operation : mutez : @parameter%sweepDust : @storage
+                    CONTRACT unit; # option (contract unit) : list operation : mutez : @parameter%sweepDust : @storage
+                    IF_NONE
+                      {
+                        PUSH int 282; # int : list operation : mutez : @parameter%sweepDust : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : list operation : mutez : @parameter%sweepDust : @storage
+                    DUP 3;      # mutez : @some : list operation : mutez : @parameter%sweepDust : @storage
+                    UNIT;       # unit : mutez : @some : list operation : mutez : @parameter%sweepDust : @storage
+                    TRANSFER_TOKENS; # operation : list operation : mutez : @parameter%sweepDust : @storage
+                    CONS;       # list operation : mutez : @parameter%sweepDust : @storage
+                    # sp.emit( # list operation : mutez : @parameter%sweepDust : @storage
+                    DUG 2;      # mutez : @parameter%sweepDust : list operation : @storage
+                    PAIR;       # pair mutez @parameter%sweepDust : list operation : @storage
+                    EMIT %dustSwept (pair (mutez %amount) (address %recipient)); # operation : list operation : @storage
+                    CONS;       # list operation : @storage
+                  }; # list operation : @storage
+              }; # list operation : @storage
+          }
+          {
+            IF_LEFT
+              {
+                DROP;       # @storage
+                # == unpause ==
+                # assert sp.sender == self.data.admin, "notAdmin" # @storage
+                DUP;        # @storage : @storage
+                GET 5;      # address : @storage
+                SENDER;     # @sender : address : @storage
+                COMPARE;    # int : @storage
+                EQ;         # bool : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "notAdmin"; # string : @storage
+                    FAILWITH;   # FAILED
+                  }; # @storage
+                # self.data.paused = False # @storage
+                PUSH bool False; # bool : @storage
+                UPDATE 15;  # @storage
+                NIL operation; # list operation : @storage
+              }
+              {
+                IF_LEFT
+                  {
+                    # == updateOracle ==
+                    # assert sp.sender == self.data.admin, "notAdmin" # @parameter%updateOracle : @storage
+                    DUP 2;      # @storage : @parameter%updateOracle : @storage
+                    GET 5;      # address : @parameter%updateOracle : @storage
+                    SENDER;     # @sender : address : @parameter%updateOracle : @storage
+                    COMPARE;    # int : @parameter%updateOracle : @storage
+                    EQ;         # bool : @parameter%updateOracle : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "notAdmin"; # string : @parameter%updateOracle : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%updateOracle : @storage
+                    # self.data.oracle = params.newOracle # @parameter%updateOracle : @storage
+                    UPDATE 13;  # @storage
+                    NIL operation; # list operation : @storage
+                  }
+                  {
+                    # == updateOwner ==
+                    # assert sp.sender == self.data.oracle, "notOracle" # @parameter%updateOwner : @storage
+                    DUP 2;      # @storage : @parameter%updateOwner : @storage
+                    GET 13;     # address : @parameter%updateOwner : @storage
+                    SENDER;     # @sender : address : @parameter%updateOwner : @storage
+                    COMPARE;    # int : @parameter%updateOwner : @storage
+                    EQ;         # bool : @parameter%updateOwner : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "notOracle"; # string : @parameter%updateOwner : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%updateOwner : @storage
+                    # burn = self.data.burnSentinel # @parameter%updateOwner : @storage
+                    DUP 2;      # @storage : @parameter%updateOwner : @storage
+                    GET 7;      # address : @parameter%updateOwner : @storage
+                    # newIsBurn = params.newOwner == burn # address : @parameter%updateOwner : @storage
+                    DUP;        # address : address : @parameter%updateOwner : @storage
+                    DUP 3;      # @parameter%updateOwner : address : address : @parameter%updateOwner : @storage
+                    CAR;        # address : address : address : @parameter%updateOwner : @storage
+                    COMPARE;    # int : address : @parameter%updateOwner : @storage
+                    EQ;         # bool : address : @parameter%updateOwner : @storage
+                    # if params.txlId in self.data.idLookUp: # bool : address : @parameter%updateOwner : @storage
+                    DUP 4;      # @storage : bool : address : @parameter%updateOwner : @storage
+                    GET 11;     # big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : bool : address : @parameter%updateOwner : @storage
+                    DUP 4;      # @parameter%updateOwner : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : bool : address : @parameter%updateOwner : @storage
+                    CDR;        # nat : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : bool : address : @parameter%updateOwner : @storage
+                    MEM;        # bool : bool : address : @parameter%updateOwner : @storage
+                    IF
+                      {
+                        # entry = self.data.idLookUp[params.txlId] # bool : address : @parameter%updateOwner : @storage
+                        DUP 4;      # @storage : bool : address : @parameter%updateOwner : @storage
+                        GET 11;     # big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : bool : address : @parameter%updateOwner : @storage
+                        DUP 4;      # @parameter%updateOwner : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : bool : address : @parameter%updateOwner : @storage
+                        CDR;        # nat : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : bool : address : @parameter%updateOwner : @storage
+                        GET;        # option (pair (mutez %lastSeenAcc) (address %owner)) : bool : address : @parameter%updateOwner : @storage
+                        IF_NONE
+                          {
+                            PUSH int 314; # int : bool : address : @parameter%updateOwner : @storage
+                            FAILWITH;   # FAILED
+                          }
+                          {}; # @some : bool : address : @parameter%updateOwner : @storage
+                        # oldOwner = entry.owner # @some : bool : address : @parameter%updateOwner : @storage
+                        DUP;        # @some : @some : bool : address : @parameter%updateOwner : @storage
+                        CDR;        # address : @some : bool : address : @parameter%updateOwner : @storage
+                        # if oldOwner != params.newOwner: # address : @some : bool : address : @parameter%updateOwner : @storage
+                        DUP 5;      # @parameter%updateOwner : address : @some : bool : address : @parameter%updateOwner : @storage
+                        CAR;        # address : address : @some : bool : address : @parameter%updateOwner : @storage
+                        DUP 2;      # address : address : address : @some : bool : address : @parameter%updateOwner : @storage
+                        COMPARE;    # int : address : @some : bool : address : @parameter%updateOwner : @storage
+                        NEQ;        # bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                        IF
+                          {
+                            # oldIsBurn = oldOwner == burn # address : @some : bool : address : @parameter%updateOwner : @storage
+                            DUP 4;      # address : address : @some : bool : address : @parameter%updateOwner : @storage
+                            DUP 2;      # address : address : address : @some : bool : address : @parameter%updateOwner : @storage
+                            COMPARE;    # int : address : @some : bool : address : @parameter%updateOwner : @storage
+                            EQ;         # bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                            # if not oldIsBurn: # bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                            DUP;        # bool : bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                            IF
+                              {
+                                DIG 2;      # @some : bool : address : bool : address : @parameter%updateOwner : @storage
+                                DROP;       # bool : address : bool : address : @parameter%updateOwner : @storage
+                                DIG 3;      # address : bool : address : bool : @parameter%updateOwner : @storage
+                                DROP;       # bool : address : bool : @parameter%updateOwner : @storage
+                              }
+                              {
+                                # share = self.data.accPerToken - entry.lastSeenAcc # bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                                DUP 3;      # @some : bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                                CAR;        # mutez : bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                                DUP 8;      # @storage : mutez : bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                                CAR;        # mutez : mutez : bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                                SUB_MUTEZ;  # option mutez : bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                                IF_NONE
+                                  {
+                                    PUSH int 319; # int : bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                                    FAILWITH;   # FAILED
+                                  }
+                                  {}; # @some : bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                                # if share > sp.mutez(0): # @some : bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                                PUSH mutez 0; # mutez : @some : bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                                DUP 2;      # @some : mutez : @some : bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                                COMPARE;    # int : @some : bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                                GT;         # bool : @some : bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                                IF
+                                  {
+                                    DIG 3;      # @some : @some : bool : address : bool : address : @parameter%updateOwner : @storage
+                                    DROP;       # @some : bool : address : bool : address : @parameter%updateOwner : @storage
+                                    DIG 4;      # address : @some : bool : address : bool : @parameter%updateOwner : @storage
+                                    DROP;       # @some : bool : address : bool : @parameter%updateOwner : @storage
+                                    # current = self.data.pending.get( # @some : bool : address : bool : @parameter%updateOwner : @storage
+                                    DUP 6;      # @storage : @some : bool : address : bool : @parameter%updateOwner : @storage
+                                    GET 17;     # big_map address mutez : @some : bool : address : bool : @parameter%updateOwner : @storage
+                                    DUP 4;      # address : big_map address mutez : @some : bool : address : bool : @parameter%updateOwner : @storage
+                                    GET;        # option mutez : @some : bool : address : bool : @parameter%updateOwner : @storage
                                     IF_NONE
-                                        {
-                                            PUSH int 299;
-                                            FAILWITH
-                                        }
-                                        {
-                                        };
-                                    DIG 4;
-                                    CAR;
-                                    UPDATE 2;
-                                    SOME;
-                                    SWAP;
-                                    UPDATE;
-                                    UPDATE 1;
-                                    NIL operation
-                                }
-                                {
-                                    DROP;
-                                    NIL operation;
-                                    PUSH string "not Oracle Error";
-                                    EMIT %notOracle string;
-                                    CONS
-                                }
-                        }
-                };
-            NIL operation;
-            SWAP;
-            ITER
-                {
-                    CONS
-                };
-            PAIR
-        }
-}
+                                      {
+                                        PUSH mutez 0; # mutez : @some : bool : address : bool : @parameter%updateOwner : @storage
+                                      }
+                                      {}; # mutez : @some : bool : address : bool : @parameter%updateOwner : @storage
+                                    # self.data.pending[oldOwner] = current + share # mutez : @some : bool : address : bool : @parameter%updateOwner : @storage
+                                    DIG 6;      # @storage : mutez : @some : bool : address : bool : @parameter%updateOwner
+                                    DUP;        # @storage : @storage : mutez : @some : bool : address : bool : @parameter%updateOwner
+                                    GET 17;     # big_map address mutez : @storage : mutez : @some : bool : address : bool : @parameter%updateOwner
+                                    DIG 3;      # @some : big_map address mutez : @storage : mutez : bool : address : bool : @parameter%updateOwner
+                                    DIG 3;      # mutez : @some : big_map address mutez : @storage : bool : address : bool : @parameter%updateOwner
+                                    ADD;        # mutez : big_map address mutez : @storage : bool : address : bool : @parameter%updateOwner
+                                    SOME;       # option mutez : big_map address mutez : @storage : bool : address : bool : @parameter%updateOwner
+                                    DUP 5;      # address : option mutez : big_map address mutez : @storage : bool : address : bool : @parameter%updateOwner
+                                    UPDATE;     # big_map address mutez : @storage : bool : address : bool : @parameter%updateOwner
+                                    UPDATE 17;  # @storage : bool : address : bool : @parameter%updateOwner
+                                    DUG 4;      # bool : address : bool : @parameter%updateOwner : @storage
+                                  }
+                                  {
+                                    DROP;       # bool : address : @some : bool : address : @parameter%updateOwner : @storage
+                                    DIG 2;      # @some : bool : address : bool : address : @parameter%updateOwner : @storage
+                                    DROP;       # bool : address : bool : address : @parameter%updateOwner : @storage
+                                    DIG 3;      # address : bool : address : bool : @parameter%updateOwner : @storage
+                                    DROP;       # bool : address : bool : @parameter%updateOwner : @storage
+                                  }; # bool : address : bool : @parameter%updateOwner : @storage
+                              }; # bool : address : bool : @parameter%updateOwner : @storage
+                            # if oldIsBurn: # bool : address : bool : @parameter%updateOwner : @storage
+                            IF
+                              {
+                                SWAP;       # bool : address : @parameter%updateOwner : @storage
+                                # if not newIsBurn: # bool : address : @parameter%updateOwner : @storage
+                                IF
+                                  {}
+                                  {
+                                    # self.data.activeSupply += sp.nat(1) # address : @parameter%updateOwner : @storage
+                                    DIG 2;      # @storage : address : @parameter%updateOwner
+                                    DUP;        # @storage : @storage : address : @parameter%updateOwner
+                                    GET 3;      # nat : @storage : address : @parameter%updateOwner
+                                    PUSH nat 1; # nat : nat : @storage : address : @parameter%updateOwner
+                                    ADD;        # nat : @storage : address : @parameter%updateOwner
+                                    UPDATE 3;   # @storage : address : @parameter%updateOwner
+                                    DUG 2;      # address : @parameter%updateOwner : @storage
+                                  }; # address : @parameter%updateOwner : @storage
+                              }
+                              {
+                                SWAP;       # bool : address : @parameter%updateOwner : @storage
+                                # if newIsBurn: # bool : address : @parameter%updateOwner : @storage
+                                IF
+                                  {
+                                    # self.data.activeSupply = sp.as_nat( # address : @parameter%updateOwner : @storage
+                                    PUSH nat 1; # nat : address : @parameter%updateOwner : @storage
+                                    DUP 4;      # @storage : nat : address : @parameter%updateOwner : @storage
+                                    GET 3;      # nat : nat : address : @parameter%updateOwner : @storage
+                                    SUB;        # int : address : @parameter%updateOwner : @storage
+                                    ISNAT;      # option nat : address : @parameter%updateOwner : @storage
+                                    IF_NONE
+                                      {
+                                        PUSH int 330; # int : address : @parameter%updateOwner : @storage
+                                        FAILWITH;   # FAILED
+                                      }
+                                      {}; # @some : address : @parameter%updateOwner : @storage
+                                    DIG 3;      # @storage : @some : address : @parameter%updateOwner
+                                    SWAP;       # @some : @storage : address : @parameter%updateOwner
+                                    UPDATE 3;   # @storage : address : @parameter%updateOwner
+                                    DUG 2;      # address : @parameter%updateOwner : @storage
+                                  }
+                                  {}; # address : @parameter%updateOwner : @storage
+                              }; # address : @parameter%updateOwner : @storage
+                            # self.data.idLookUp[params.txlId] = sp.record( # address : @parameter%updateOwner : @storage
+                            DUP 3;      # @storage : address : @parameter%updateOwner : @storage
+                            DUP;        # @storage : @storage : address : @parameter%updateOwner : @storage
+                            GET 11;     # big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : @parameter%updateOwner : @storage
+                            DUP 4;      # @parameter%updateOwner : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : @parameter%updateOwner : @storage
+                            CAR;        # address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : @parameter%updateOwner : @storage
+                            DIG 5;      # @storage : address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : @parameter%updateOwner
+                            CAR;        # mutez : address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : @parameter%updateOwner
+                            PAIR;       # pair mutez address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : @parameter%updateOwner
+                            SOME;       # option (pair mutez address) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : @parameter%updateOwner
+                            DUP 5;      # @parameter%updateOwner : option (pair mutez address) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : @parameter%updateOwner
+                            CDR;        # nat : option (pair mutez address) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : address : @parameter%updateOwner
+                            UPDATE;     # big_map nat (pair mutez address) : @storage : address : @parameter%updateOwner
+                            UPDATE 11;  # @storage : address : @parameter%updateOwner
+                            DUG 2;      # address : @parameter%updateOwner : @storage
+                            # sp.emit( # address : @parameter%updateOwner : @storage
+                            NIL operation; # list operation : address : @parameter%updateOwner : @storage
+                            DUP 3;      # @parameter%updateOwner : list operation : address : @parameter%updateOwner : @storage
+                            CDR;        # nat : list operation : address : @parameter%updateOwner : @storage
+                            DIG 2;      # address : nat : list operation : @parameter%updateOwner : @storage
+                            DIG 3;      # @parameter%updateOwner : address : nat : list operation : @storage
+                            CAR;        # address : address : nat : list operation : @storage
+                            PAIR 3;     # pair address (pair address nat) : list operation : @storage
+                            EMIT %ownerChanged (pair (address %newOwner) (pair (address %oldOwner) (nat %txlId))); # operation : list operation : @storage
+                            CONS;       # list operation : @storage
+                          }
+                          {
+                            DROP 5;     # @storage
+                            NIL operation; # list operation : @storage
+                          }; # list operation : @storage
+                      }
+                      {
+                        SWAP;       # address : bool : @parameter%updateOwner : @storage
+                        DROP;       # bool : @parameter%updateOwner : @storage
+                        # if not newIsBurn: # bool : @parameter%updateOwner : @storage
+                        IF
+                          {}
+                          {
+                            SWAP;       # @storage : @parameter%updateOwner
+                            # self.data.activeSupply += sp.nat(1) # @storage : @parameter%updateOwner
+                            DUP;        # @storage : @storage : @parameter%updateOwner
+                            GET 3;      # nat : @storage : @parameter%updateOwner
+                            PUSH nat 1; # nat : nat : @storage : @parameter%updateOwner
+                            ADD;        # nat : @storage : @parameter%updateOwner
+                            UPDATE 3;   # @storage : @parameter%updateOwner
+                            SWAP;       # @parameter%updateOwner : @storage
+                          }; # @parameter%updateOwner : @storage
+                        # self.data.idLookUp[params.txlId] = sp.record( # @parameter%updateOwner : @storage
+                        DUP 2;      # @storage : @parameter%updateOwner : @storage
+                        DUP;        # @storage : @storage : @parameter%updateOwner : @storage
+                        GET 11;     # big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : @parameter%updateOwner : @storage
+                        DUP 3;      # @parameter%updateOwner : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : @parameter%updateOwner : @storage
+                        CAR;        # address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : @parameter%updateOwner : @storage
+                        DIG 4;      # @storage : address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : @parameter%updateOwner
+                        CAR;        # mutez : address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : @parameter%updateOwner
+                        PAIR;       # pair mutez address : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : @parameter%updateOwner
+                        SOME;       # option (pair mutez address) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : @parameter%updateOwner
+                        DUP 4;      # @parameter%updateOwner : option (pair mutez address) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : @parameter%updateOwner
+                        CDR;        # nat : option (pair mutez address) : big_map nat (pair (mutez %lastSeenAcc) (address %owner)) : @storage : @parameter%updateOwner
+                        UPDATE;     # big_map nat (pair mutez address) : @storage : @parameter%updateOwner
+                        UPDATE 11;  # @storage : @parameter%updateOwner
+                        SWAP;       # @parameter%updateOwner : @storage
+                        # sp.emit( # @parameter%updateOwner : @storage
+                        EMIT %ownerRegistered (pair (address %newOwner) (nat %txlId)); # operation : @storage
+                        NIL operation; # list operation : operation : @storage
+                        SWAP;       # operation : list operation : @storage
+                        CONS;       # list operation : @storage
+                      }; # list operation : @storage
+                  }; # list operation : @storage
+              }; # list operation : @storage
+          }; # list operation : @storage
+      }; # list operation : @storage
+    NIL operation; # list operation : list operation : @storage
+    SWAP;       # list operation : list operation : @storage
+    ITER
+      {
+        CONS;       # list operation : @storage
+      }; # list operation : @storage
+    PAIR;       # pair (list operation) @storage
+  };

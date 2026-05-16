@@ -976,6 +976,105 @@ move to commit-reveal axis randomisation behind an admin updater
   full buy list. Same pattern as the Plinko v2 redesign at the bottom
   of this doc.
 
+
+## TXL v2 (`src/services/smart_contract_txl.py`)
+
+First audit pass for the TXL holder-reward contract — v1 was never
+audited. v2 was redesigned from scratch around the accumulator pattern;
+findings below are vs. that design, not the v1 codebase.
+
+### Fixed in v2 (vs v1 known issues)
+
+- **HIGH — `default()` O(N) gas.** v1 wrote to all 271 ledger entries on
+  every deposit. With the game suite live, every bet forwarded a holder
+  fee → 271 storage writes per game op. v2 uses a single `accPerToken`
+  accumulator; deposits are O(1).
+- **HIGH — silent-no-op auth on oracle entrypoints.** v1's
+  `updateOwner` used `if sp.sender == oracle:` followed by `sp.emit
+  'not Oracle Error'` — non-oracle calls succeeded (wasted gas, no
+  revert). v2 uses `assert sp.sender == self.data.oracle, "notOracle"`.
+- **HIGH — no admin rotation.** v1's oracle was permanent. v2 adds
+  two-step `proposeAdmin`/`acceptAdmin` and `updateOracle`.
+- **HIGH — no circuit breaker.** v1 had no pause path. v2 has
+  `pause`/`unpause` gating deposits, settle, push, and claim. Oracle
+  ops + admin role ops bypass pause by design.
+- **HIGH — public oracle seed.** v1's oracle mnemonic was committed
+  in `src/services/oracle_TXL.py` — anyone could call `updateOwner`.
+  v2 ships with a fresh, gitignored `TXL_ORACLE_MNEMONIC` in `.env`,
+  separate from the deploy key.
+- **MED — sp.map vs big_map.** v1 stored 271 owner entries in
+  `sp.map`, serialized whole on every read. v2 uses `big_map`,
+  paying per-key gas only. Combined with lazy creation, this also
+  makes the contract storage-rent-friendly.
+- **MED — untracked dust.** v1's `sp.split_tokens(amount, 1, 271)`
+  silently dropped `amount mod 271` mutez per deposit. v2 tracks
+  dust in storage and exposes `sweepDust(recipient)` to admin.
+- **LOW — UI/contract drift.** v1's `NFT_INFO` copy promised "inverse
+  weight against rank"; contract distributed flat. v2 keeps the flat
+  distribution AND updates `constants.js:NFT_INFO` to match.
+
+### v2 audit findings (informational)
+
+- **`default()` division by zero guarded.** `sp.ediv(amount, activeSupply)`
+  is wrapped in `unwrap_some` after an `assert activeSupply > 0`
+  guard — so the contract reverts cleanly on a deposit before the
+  oracle reconciles any holders (no panic, no silent loss).
+- **Claim settles `lastSeenAcc` BEFORE `sp.send`.** Reentrancy belt-
+  and-suspenders: even though Tezos's transfer semantics make a real
+  reentrancy unlikely here, the storage write happens first.
+- **Push-payout failure mode.** `pushPayouts` does multiple `sp.send`s
+  in one op. If any recipient rejects tez, the whole op reverts and
+  none of the listed addresses get paid. Mitigations:
+    - Operator script splits the address list into smaller batches
+      to isolate a bad address.
+    - For a contract-holder that rejects tez and can't `claim()`
+      either, the oracle can reassign that token to the burn
+      sentinel — the share stops moving and the loss is contained
+      to that single NFT until it changes hands.
+  Considered routing failed sends back to a `pending` queue
+  programmatically, but Michelson has no try/catch — the only way
+  to "catch" is to pre-check via `sp.contract(unit, addr)` and skip
+  unknown contracts. That introduces a new attack surface (`sp.
+  contract` revert paths). Operator-side filtering is the cheaper
+  defense.
+- **`batchUpdateOwner` gas-bounded.** Asserts `len(updates) <=
+  MAX_BATCH (50)`. Settles each entry's old owner before reassign,
+  so a 50-update batch reuses the per-update settlement pattern that
+  `updateOwner` validated.
+- **`sweepDust` recipient is a parameter.** Not `sp.sender`. Every
+  sweep is auditable on tzkt with the destination address visible.
+  Recommend pointing it at a multisig or operator pot (TBD,
+  document the chosen target before mainnet).
+- **First-touch creates the entry.** v2's lazy-create design means
+  any txlId the oracle passes to `updateOwner` will be created if
+  not present. We considered hardcoding a 271-element valid-IDs set
+  to guard against typos/oracle-compromise, but:
+    1. SmartPy 0.20 can't bake a 271-element `sp.set` in @sp.module
+       __init__ (same dict-comprehension/literal-only constraint
+       that drove the lazy-create design).
+    2. A compromised oracle can already do worse things (drain
+       active holders' shares by mass-reassigning to attacker
+       addresses). The phantom-ID risk is a strict subset.
+  Operationally, the reconcile script reads its token universe
+  from a hardcoded list mirroring `txlOwners.js`, so it can't
+  accidentally pass a bogus ID.
+
+### Blocking before mainnet origination
+
+- [ ] Generate a NEW `TXL_ORACLE_MNEMONIC` for mainnet — do not reuse
+      the shadownet mnemonic, and do not reuse the v1 mnemonic.
+- [ ] Replace `DEFAULT_ORACLE` in `src/services/smart_contract_txl.py`
+      with the mainnet-only tz1.
+- [ ] Decide the `sweepDust` recipient and document in
+      `docs/TXL_MAINNET_RUNBOOK.md`.
+- [ ] Decide the operator's push-payout script chunk size + ordering
+      strategy (see runbook).
+- [ ] Pause-test on shadownet: pause → confirm default/claim/push
+      revert → unpause.
+- [ ] Owner-change settlement test on shadownet: assign A → deposit →
+      reassign to B → confirm A's accrual settles into `pending[A]`,
+      B's `lastSeenAcc` = accPerToken (B doesn't backfill A's share).
+
 **Acceptance for v2**: documented as the trust assumption in the
 contract's docstring (lines 1-23) and `setAxes` body comment (line
 278-279). No code change required for this batch.

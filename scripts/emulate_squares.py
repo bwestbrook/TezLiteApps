@@ -2,14 +2,14 @@
 """
 emulate_squares.py — End-to-end Squares emulator driven by real ESPN scores.
 
-Pulls a *finished* game from NBA, WNBA, NFL, or NHL; spins up a fresh
+Pulls a *finished* game from NBA, WNBA, or NFL; spins up a fresh
 Squares grid on the deployed contract; buys it out across two wallets;
 randomizes axes; reports each scoring period from the real linescore;
 prints the resulting winners and pending payouts.
 
-Soccer and baseball are intentionally out — too few points per period
-for the mod-10 digit payout to feel fair. See periodSpecForLeague in
-src/components/squaresGame.vue.
+NHL, soccer, and baseball are intentionally out — too few points per
+period for the mod-10 digit payout to feel fair. See
+periodSpecForLeague in src/components/squaresGame.vue.
 
 Why this exists: the on-chain happy path needs (a) at least two distinct
 buyers, (b) a sport's worth of period-by-period scores, (c) an admin who
@@ -21,7 +21,6 @@ second buyer.
 Usage (shadownet, defaults to NBA on the most recent slate with a final):
     .venv/bin/python scripts/emulate_squares.py
     .venv/bin/python scripts/emulate_squares.py --league WNBA
-    .venv/bin/python scripts/emulate_squares.py --league NHL --date 20260512
     .venv/bin/python scripts/emulate_squares.py --league NFL --event-id 401671234
     .venv/bin/python scripts/emulate_squares.py --dry-run    # no signed ops
 
@@ -75,10 +74,10 @@ TZKT = {
 # numPeriods + weights must match periodSpecForLeague() in squaresGame.vue
 # so the contract accepts the createGame params we emit.
 #
-# Soccer (EPL/MLS) and baseball (MLB) used to be here but were pulled —
-# scoring +5 in a single period is rare, which collapses the mod-10
-# digit lottery onto a handful of cells. Restore from git history if a
-# low-scoring payout model lands later.
+# NHL, soccer (EPL/MLS), and baseball (MLB) used to be here but were
+# pulled — scoring +5 in a single period is rare, which collapses the
+# mod-10 digit lottery onto a handful of cells. Restore from git
+# history if a low-scoring payout model lands later.
 LEAGUES: dict[str, dict] = {
     "NBA": {
         "espn_path": "basketball/nba",
@@ -95,11 +94,6 @@ LEAGUES: dict[str, dict] = {
         "espn_path": "football/nfl",
         "numPeriods": 4,
         "weights":   {0: 15, 1: 15, 2: 15, 3: 55},
-    },
-    "NHL": {
-        "espn_path": "hockey/nhl",
-        "numPeriods": 3,
-        "weights":   {0: 20, 1: 30, 2: 50},
     },
 }
 

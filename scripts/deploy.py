@@ -136,6 +136,11 @@ CONTRACTS: dict[str, ContractSpec] = {
         source=SOURCES_DIR / "smart_contract_oracle_reference.py",
         constants_var="ORACLE_REFERENCE_CONTRACT_ADDRESS",
     ),
+    "mint-time": ContractSpec(
+        id="mint-time",
+        source=SOURCES_DIR / "smart_contract_mint_time.py",
+        constants_var="MINT_TIME_CONTRACT_ADDRESS",
+    ),
 }
 
 # ─── .env loader ───────────────────────────────────────────────────────────

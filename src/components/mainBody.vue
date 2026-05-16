@@ -348,13 +348,13 @@ export default {
   <div class="mainBody">
     <div class="centerBody">
       <div class="gameManagement">
-        <div class="rowFlex">
-          <div class="actionButton" @click="toggleWallet">{{ walletAddress }}</div>
-          <div class="actionButton" @click="payNftHolderBC"> Cash Out TXL Earnings </div>
-          <div :class="['txlRank', txlPoolFlash ? 'txlRank--flash' : '']"> Unclaimed: {{ txlPoolValue.toFixed(3) }} ꜩ </div>
+        <div class="rowFlex topBanner">
+          <div class="actionButton topBanner__wallet" @click="toggleWallet">{{ walletAddress }}</div>
+          <div class="actionButton topBanner__cashOut" @click="payNftHolderBC"> Cash Out TXL Earnings </div>
+          <div :class="['txlRank', 'topBanner__unclaimed', txlPoolFlash ? 'txlRank--flash' : '']"> Unclaimed: {{ txlPoolValue.toFixed(3) }} ꜩ </div>
           <div
             v-if="walletAddress.includes('error') || walletAddress.includes('failed')"
-            class="actionButtonHelp walletReset"
+            class="actionButtonHelp walletReset topBanner__reset"
             @click="resetWallet"
             title="Wipe Beacon's cached state and start fresh — fixes stuck connect handshakes"
           >Reset wallet</div>
@@ -362,6 +362,7 @@ export default {
             :class="[
               'networkBadge',
               'networkBadge--toggle',
+              'topBanner__network',
               NETWORK === 'mainnet' ? 'badgeProd' : 'badgeTest',
             ]"
             @click="toggleNetwork"
@@ -958,6 +959,57 @@ export default {
   /* Keep the network badge readable at thumb scale */
   .networkBadge { font-size: 11px; padding: 6px 12px 6px 10px; }
   .label { font-size: 10px; margin-top: 10px; }
+
+  /* ─── Top banner: stacked layout instead of one crushed row ────
+     Row 1: SYNC WALLET (large, full-bleed minus the network pill)
+            + network badge pinned right
+     Row 2: Cash Out TXL Earnings | Unclaimed pool  (50/50)
+     Row 3 (only if error): Reset wallet full-width
+     Buttons revert to flex:0 so flex-basis controls the split. */
+  .topBanner {
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    column-gap: 8px;
+  }
+  .topBanner > .actionButton,
+  .topBanner > .actionButtonHelp,
+  .topBanner > .txlRank {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+  .topBanner__wallet {
+    /* Calc keeps the wallet button from running into the network
+       badge — pill width ≈ 96px on mobile, with 8px gap. */
+    flex: 1 1 calc(100% - 110px);
+    min-width: 0;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    /* Connected addresses are 36 chars (tz1…); truncate cleanly so the
+       button never breaks the layout. The full address is still visible
+       in the wallet UI on tap. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    text-align: center;
+    line-height: 24px;
+  }
+  .topBanner__network {
+    flex: 0 0 auto;
+    align-self: stretch;
+    /* Match the wallet button's height so the top row reads as a
+       single banded element rather than two mismatched bubbles. */
+    min-height: 44px;
+    padding: 0 12px;
+  }
+  .topBanner__cashOut,
+  .topBanner__unclaimed {
+    flex: 1 1 calc(50% - 4px);
+  }
+  .topBanner__reset {
+    flex: 1 1 100%;
+  }
 }
 
 /* Phone landscape / large phone — gentler */

@@ -117,13 +117,12 @@ const TEST_NBA_GAMES = [
 // merged lobby tags each card with the league id for display + later
 // oracle routing.
 // Squares only does well in leagues that put up 5+ points per period —
-// otherwise the mod-10 digit lottery is near-deterministic. Soccer
-// (EPL/MLS) and MLB are dropped for now; can be restored once we model
+// otherwise the mod-10 digit lottery is near-deterministic. NHL, soccer
+// (EPL/MLS), and MLB are dropped for now; can be restored once we model
 // low-scoring periods sensibly. See periodSpecForLeague below.
 const LEAGUES = [
   { id: 'NBA',  path: 'basketball/nba' },
   { id: 'WNBA', path: 'basketball/wnba' },
-  { id: 'NHL',  path: 'hockey/nhl' },
 ]
 
 // Forward window for the picker fetch — today + the next (DAYS_AHEAD - 1)
@@ -167,6 +166,11 @@ export default {
       game: null,
       walletAddress: '',
       pollInterval: null,
+      // Rolling ESPN slate refresh. ESPN re-publishes start times,
+      // status, and the day's new games as the calendar advances —
+      // we re-poll every 5 min so the "next 3 days" lobby naturally
+      // drops finished games and picks up new postings.
+      espnRefreshInterval: null,
       blockchainStatus: 'idle',
       buyCount: 1,
       myAddress: '',
@@ -447,9 +451,18 @@ export default {
         this.showCreateForm = true
       }
     })
+    // Rolling refresh: ESPN updates the slate as games end and new
+    // postings open. 5-minute cadence keeps the lobby current without
+    // hammering the API (game times and statuses don't churn faster
+    // than that). Skips work when the tab is hidden.
+    this.espnRefreshInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return
+      this.fetchEspnGames()
+    }, 5 * 60 * 1000)
   },
   beforeUnmount() {
     if (this.pollInterval) clearInterval(this.pollInterval)
+    if (this.espnRefreshInterval) clearInterval(this.espnRefreshInterval)
   },
   watch: {
     // HTML5 `:max` on type=number is only a validation hint — users can
@@ -673,6 +686,7 @@ export default {
                 league: lg.id,
                 date: ev.date || '',
                 id: String(ev.id),
+                state: t.state || '',   // 'pre' | 'in' | 'post'
                 homeAbbr: home.team?.abbreviation || '?',
                 awayAbbr: away.team?.abbreviation || '?',
                 homeName: home.team?.displayName || home.team?.shortDisplayName || '?',
@@ -698,10 +712,22 @@ export default {
         // (defensive — adjacent leagues can share ids theoretically, and
         // the same event can re-appear via timezone boundary fuzz). Sort
         // by tip-off date.
+        // Rolling "upcoming only" filter — drop games that have
+        // already ended or are currently in-progress. ESPN's `type.state`
+        // is the source of truth ('pre' = not yet started). As a
+        // belt-and-suspenders check we also gate on the wall-clock
+        // start time so a stuck 'pre' from a delayed ESPN update can't
+        // smuggle past midnight cutovers.
+        const now = Date.now()
         const seen = new Set()
         this.espnGames = results
           .flat()
           .filter((g) => g.awayAbbr !== '?' && g.homeAbbr !== '?')
+          .filter((g) => g.state === 'pre')
+          .filter((g) => {
+            const ts = Date.parse(g.date)
+            return Number.isNaN(ts) ? true : ts > now
+          })
           .filter((g) => (seen.has(g.id) ? false : seen.add(g.id)))
           .sort((a, b) => String(a.date).localeCompare(String(b.date)))
       } catch (e) {
@@ -950,19 +976,14 @@ export default {
     // Period model (numPeriods + quarterWeights) for a given league.
     // Sport-specific so contract reportQuarter accepts the right number
     // of reports and the pool's weight distribution mirrors how the
-    // sport actually scores. Defaults to NBA/NFL quarters when the
-    // league is unknown.
-    //   - Hockey (NHL):              3 periods, 20/30/50
-    //   - Basketball/NFL (incl WNBA): 4 quarters, 15/15/15/55
-    // Soccer (EPL/MLS) and baseball (MLB) used to live here but were
-    // pulled — too few points per period for the mod-10 digit lottery
-    // to feel fair. Restore from git history if/when we add a more
-    // forgiving payout model for low-scoring sports.
-    periodSpecForLeague(league) {
-      if (league === 'NHL') {
-        return { numPeriods: 3, quarterWeights: { 0: 20, 1: 30, 2: 50 } }
-      }
-      // Default: NBA/NFL/NCAAM/WNBA — four quarters, 15/15/15/55.
+    // sport actually scores. Only basketball-family quarters are
+    // supported right now (NBA / WNBA / NFL / NCAAM all share the same
+    // 4-quarter, 15/15/15/55 shape). NHL/soccer/MLB used to live here
+    // but were pulled — too few points per period for the mod-10 digit
+    // lottery to feel fair. Restore from git history if/when we add a
+    // more forgiving payout model for low-scoring sports.
+    periodSpecForLeague(_league) {
+      // four quarters, 15/15/15/55.
       return {
         numPeriods: 4,
         quarterWeights: { 0: 15, 1: 15, 2: 15, 3: 55 },
@@ -1117,7 +1138,7 @@ export default {
           <span class="sqCreateLabel">Pick a game (required)</span>
           <div class="rowFlex sqEspnDateRow">
             <div class="sqCreateHint sqEspnWindowHint">
-              Showing the next {{ DAYS_AHEAD }} days · NBA · WNBA · NHL
+              Showing the next {{ DAYS_AHEAD }} days · NBA · WNBA
             </div>
             <div class="actionButton sqEspnRefresh" @click="fetchEspnGames">
               {{ espnLoading ? 'Loading…' : 'Refresh slate' }}
@@ -1500,13 +1521,17 @@ export default {
 }
 .sqEspnRefresh { flex: 0 0 auto; }
 /* ─── DraftKings/FanDuel-style game lobby ────────────────────────────
-   Each NBA matchup is a tappable card: matchup title + status pill up
-   top, then an away row and a home row with logo, abbr, and full name. */
+   Each matchup is a tappable card: matchup title + status pill up
+   top, then an away row and a home row with logo, abbr, and full name.
+   Uniform-size grid that wraps onto more rows as the slate grows —
+   every tile shares one width (auto-fill + minmax) and one height
+   (grid-auto-rows), so adding games never reflows the existing cards. */
 .sqEspnList {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-auto-rows: 130px;
   gap: 8px;
-  max-height: 340px;
+  max-height: 420px;
   overflow-y: auto;
   margin-bottom: 4px;
   padding-right: 2px;
@@ -1521,6 +1546,10 @@ export default {
   border: 1px solid rgba(255, 255, 255, 0.10);
   cursor: pointer;
   user-select: none;
+  /* Pin to the grid cell so every tile is exactly the same size,
+     regardless of whether linescores are present yet. */
+  height: 100%;
+  overflow: hidden;
   transition: border-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
 }
 .sqGameCard:hover {

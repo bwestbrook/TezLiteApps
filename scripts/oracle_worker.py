@@ -154,6 +154,26 @@ def _field(record: Any, name: str, default: Any) -> Any:
     return getattr(record, name, default)
 
 
+def _opg_hash(op: Any) -> str:
+    """Extract the op hash from whatever pytezos returns from .send().
+    pytezos 3.17 returns an OperationGroup whose `.hash` is a METHOD
+    (not an attribute) — naive `getattr(op, "hash", None) or …` returns
+    the bound method (truthy), so we end up logging "<bound method
+    OperationGroup.hash …>" instead of the hash. Call the method if
+    it's callable; fall back to dict-style for older pytezos."""
+    h = getattr(op, "hash", None)
+    if callable(h):
+        try:
+            return h()
+        except Exception:
+            pass
+    if isinstance(op, dict) and "hash" in op:
+        return op["hash"]
+    if isinstance(h, str):
+        return h
+    return "(unknown)"
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # v3 commit-reveal — preimage journal (persisted across restarts)
 # ═══════════════════════════════════════════════════════════════════════
@@ -276,7 +296,7 @@ class WarHandler(GameHandler):
                 op = contract.deal(
                     gameId=gid, cards1=c1, cards2=c2, seed=seed,
                 ).send(min_confirmations=1)
-                return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+                return _opg_hash(op)
             return [HandlerAction(label=label, submit=submit)]
         return []
 
@@ -302,7 +322,7 @@ class _CoinFlipHandler(GameHandler):
                 op = contract.flipForFirst(
                     gameId=gid, bit=bit, seed=seed,
                 ).send(min_confirmations=1)
-                return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+                return _opg_hash(op)
             return [HandlerAction(label=label, submit=submit)]
         return []
 
@@ -394,7 +414,7 @@ class SquaresHandler(GameHandler):
                     op = contract.setAxes(
                         gameId=gid, axisHome=ah, axisAway=aa,
                     ).send(min_confirmations=1)
-                    return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+                    return _opg_hash(op)
                 return [HandlerAction(label=label, submit=submit)]
 
             # ─── 2. Sports score step ───────────────────────────────
@@ -456,7 +476,7 @@ class SquaresHandler(GameHandler):
                 op = contract.reportQuarter(
                     gameId=gid, quarter=q, homeScore=h, awayScore=a,
                 ).send(min_confirmations=1)
-                return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+                return _opg_hash(op)
             return HandlerAction(label=label, submit=submit)
         return None
 
@@ -535,7 +555,11 @@ class OracleCommitter(GameHandler):
         label = (f"postCommit hash=0x{hash_bytes.hex()[:10]}…  "
                  f"(expected cid {expected_cid}, {unrevealed} unrevealed)")
         def submit(contract: Any, hash_bytes=hash_bytes, preimage_hex=preimage.hex(), expected_cid=expected_cid) -> str:
-            op = contract.postCommit(hash=hash_bytes).send(min_confirmations=1)
+            # SmartPy flattens single-field record params to bare types,
+            # so pytezos's introspected signature is `postCommit(bytes)`
+            # not `postCommit(hash=bytes)`. Passing as kwarg trips the
+            # `or`-tree dispatcher with "Unexpected arguments: {'hash': ...}".
+            op = contract.postCommit(hash_bytes).send(min_confirmations=1)
             # Re-read storage to find the actual commitId assigned.
             try:
                 after = self.contract.storage()
@@ -553,7 +577,7 @@ class OracleCommitter(GameHandler):
                 "status": "posted",
             }
             save_journal(self.network, self.journal)
-            return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+            return _opg_hash(op)
         return [HandlerAction(label=label, submit=submit)]
 
 
@@ -621,8 +645,9 @@ class RandomnessHandler(GameHandler):
             if not _is_unrevealed(preimage):
                 label = f"req {rid:>3} → fulfillRandom (bound commit {cid} already revealed)"
                 def submit(contract: Any, rid=rid) -> str:
-                    op = contract.fulfillRandom(requestId=rid).send(min_confirmations=1)
-                    return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+                    # Single-field-record flatten — see postCommit note.
+                    op = contract.fulfillRandom(rid).send(min_confirmations=1)
+                    return _opg_hash(op)
                 return [HandlerAction(label=label, submit=submit)]
 
         # Second pass: any pending request whose bound commit needs a
@@ -656,15 +681,18 @@ class RandomnessHandler(GameHandler):
             preimage_bytes = bytes.fromhex(journal_entry["preimage_hex"])
             label = f"revealCommit({cid})  (unblocks req {rid} + others bound to this commit)"
             def submit(contract: Any, cid=cid, preimage_bytes=preimage_bytes) -> str:
+                # Two-field record — passing as a dict via kwargs would
+                # also trip the `or`-tree introspection; positional dict
+                # (or positional ordered tuple) navigates it correctly.
                 op = contract.revealCommit(
-                    commitId=cid, preimage=preimage_bytes,
+                    {"commitId": cid, "preimage": preimage_bytes},
                 ).send(min_confirmations=1)
                 # Mark the journal entry as revealed for hygiene.
                 je = self.journal.get(str(cid), {})
                 je["status"] = "revealed"
                 self.journal[str(cid)] = je
                 save_journal(self.network, self.journal)
-                return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+                return _opg_hash(op)
             return [HandlerAction(label=label, submit=submit)]
 
         return []
@@ -705,11 +733,40 @@ class Worker:
         self.rpc = NETWORK_RPCS[self.network]
         self.tzkt = TZKT_HOSTS[self.network]
 
-        mnemonic = os.environ.get("DEPLOY_MNEMONIC", "").strip()
+        # Worker key resolution order (most specific → least):
+        #   1. --mnemonic-env <NAME>           CLI override
+        #   2. ORACLE_MNEMONIC_<NETWORK>       per-network oracle key
+        #   3. TXL_ORACLE_MNEMONIC_<NETWORK>   alias (the TXL deploy uses
+        #                                      this name; on mainnet the
+        #                                      same tz1 serves both the
+        #                                      TXL oracle role AND the
+        #                                      RandomOracle oracle role,
+        #                                      so the env var is dual-use)
+        #   4. DEPLOY_MNEMONIC                 legacy fallback
+        net = self.network.upper()
+        candidates = []
+        if args.mnemonic_env:
+            candidates.append(args.mnemonic_env)
+        candidates += [
+            f"ORACLE_MNEMONIC_{net}",
+            f"TXL_ORACLE_MNEMONIC_{net}",
+            "DEPLOY_MNEMONIC",
+        ]
+        mnemonic = ""
+        chosen_var = None
+        for var in candidates:
+            val = os.environ.get(var, "").strip()
+            if val:
+                mnemonic = val
+                chosen_var = var
+                break
+
         if not mnemonic and not args.dry_run:
-            die("DEPLOY_MNEMONIC missing from .env. "
-                "Run scripts/new-test-wallet.sh to generate one, or "
-                "re-run with --dry-run to see what the worker would do.")
+            die(
+                f"No worker mnemonic found. Looked for (in order): "
+                f"{', '.join(candidates)}. Add one to .env, or re-run "
+                f"with --dry-run."
+            )
 
         if args.dry_run:
             self.key = None
@@ -717,6 +774,7 @@ class Worker:
         else:
             self.key = Key.from_mnemonic(mnemonic.split())
             self.client = pytezos.using(shell=self.rpc, key=self.key)
+            info(f"signer: {self.key.public_key_hash()} (from {chosen_var})")
 
         # Build the list of active handlers.
         chosen = list(HANDLERS) if args.game == "all" else [args.game]
@@ -889,6 +947,11 @@ def main() -> None:
                    help="Run a single poll cycle, then exit")
     p.add_argument("--dry-run", action="store_true",
                    help="Don't sign anything — log what we would do")
+    p.add_argument("--mnemonic-env", default=None,
+                   help="Name of the .env variable holding the worker "
+                        "mnemonic (overrides the default ORACLE_MNEMONIC_"
+                        "<NETWORK> / TXL_ORACLE_MNEMONIC_<NETWORK> / "
+                        "DEPLOY_MNEMONIC fallback chain)")
     args = p.parse_args()
 
     load_dotenv()

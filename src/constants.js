@@ -198,7 +198,7 @@ export function clearStaleBeaconStorage() {
 
 // ── Shadownet (current testnet, primary dev target) ──
 export const ORACLE_CONTRACT_SHADOWNET             = 'KT19V1YiyPtyCbxouhyeM96SekRTVC7Gw6qq'
-export const TXL_CONTRACT_ADDRESS_SHADOWNET        = 'KT1Ro63rVDUx2x8pMChCLSySso8t6JH47oRQ'
+export const TXL_CONTRACT_ADDRESS_SHADOWNET        = 'KT1JukrFQ2DtKPDRDBq4j3Z6HkXtXxuF2Evd'
 export const AD_CONTRACT_ADDRESS_SHADOWNET         = 'KT1N4dEistsQcxMTLW7A6AdBc7Sh9GkohHnJ'
 export const TTT_CONTRACT_ADDRESS_SHADOWNET        = 'KT1GkvjJhHtEZfsiSJnQWCS3zZVdgfnBdqWc'
 export const OBJECT_CONTRACT_SHADOWNET             = 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
@@ -211,7 +211,7 @@ export const WAR_CONTRACT_ADDRESS_SHADOWNET        = 'KT1Cbb7aTgWjhSCK4bXTEWp4aG
 
 // ── Mainnet (last known Ghostnet leftovers; redeploy each before real use) ──
 export const ORACLE_CONTRACT_MAINNET             = 'KT1H3RJBs3SjoLyFRG3Q6LXMGtm4n5wJGa4N'
-export const TXL_CONTRACT_ADDRESS_MAINNET        = 'KT1HD71gj4ZdehpS4Ri8nasjpDTPDQ574Sxy'
+export const TXL_CONTRACT_ADDRESS_MAINNET        = 'KT1TYgt7SphtEQHLk4GySkXckhSctJww5hdj'
 export const AD_CONTRACT_ADDRESS_MAINNET         = 'KT1DHjMQWua8eUzFrqtjtmjDmdeQ6YoKPXT7'
 export const TTT_CONTRACT_ADDRESS_MAINNET        = 'KT1FsKda1m7CR2YwXRM9Awzctq1Js7TjmTmM'
 export const OBJECT_CONTRACT_MAINNET             = 'KT1FvqJwEDWb1Gwc55Jd1jjTHRVWbYKUUpyq'
@@ -250,13 +250,13 @@ export const ADMIN_ADDRESS = 'tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q'
 // ─── Game / NFT info copy ────────────────────────────────────────────────────
 export const NFT_INFO = [
   'More Information Coming Soon!',
-  'All games on thextz.life plan to generate revenue in the form of XTZ',
-  'This revenue will be shared evenly among the holders with an inverse weight against NFT rank',
-  "There's only 275 of them and already over 100 unique owners",
+  'All games on thextz.life generate revenue in the form of XTZ',
+  'Revenue is shared evenly among active TXL holders — every NFT earns the same flat share per deposit',
+  "There's only 271 of them and already over 100 unique owners",
   'They are only 2.725 XTZ on primary!',
   'The only way to cash out from the contract is by hodling the NFTs',
-  'A separate smart contract takes snaps shots of the NFTs owners and monitors for sales',
-  'Each NFT has its own balance that gets set back to zero when claimed by the owner',
+  'A separate smart contract tracks NFT owners and monitors for sales — holders can claim anytime',
+  'Tokens held on the objkt marketplace are skipped, so their share automatically redistributes to active holders',
 ]
 
 // XC-2 — `default()` semantics: the AceyDuecey contract's default

@@ -364,12 +364,19 @@ export default {
         (roundOutcomes[0] === 'you' && roundOutcomes[1] === 'you') ||
         (roundOutcomes[0] === 'opp' && roundOutcomes[1] === 'opp')
 
-      // Beat schedule (ms). One round ≈ 800ms total: ~300ms opp flip,
-      // ~250ms gap, ~250ms knight flip. Sweep ends after round 2.
-      const ROUND_GAP = 850
-      const ORC_FLIP = 320
-      const KNIGHT_FLIP = 560
-      const RESULT = 760
+      // Beat schedule (ms). Slowed-down cadence so the reveals breathe.
+      // Per-round timeline:
+      //   t=0          deal entrance (warCardDeal, 800ms on the slot)
+      //   t=ORC_FLIP   opp card rotateY flips
+      //   t=KNIGHT_FLIP your card rotateY flips
+      //   t=RESULT     round outcome lights up + leans clear
+      //   t=ROUND_GAP  next round begins
+      // The orc flip waits past the 800ms deal animation so the entrance
+      // and the flip don't fight for the card's transform.
+      const ROUND_GAP = 2400
+      const ORC_FLIP = 950
+      const KNIGHT_FLIP = 1650
+      const RESULT = 2150
 
       const sched = (delay, fn) => {
         this.demoTimeouts.push(setTimeout(fn, delay))
@@ -408,15 +415,16 @@ export default {
       this.demoTimeouts = []
     },
     // Auto-redeal so the table is never static. Skips when a real game
-    // is in flight — the on-chain state takes precedence. Sweep games
-    // resolve at ~2.4s, full series at ~3.2s; the 4.5s loop leaves a
-    // breath of dead air between rounds.
+    // is in flight — the on-chain state takes precedence. At the slower
+    // cadence above, a full 3-round series wraps in ~9.6s and a 2-0
+    // sweep in ~7.2s; the 12s loop leaves a couple seconds of post-
+    // verdict dead air before the next deal.
     startDemoLoop() {
       this.stopDemoLoop()
       this.demoLoopTimer = setInterval(() => {
         if (this.inRealGame) return
         this.dealDemo()
-      }, 4500)
+      }, 12000)
     },
     stopDemoLoop() {
       if (this.demoLoopTimer) {
@@ -625,70 +633,111 @@ export default {
             <div class="warFelt">
               <div class="warBrand">SPEED WAR · BEST OF 3</div>
 
-              <!-- Opponent's card (top) — orc avatar leans in alongside -->
-              <div class="warSide warSide--opp">
-                <div :class="['warCharacter', 'warCharacter--orc', { 'warCharacter--lean': orcLean }]" aria-hidden="true">
-                  <svg viewBox="0 0 100 130" class="warCharSvg">
-                    <!-- Shoulders / leather pauldrons -->
-                    <path d="M10,120 Q15,90 30,82 L70,82 Q85,90 90,120 Z"
-                          fill="#3a2a18" stroke="#1c130a" stroke-width="1.5"/>
-                    <path d="M14,98 Q20,86 32,86 L38,90 L32,108 Q22,108 14,98 Z" fill="#5a3a20"/>
-                    <path d="M86,98 Q80,86 68,86 L62,90 L68,108 Q78,108 86,98 Z" fill="#5a3a20"/>
-                    <!-- Neck -->
-                    <rect x="42" y="74" width="16" height="12" fill="#4a7a30"/>
-                    <!-- Head -->
-                    <ellipse cx="50" cy="50" rx="26" ry="28" fill="#5a8a3a"/>
-                    <!-- Brow ridge / shadow -->
-                    <path d="M24,46 Q50,30 76,46 L74,52 Q50,40 26,52 Z" fill="#3d6824"/>
-                    <!-- Spiked helmet skull cap -->
-                    <path d="M20,40 Q50,12 80,40 L78,32 L72,22 L66,30 L60,18 L54,28 L50,14 L46,28 L40,18 L34,30 L28,22 L22,32 Z"
-                          fill="#2a1810" stroke="#0e0805" stroke-width="1"/>
-                    <!-- Eyes — angry red glow -->
-                    <ellipse cx="40" cy="52" rx="3.5" ry="2.2" fill="#1a0805"/>
-                    <ellipse cx="60" cy="52" rx="3.5" ry="2.2" fill="#1a0805"/>
-                    <circle cx="40" cy="52" r="1.4" fill="#ff4030"/>
-                    <circle cx="60" cy="52" r="1.4" fill="#ff4030"/>
-                    <!-- Nose -->
-                    <path d="M48,56 L50,66 L52,56 Z" fill="#3d6824"/>
-                    <!-- Mouth + tusks -->
-                    <path d="M40,68 Q50,74 60,68" fill="none" stroke="#1c0e08" stroke-width="2" stroke-linecap="round"/>
-                    <path d="M42,68 L40,76 L44,74 Z" fill="#f1e7c8"/>
-                    <path d="M58,68 L60,76 L56,74 Z" fill="#f1e7c8"/>
-                    <!-- Scar across cheek -->
-                    <path d="M30,58 L38,62" stroke="#3d2410" stroke-width="1.2" stroke-linecap="round"/>
-                    <!-- Axe haft poking up behind shoulder -->
-                    <line x1="80" y1="120" x2="92" y2="50" stroke="#3a2412" stroke-width="3"/>
-                    <path d="M86,52 L96,42 L98,50 L94,58 Z" fill="#9aa0a6" stroke="#3a2412" stroke-width="1"/>
-                  </svg>
-                  <div class="warCharName">GROK · ORC</div>
-                </div>
-                <div class="warSideLabel">
-                  Opponent
-                  <span class="warTotal warTotal--score">{{ displayOppScore }}</span>
-                </div>
-                <div class="warHand">
-                  <div
-                    v-for="r in 3"
-                    :key="'opp-' + r"
-                    :class="['warCardSlot', 'warCardSlot--round', `warCardSlot--round--${roundOutcomes[r-1] || 'pending'}`]"
-                  >
-                    <div :class="['warCard', {
-                      'warCard--flipped': displayOppRevealed[r-1],
-                      'warCard--winner': displayOppRevealed[r-1] && roundOutcomes[r-1] === 'opp',
-                    }]">
-                      <div class="warCardFace warCardFace--back">
-                        <div class="warBack"><div class="warBackInner"><div class="warBackMark">W</div></div></div>
+              <!-- Left edge of the table: the orc -->
+              <div :class="['warCharacter', 'warCharacter--orc', 'warCharacter--sideLeft', { 'warCharacter--lean': orcLean }]" aria-hidden="true">
+                <svg viewBox="0 0 100 130" class="warCharSvg">
+                  <!-- Shoulders / leather pauldrons -->
+                  <path d="M10,120 Q15,90 30,82 L70,82 Q85,90 90,120 Z"
+                        fill="#3a2a18" stroke="#1c130a" stroke-width="1.5"/>
+                  <path d="M14,98 Q20,86 32,86 L38,90 L32,108 Q22,108 14,98 Z" fill="#5a3a20"/>
+                  <path d="M86,98 Q80,86 68,86 L62,90 L68,108 Q78,108 86,98 Z" fill="#5a3a20"/>
+                  <!-- Neck -->
+                  <rect x="42" y="74" width="16" height="12" fill="#4a7a30"/>
+                  <!-- Head -->
+                  <ellipse cx="50" cy="50" rx="26" ry="28" fill="#5a8a3a"/>
+                  <!-- Brow ridge / shadow -->
+                  <path d="M24,46 Q50,30 76,46 L74,52 Q50,40 26,52 Z" fill="#3d6824"/>
+                  <!-- Spiked helmet skull cap -->
+                  <path d="M20,40 Q50,12 80,40 L78,32 L72,22 L66,30 L60,18 L54,28 L50,14 L46,28 L40,18 L34,30 L28,22 L22,32 Z"
+                        fill="#2a1810" stroke="#0e0805" stroke-width="1"/>
+                  <!-- Eyes — angry red glow -->
+                  <ellipse cx="40" cy="52" rx="3.5" ry="2.2" fill="#1a0805"/>
+                  <ellipse cx="60" cy="52" rx="3.5" ry="2.2" fill="#1a0805"/>
+                  <circle cx="40" cy="52" r="1.4" fill="#ff4030"/>
+                  <circle cx="60" cy="52" r="1.4" fill="#ff4030"/>
+                  <!-- Nose -->
+                  <path d="M48,56 L50,66 L52,56 Z" fill="#3d6824"/>
+                  <!-- Mouth + tusks -->
+                  <path d="M40,68 Q50,74 60,68" fill="none" stroke="#1c0e08" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M42,68 L40,76 L44,74 Z" fill="#f1e7c8"/>
+                  <path d="M58,68 L60,76 L56,74 Z" fill="#f1e7c8"/>
+                  <!-- Scar across cheek -->
+                  <path d="M30,58 L38,62" stroke="#3d2410" stroke-width="1.2" stroke-linecap="round"/>
+                  <!-- Axe haft poking up behind shoulder -->
+                  <line x1="80" y1="120" x2="92" y2="50" stroke="#3a2412" stroke-width="3"/>
+                  <path d="M86,52 L96,42 L98,50 L94,58 Z" fill="#9aa0a6" stroke="#3a2412" stroke-width="1"/>
+                </svg>
+                <div class="warCharName">GROK · ORC</div>
+              </div>
+
+              <!-- Centre column: opponent's hand, vs, your hand. -->
+              <div class="warMatchColumn">
+                <div class="warSide warSide--opp">
+                  <div class="warSideLabel">
+                    Opponent
+                    <span class="warTotal warTotal--score">{{ displayOppScore }}</span>
+                  </div>
+                  <div class="warHand">
+                    <div
+                      v-for="r in 3"
+                      :key="'opp-' + r"
+                      :class="['warCardSlot', 'warCardSlot--round', `warCardSlot--round--${roundOutcomes[r-1] || 'pending'}`]"
+                    >
+                      <div :class="['warCard', {
+                        'warCard--flipped': displayOppRevealed[r-1],
+                        'warCard--winner': displayOppRevealed[r-1] && roundOutcomes[r-1] === 'opp',
+                      }]">
+                        <div class="warCardFace warCardFace--back">
+                          <div class="warBack"><div class="warBackInner"><div class="warBackMark">W</div></div></div>
+                        </div>
+                        <div class="warCardFace warCardFace--front">
+                          <img
+                            v-if="cardFace(displayOppCards[r-1])"
+                            :src="cardFace(displayOppCards[r-1])"
+                            :alt="cardLabel(displayOppCards[r-1])"
+                            class="warCardImg"
+                            draggable="false"
+                          />
+                          <div :class="['warCardCorner', `warCardCorner--${suitColor(displayOppCards[r-1])}`]">
+                            {{ cardLabel(displayOppCards[r-1]) }}
+                          </div>
+                        </div>
                       </div>
-                      <div class="warCardFace warCardFace--front">
-                        <img
-                          v-if="cardFace(displayOppCards[r-1])"
-                          :src="cardFace(displayOppCards[r-1])"
-                          :alt="cardLabel(displayOppCards[r-1])"
-                          class="warCardImg"
-                          draggable="false"
-                        />
-                        <div :class="['warCardCorner', `warCardCorner--${suitColor(displayOppCards[r-1])}`]">
-                          {{ cardLabel(displayOppCards[r-1]) }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="warVs">vs</div>
+
+                <div class="warSide warSide--you">
+                  <div class="warSideLabel">
+                    You
+                    <span class="warTotal warTotal--score">{{ displayYouScore }}</span>
+                  </div>
+                  <div class="warHand">
+                    <div
+                      v-for="r in 3"
+                      :key="'you-' + r"
+                      :class="['warCardSlot', 'warCardSlot--round', `warCardSlot--round--${roundOutcomes[r-1] || 'pending'}`]"
+                    >
+                      <div :class="['warCard', {
+                        'warCard--flipped': displayYouRevealed[r-1],
+                        'warCard--winner': displayYouRevealed[r-1] && roundOutcomes[r-1] === 'you',
+                      }]">
+                        <div class="warCardFace warCardFace--back">
+                          <div class="warBack"><div class="warBackInner"><div class="warBackMark">W</div></div></div>
+                        </div>
+                        <div class="warCardFace warCardFace--front">
+                          <img
+                            v-if="cardFace(displayYouCards[r-1])"
+                            :src="cardFace(displayYouCards[r-1])"
+                            :alt="cardLabel(displayYouCards[r-1])"
+                            class="warCardImg"
+                            draggable="false"
+                          />
+                          <div :class="['warCardCorner', `warCardCorner--${suitColor(displayYouCards[r-1])}`]">
+                            {{ cardLabel(displayYouCards[r-1]) }}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -696,78 +745,42 @@ export default {
                 </div>
               </div>
 
-              <div class="warVs">vs</div>
-
-              <!-- Your card (bottom) — knight avatar leans in alongside -->
-              <div class="warSide warSide--you">
-                <div :class="['warCharacter', 'warCharacter--knight', { 'warCharacter--lean': knightLean }]" aria-hidden="true">
-                  <svg viewBox="0 0 100 130" class="warCharSvg">
-                    <!-- Sword diagonal behind shoulder -->
-                    <line x1="2" y1="120" x2="22" y2="22" stroke="#7c6a3f" stroke-width="2.5"/>
-                    <rect x="14" y="18" width="14" height="2.5" rx="1" fill="#d4a24e"/>
-                    <path d="M19,22 L23,8 L27,22 Z" fill="#dde2ea" stroke="#5a6068" stroke-width="0.8"/>
-                    <!-- Shoulders / blue tabard -->
-                    <path d="M10,120 Q14,92 28,84 L72,84 Q86,92 90,120 Z"
-                          fill="#1d2a78" stroke="#0c1240" stroke-width="1.5"/>
-                    <!-- Gold cross on tabard -->
-                    <rect x="46" y="92" width="8" height="22" fill="#f5c451"/>
-                    <rect x="38" y="98" width="24" height="8" fill="#f5c451"/>
-                    <!-- Pauldrons (steel) -->
-                    <ellipse cx="18" cy="92" rx="10" ry="8" fill="#9aa0a6" stroke="#42464d" stroke-width="1"/>
-                    <ellipse cx="82" cy="92" rx="10" ry="8" fill="#9aa0a6" stroke="#42464d" stroke-width="1"/>
-                    <!-- Neck guard -->
-                    <rect x="42" y="74" width="16" height="12" fill="#7a8088"/>
-                    <!-- Helmet — rounded great-helm -->
-                    <path d="M22,60 Q22,28 50,22 Q78,28 78,60 L78,72 Q50,80 22,72 Z"
-                          fill="#c4cad2" stroke="#42464d" stroke-width="1.5"/>
-                    <!-- Helmet shading -->
-                    <path d="M22,60 Q22,28 50,22 L50,50 Q34,52 22,60 Z" fill="#dde2ea" opacity="0.55"/>
-                    <!-- Visor slit -->
-                    <rect x="32" y="48" width="36" height="4" rx="1.5" fill="#0a0c12"/>
-                    <!-- Eye glints behind slit -->
-                    <rect x="40" y="49" width="3" height="2" fill="#f5c451"/>
-                    <rect x="57" y="49" width="3" height="2" fill="#f5c451"/>
-                    <!-- Cross-shaped visor stripe -->
-                    <rect x="48" y="32" width="4" height="38" fill="#42464d"/>
-                    <!-- Red plume -->
-                    <path d="M50,22 Q44,8 50,2 Q56,8 50,22 Z" fill="#c4524f" stroke="#7a2a28" stroke-width="0.8"/>
-                    <path d="M50,16 Q42,12 38,6 Q46,8 50,16 Z" fill="#a8413e"/>
-                    <path d="M50,16 Q58,12 62,6 Q54,8 50,16 Z" fill="#a8413e"/>
-                  </svg>
-                  <div class="warCharName">SIR ELDRIC · KNIGHT</div>
-                </div>
-                <div class="warSideLabel">
-                  You
-                  <span class="warTotal warTotal--score">{{ displayYouScore }}</span>
-                </div>
-                <div class="warHand">
-                  <div
-                    v-for="r in 3"
-                    :key="'you-' + r"
-                    :class="['warCardSlot', 'warCardSlot--round', `warCardSlot--round--${roundOutcomes[r-1] || 'pending'}`]"
-                  >
-                    <div :class="['warCard', {
-                      'warCard--flipped': displayYouRevealed[r-1],
-                      'warCard--winner': displayYouRevealed[r-1] && roundOutcomes[r-1] === 'you',
-                    }]">
-                      <div class="warCardFace warCardFace--back">
-                        <div class="warBack"><div class="warBackInner"><div class="warBackMark">W</div></div></div>
-                      </div>
-                      <div class="warCardFace warCardFace--front">
-                        <img
-                          v-if="cardFace(displayYouCards[r-1])"
-                          :src="cardFace(displayYouCards[r-1])"
-                          :alt="cardLabel(displayYouCards[r-1])"
-                          class="warCardImg"
-                          draggable="false"
-                        />
-                        <div :class="['warCardCorner', `warCardCorner--${suitColor(displayYouCards[r-1])}`]">
-                          {{ cardLabel(displayYouCards[r-1]) }}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <!-- Right edge of the table: the knight -->
+              <div :class="['warCharacter', 'warCharacter--knight', 'warCharacter--sideRight', { 'warCharacter--lean': knightLean }]" aria-hidden="true">
+                <svg viewBox="0 0 100 130" class="warCharSvg">
+                  <!-- Sword diagonal behind shoulder -->
+                  <line x1="2" y1="120" x2="22" y2="22" stroke="#7c6a3f" stroke-width="2.5"/>
+                  <rect x="14" y="18" width="14" height="2.5" rx="1" fill="#d4a24e"/>
+                  <path d="M19,22 L23,8 L27,22 Z" fill="#dde2ea" stroke="#5a6068" stroke-width="0.8"/>
+                  <!-- Shoulders / blue tabard -->
+                  <path d="M10,120 Q14,92 28,84 L72,84 Q86,92 90,120 Z"
+                        fill="#1d2a78" stroke="#0c1240" stroke-width="1.5"/>
+                  <!-- Gold cross on tabard -->
+                  <rect x="46" y="92" width="8" height="22" fill="#f5c451"/>
+                  <rect x="38" y="98" width="24" height="8" fill="#f5c451"/>
+                  <!-- Pauldrons (steel) -->
+                  <ellipse cx="18" cy="92" rx="10" ry="8" fill="#9aa0a6" stroke="#42464d" stroke-width="1"/>
+                  <ellipse cx="82" cy="92" rx="10" ry="8" fill="#9aa0a6" stroke="#42464d" stroke-width="1"/>
+                  <!-- Neck guard -->
+                  <rect x="42" y="74" width="16" height="12" fill="#7a8088"/>
+                  <!-- Helmet — rounded great-helm -->
+                  <path d="M22,60 Q22,28 50,22 Q78,28 78,60 L78,72 Q50,80 22,72 Z"
+                        fill="#c4cad2" stroke="#42464d" stroke-width="1.5"/>
+                  <!-- Helmet shading -->
+                  <path d="M22,60 Q22,28 50,22 L50,50 Q34,52 22,60 Z" fill="#dde2ea" opacity="0.55"/>
+                  <!-- Visor slit -->
+                  <rect x="32" y="48" width="36" height="4" rx="1.5" fill="#0a0c12"/>
+                  <!-- Eye glints behind slit -->
+                  <rect x="40" y="49" width="3" height="2" fill="#f5c451"/>
+                  <rect x="57" y="49" width="3" height="2" fill="#f5c451"/>
+                  <!-- Cross-shaped visor stripe -->
+                  <rect x="48" y="32" width="4" height="38" fill="#42464d"/>
+                  <!-- Red plume -->
+                  <path d="M50,22 Q44,8 50,2 Q56,8 50,22 Z" fill="#c4524f" stroke="#7a2a28" stroke-width="0.8"/>
+                  <path d="M50,16 Q42,12 38,6 Q46,8 50,16 Z" fill="#a8413e"/>
+                  <path d="M50,16 Q58,12 62,6 Q54,8 50,16 Z" fill="#a8413e"/>
+                </svg>
+                <div class="warCharName">SIR ELDRIC · KNIGHT</div>
               </div>
 
               <!-- Awaiting-deal overlay: real game in gameStatus=1 -->
@@ -1111,40 +1124,44 @@ export default {
   background:
     radial-gradient(ellipse at 50% 35%, rgba(255,255,255,0.06) 0%, transparent 50%),
     radial-gradient(ellipse at 50% 50%, #1f5c3a 0%, #0e3b22 60%, #07291a 100%);
-  display: flex; flex-direction: column; justify-content: space-between;
-  padding: 14px 12px 14px;
+  /* 3-column layout: [orc][matchColumn][knight]. Vertically centred so the
+     characters anchor to the table's mid-line and the card stack breathes
+     between them. The brand label sits outside this grid (position:
+     absolute) so it doesn't claim a row. */
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 10px 14px;
   box-shadow: inset 0 0 30px rgba(0,0,0,0.45);
+}
+.warMatchColumn {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 6px;
+  min-width: 0;
 }
 .warBrand {
   position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
   letter-spacing: 4px; font-size: 10px; color: rgba(245, 196, 81, 0.55); font-weight: 600;
 }
 
+/* Each side is now a simple column of [label, hand] inside the centre
+ * match column. The characters live OUTSIDE .warSide (as siblings in the
+ * felt grid), so the side container no longer reserves columns for them. */
 .warSide {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex; flex-direction: column;
   align-items: center;
-  justify-items: center;
-  gap: 8px;
+  gap: 4px;
 }
-/* Row layout per side:
- *   opp (top):  [orc avatar] [opp card]  [—filler—]   (label sits above card via order)
- *   you (bot):  [—filler—]   [your card] [knight avatar]
- *
- * The label rides on top of the card column via grid-column. The opposite
- * filler keeps the card visually centered between the two avatars.
- */
-.warSide > .warSideLabel { grid-column: 2; grid-row: 1; order: 0; }
-.warSide > .warCardSlot  { grid-column: 2; grid-row: 2; }
-.warSide--opp > .warCharacter--orc     { grid-column: 1; grid-row: 1 / span 2; justify-self: end; }
-.warSide--you > .warCharacter--knight  { grid-column: 3; grid-row: 1 / span 2; justify-self: start; }
 
 .warSide--opp { transform: rotate(180deg); }
-/* The img and corner get the rotate back so they read upright after the side flip. */
+/* Counter-rotate the readable bits so labels + corner letters + the
+ * card face image stay upright after the side flip. The orc no longer
+ * lives inside .warSide so it doesn't need the counter-rotate anymore. */
 .warSide--opp .warSideLabel,
 .warSide--opp .warCardCorner,
-.warSide--opp .warCardImg,
-.warSide--opp .warCharacter--orc { transform: rotate(180deg); }
+.warSide--opp .warCardImg { transform: rotate(180deg); }
 .warSideLabel {
   font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
   color: rgba(255, 255, 255, 0.85);
@@ -1172,6 +1189,12 @@ export default {
   perspective: 1200px;
   position: relative;
   transition: filter 0.4s ease;
+  /* Deal entrance lives here — NOT on .warCard. The card itself owns the
+     rotateY flip transition, and a parallel `animation: ... both` on the
+     same element holds the entrance's transform permanently, which
+     suppresses the flip. Keeping the two on separate elements lets both
+     run cleanly. */
+  animation: warCardDeal 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 .warCardSlot--round--you  .warCard { filter: drop-shadow(0 0 8px rgba(245, 196, 81, 0.65)); }
 .warCardSlot--round--opp  .warCard { filter: drop-shadow(0 0 8px rgba(196, 82, 79, 0.55)); }
@@ -1355,6 +1378,11 @@ export default {
 @media (max-width: 480px) {
   .warHero { flex-direction: column; gap: 12px; }
   .warBgRing--a, .warBgRing--b, .warBgRing--c { display: none; }
+  /* Shrink the side characters so three cards + two avatars all fit on a
+     360px-wide screen. */
+  .warCharacter { width: 56px; }
+  .warCharName  { font-size: 7px; letter-spacing: 1px; }
+  .warFelt { gap: 6px; padding: 22px 6px 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .warBgStars--far, .warBgStars--mid, .warBgStars--near,

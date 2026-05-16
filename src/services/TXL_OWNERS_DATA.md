@@ -75,14 +75,21 @@ leaderboards) should use the same constant and label conventionally.
 
 ## Mainnet vs testnet reminder
 
-> ⚠️ Ghostnet was decommissioned in 2026 (along with Baking Bad's
-> TzKT Ghostnet API). The TXL manager + the snapshot oracle that used
-> to live there are stale. The shadownet equivalent is what
-> `TXL_CONTRACT_ADDRESS_SHADOWNET` points at in `src/constants.js`,
-> read live by `src/components/mainBody.vue` for the holder pool /
-> Unclaimed / Your Share chips. Anything in this folder still
-> referencing `api.ghostnet.tzkt.io` (e.g. `oracle_TXL.py`,
-> `reconcile_txl_owners.py`) is dead historical code until ported.
+> The TXL holder-reward manager is **v2** as of 2026 — accumulator
+> pattern, lazy-created idLookUp big_map, separate admin/oracle keys.
+> Shadownet KT1: see `TXL_CONTRACT_ADDRESS_SHADOWNET` in
+> `src/constants.js` (`deploy.py` auto-patches it on origination).
+> Mainnet KT1: see `TXL_CONTRACT_ADDRESS_MAINNET` (currently a
+> ghostnet leftover until v2 is originated on mainnet). The
+> matching oracle key is derived from `TXL_ORACLE_MNEMONIC` in
+> `.env` — NOT the v1 seed in `oracle_TXL.py` (publicly committed,
+> deprecated).
+>
+> The only oracle entrypoint going forward is
+> `src/services/reconcile_txl_owners.py` — it takes `--network` and
+> reads the contract address from `constants.js` per network.
+> `oracle_TXL.py` is deprecated and will be removed in a future
+> commit. See `docs/TXL_MAINNET_RUNBOOK.md` for the full ops flow.
 
 Ownership of the underlying Kalamint NFTs lives on **mainnet** (Kalamint
 FA2 `KT1EpGgjQs73QfFJs9z7m1Mxm5MTnpC2tqse`, big_map 857). The browse-NFTs

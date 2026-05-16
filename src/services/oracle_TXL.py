@@ -1,12 +1,19 @@
-# ⚠️ DEPRECATED — historical reference only.
+# ⚠️ DEPRECATED — DO NOT RUN, DO NOT REUSE THE SEED.
 #
-# This watcher hardcodes `api.ghostnet.tzkt.io` and the ghostnet TXL
-# manager `KT1HD71gj4ZdehpS4Ri8nasjpDTPDQ574Sxy`. Ghostnet was
-# decommissioned in 2026 along with Baking Bad's TzKT Ghostnet API, so
-# every HTTP call below now fails DNS. The live TXL manager + snapshot
-# oracle path needs to be re-implemented against shadownet (or whichever
-# network the redeployed manager lives on) before this script is useful
-# again. See src/services/TXL_OWNERS_DATA.md for the current state.
+# The seed phrase below was the v1 oracle key. It's been publicly
+# committed to git history, so the address it derives to
+# (tz1XbrvTMVa5dWQQBSCn2jgX7BPZyLRhgtKS) must be considered
+# compromised. The v2 contract uses a new key sourced from
+# TXL_ORACLE_MNEMONIC in .env (see docs/TXL_MAINNET_RUNBOOK.md).
+#
+# Use src/services/reconcile_txl_owners.py instead — same job
+# (sync TXL owners from Kalamint), but reads the network from arg,
+# the contract address from constants.js, and the oracle key from
+# .env. It also batches via the v2 batchUpdateOwner entrypoint.
+#
+# This file is kept only so a reader following git blame on
+# TXL_CONTRACT_ADDRESS_MAINNET can see where the old oracle ran. It
+# will be removed in a future commit.
 import requests
 import time
 import random

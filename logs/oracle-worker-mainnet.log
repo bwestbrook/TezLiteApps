@@ -1,0 +1,58 @@
+[2m[14:13:12][0m   signer: tz1QtpR6hraURtjP9V1rMMYnrqfyaicJFPWv (from TXL_ORACLE_MNEMONIC_MAINNET)
+[2m[14:13:13][0m [33m![0m war: no usable contract address (looked up WAR_CONTRACT_ADDRESS_MAINNET in constants.js, got 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'). Skipping.
+[2m[14:13:13][0m [33m![0m reversi: no usable contract address (looked up REVERSI_CONTRACT_ADDRESS_MAINNET in constants.js, got 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'). Skipping.
+[2m[14:13:13][0m [33m![0m chess: no usable contract address (looked up CHESS_CONTRACT_ADDRESS_MAINNET in constants.js, got 'KT1XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'). Skipping.
+
+[36m─── Oracle worker ───[0m
+[2m[14:13:13][0m   Network:  mainnet
+[2m[14:13:13][0m   RPC:      https://mainnet.tezos.ecadinfra.com
+[2m[14:13:13][0m     • oracle-committer KT1H3RJBs3SjoLyFRG3Q6LXMGtm4n5wJGa4N
+[2m[14:13:13][0m       https://tzkt.io/KT1H3RJBs3SjoLyFRG3Q6LXMGtm4n5wJGa4N
+[2m[14:13:13][0m     • randomness  KT1H3RJBs3SjoLyFRG3Q6LXMGtm4n5wJGa4N
+[2m[14:13:13][0m       https://tzkt.io/KT1H3RJBs3SjoLyFRG3Q6LXMGtm4n5wJGa4N
+[2m[14:13:13][0m     • squares     KT1Jojs8aSxzJQAXiEXusNataWmxaHmiQPh5
+[2m[14:13:13][0m       https://tzkt.io/KT1Jojs8aSxzJQAXiEXusNataWmxaHmiQPh5
+[2m[14:13:13][0m   Poll:     every 5s   (--once to do one cycle and exit)
+[2m[14:13:13][0m   Mode:     live
+[2m[14:13:13][0m   
+[2m[14:13:13][0m   Worker key:    tz1QtpR6hraURtjP9V1rMMYnrqfyaicJFPWv
+[2m[14:13:13][0m   Worker balance: 9.5330 ꜩ
+[2m[14:13:13][0m   
+[2m[14:13:13][0m [32m✓[0m oracle-committer: authorised as oracle (tz1QtpR6hraURtjP9V1rMMYnrqfyaicJFPWv)
+[2m[14:13:14][0m [32m✓[0m randomness: authorised as oracle (tz1QtpR6hraURtjP9V1rMMYnrqfyaicJFPWv)
+[2m[14:13:14][0m [33m![0m squares: not authorised (storage.oracle = tz1zu2rlw7ugy8xxz49cckihny86zs6tdq8q, my key = tz1QtpR6hraURtjP9V1rMMYnrqfyaicJFPWv). Skipping.
+[2m[14:13:14][0m   [oracle-committer] submitting  postCommit hash=0x17280ceeb6…  (expected cid 3, 1 unrevealed)
+[2m[14:13:22][0m [32m✓[0m   confirmed — opMDveG6CEHw5uMjmcLMPztVY6z2KEPyDd5EkokHfQqV8aK4Zbx
+[2m[14:13:22][0m     https://tzkt.io/opMDveG6CEHw5uMjmcLMPztVY6z2KEPyDd5EkokHfQqV8aK4Zbx
+[2m[14:13:22][0m   [randomness] submitting  revealCommit(1)  (unblocks req 2 + others bound to this commit)
+[2m[14:13:27][0m [32m✓[0m   confirmed — onoXcWQEHkkiBSJcJy9X6H1nbuUZntCi6Q817ViDgz62SbYfNYw
+[2m[14:13:27][0m     https://tzkt.io/onoXcWQEHkkiBSJcJy9X6H1nbuUZntCi6Q817ViDgz62SbYfNYw
+[2m[14:13:33][0m   [oracle-committer] submitting  postCommit hash=0xb88ade2750…  (expected cid 4, 1 unrevealed)
+[2m[14:13:39][0m [32m✓[0m   confirmed — oo2zgGn2SA7CvohWR4sc48PjvZ7SRKVhuVG1oBdFvTtrTwsno3A
+[2m[14:13:39][0m     https://tzkt.io/oo2zgGn2SA7CvohWR4sc48PjvZ7SRKVhuVG1oBdFvTtrTwsno3A
+[2m[14:13:39][0m   [randomness] submitting  req   2 → fulfillRandom (bound commit 1 already revealed)
+[2m[14:13:45][0m [32m✓[0m   confirmed — oommC1TzBzuMBFK3Q3wUu5vyVMfSUHUb7PTYy1bKkU5s9dQ9DrH
+[2m[14:13:45][0m     https://tzkt.io/oommC1TzBzuMBFK3Q3wUu5vyVMfSUHUb7PTYy1bKkU5s9dQ9DrH
+[2m[14:13:50][0m   [oracle-committer] submitting  postCommit hash=0xc0199fe212…  (expected cid 5, 2 unrevealed)
+[2m[14:13:56][0m [32m✓[0m   confirmed — onuTaeEyw6kVJznSNn57ZwGRMic6mfEL3vnGuZtx3P3Jto4eC81
+[2m[14:13:56][0m     https://tzkt.io/onuTaeEyw6kVJznSNn57ZwGRMic6mfEL3vnGuZtx3P3Jto4eC81
+[2m[14:14:29][0m   [randomness] submitting  revealCommit(5)  (unblocks req 3 + others bound to this commit)
+[2m[14:14:34][0m [32m✓[0m   confirmed — onmzCTtyJDJnyWwApaCJgsJHSty1fHaUyZHdMxmrGur76TNTCRq
+[2m[14:14:34][0m     https://tzkt.io/onmzCTtyJDJnyWwApaCJgsJHSty1fHaUyZHdMxmrGur76TNTCRq
+[2m[14:14:39][0m   [oracle-committer] submitting  postCommit hash=0x0ed95d0627…  (expected cid 6, 2 unrevealed)
+[2m[14:14:40][0m [31m✗[0m   submit failed: ({'id': 'failure',
+  'kind': 'temporary',
+  'msg': 'Error while validating injected operation '
+         'ooXrT86rrqT1Lnm59fyRDLhqsPnffoQn5NgKst4GDFvjoi9cbCL:\n'
+         'Error:\n'
+         '  The op
+[2m[14:14:40][0m   [randomness] submitting  req   3 → fulfillRandom (bound commit 5 already revealed)
+[2m[14:14:41][0m [31m✗[0m   submit failed: ({'id': 'failure',
+  'kind': 'temporary',
+  'msg': 'Error while validating injected operation '
+         'ooe7c1aPNnJ3fGCuMpYVAc9NhrnBrrEGutU8N4xxxug6CLsGafs:\n'
+         'Error:\n'
+         '  The op
+[2m[14:14:47][0m   [randomness] submitting  req   3 → fulfillRandom (bound commit 5 already revealed)
+[2m[14:14:51][0m [32m✓[0m   confirmed — ooKePXNER1QqqJBtUMwt2f6FASjiABAEpqkWQ6334WQTFSy5RGs
+[2m[14:14:51][0m     https://tzkt.io/ooKePXNER1QqqJBtUMwt2f6FASjiABAEpqkWQ6334WQTFSy5RGs
