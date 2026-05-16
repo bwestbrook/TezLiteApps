@@ -116,22 +116,45 @@ export function getBeaconNetwork() {
 }
 
 /**
- * Alternative Beacon relay (Matrix) nodes. Beacon SDK ships a default
- * list that points at servers under `*.papers.tech`. We've seen
- * `beacon-node-1.beacon-server-2.papers.tech` fail DNS resolution; if
- * that's the first relay Beacon tries on a given page load, the user
- * waits ~45 seconds for the SDK's internal retries before anything
- * useful happens.
+ * Beacon Matrix relay nodes, keyed by `Regions` enum values from
+ * @airgap/beacon-types (`'europe-west'`, `'north-america-east'`, etc.).
  *
- * Providing this list to BeaconWallet's constructor sidesteps the dead
- * relay by giving the SDK working alternatives to round-robin through.
+ * Why we override: @taquito/beacon-wallet@21 transitively installs
+ * beacon-transport-matrix@4.5.1 whose default region map points the
+ * non-EU regions at hostnames that no longer resolve:
+ *   north-america-east  → beacon-node-1.beacon-server-1.papers.tech (DNS fail)
+ *   north-america-west  → beacon-node-1.beacon-server-2.papers.tech (DNS fail)
+ *   asia-east           → beacon-node-1.beacon-server-3.papers.tech (DNS fail)
+ *   australia           → beacon-node-1.beacon-server-4.papers.tech (DNS fail)
+ * The SDK probes all regions in parallel; dead probes contribute to a
+ * 60s race that ultimately surfaces as "No server responded." from
+ * DAppClient.js when no probe lands a healthy response.
+ *
+ * BeaconWallet merges this object into the SDK defaults with `{...defaults,
+ * ...matrixNodes}`. Spread is by-key, so each key here REPLACES that
+ * region's default entirely. Keys must match the SDK's Regions enum
+ * values verbatim — a wrong key (e.g. 'EUROPE') gets merged in as a
+ * junk region that the SDK iterates but never reads back, and the
+ * dead defaults stay in play.
+ *
+ * Hosts: octez.io 1-8 are Tezos Foundation-operated and currently
+ * respond 200 with CORS; we also keep a few healthy papers.tech as
+ * EU redundancy.
  */
-export const BEACON_MATRIX_NODES = [
-  'beacon-node-1.diamond.papers.tech',
-  'beacon-node-1.sky.papers.tech',
-  'beacon-node-1.hope.papers.tech',
-  'beacon-node-2.sky.papers.tech',
-]
+export const BEACON_MATRIX_NODES = {
+  'europe-west': [
+    'beacon-node-1.octez.io',
+    'beacon-node-2.octez.io',
+    'beacon-node-1.diamond.papers.tech',
+    'beacon-node-1.sky.papers.tech',
+    'beacon-node-2.sky.papers.tech',
+    'beacon-node-1.hope.papers.tech',
+  ],
+  'north-america-east': ['beacon-node-3.octez.io'],
+  'north-america-west': ['beacon-node-4.octez.io'],
+  'asia-east': ['beacon-node-5.octez.io'],
+  'australia': ['beacon-node-6.octez.io'],
+}
 
 /**
  * Hostnames Beacon has been seen failing on. App.vue scrubs any localStorage

@@ -9,6 +9,7 @@ import { reduceAddress } from './utilities'
 import {
   APP_NAME,
   ADMIN_ADDRESS,
+  BEACON_MATRIX_NODES,
   DEFAULT_GAME_SIZE,
   NODE_URL,
   SOCKET_URL,
@@ -110,16 +111,30 @@ export default {
       // SDK already knows the RPC, but we pass it explicitly anyway so
       // the dApp and the wallet are always agreeing on the same chain.
       const network = getBeaconNetwork()
-      // No matrixNodes override. Beacon-sdk 4.8.x ships a current
-      // regional list (papers.tech + octez.io hosts). A previous
-      // override pinned EUROPE to a hand-picked 4-host papers.tech
-      // subset using the wrong region key — wallets were probing the
-      // full default set (including beacon-node-*.octez.io) and posting
-      // responses to servers we weren't listening on, surfacing in
-      // Temple as "No server responded".
+      // matrixNodes override using the SDK's actual region keys
+      // (Regions.* values from @airgap/beacon-types). We MUST override
+      // because @taquito/beacon-wallet@21 pins @airgap/beacon-dapp@4.5.1,
+      // which transitively installs beacon-transport-matrix@4.5.1 nested
+      // under node_modules/@taquito/beacon-wallet/node_modules/. That
+      // 4.5.1 P2PCommunicationClient has dead hostnames hardcoded as the
+      // default regional list:
+      //   north-america-east: beacon-node-1.beacon-server-1.papers.tech
+      //   north-america-west: beacon-node-1.beacon-server-2.papers.tech
+      //   asia-east:          beacon-node-1.beacon-server-3.papers.tech
+      //   australia:          beacon-node-1.beacon-server-4.papers.tech
+      // None of those resolve in DNS anymore. The SDK probes all regions
+      // in parallel; the dead probes generate ERR_NAME_NOT_RESOLVED
+      // errors and stall the 60s probe race, eventually surfacing as
+      // "No server responded." from DAppClient.js.
+      //
+      // Spread-merge in the SDK is by-key, so passing the right region
+      // keys REPLACES each region's list. We point every region at
+      // octez.io hosts (Tezos Foundation-operated, currently live with
+      // proper CORS) plus a couple healthy papers.tech for redundancy.
       const wallet = new BeaconWallet({
         name: APP_NAME,
         network,
+        matrixNodes: BEACON_MATRIX_NODES,
       })
       this.wallet = wallet
 
