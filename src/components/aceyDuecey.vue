@@ -1050,6 +1050,79 @@ export default {
 
 <template>
   <div class="canvasContainer">
+    <!-- ─── New visual: felt table with three flippable cards ─────────── -->
+    <div class="adTableWrap">
+      <div :class="['adTable', verdict ? `adTable--${verdict}` : '']">
+        <div class="adRail" aria-hidden="true"></div>
+        <div class="adFelt">
+          <div class="adBrand">ACEY · DUECEY</div>
+
+          <div class="adCardRow">
+            <div
+              v-for="(slot, i) in slots"
+              :key="slot.key + '-' + i"
+              :class="['adCardSlot', `adCardSlot--${slot.key}`]"
+            >
+              <div
+                :class="['adCard', { 'adCard--flipped': slot.flipped }]"
+                :style="{ '--ad-card-tilt': slot.tilt + 'deg' }"
+              >
+                <!-- Back face: pure-CSS card back -->
+                <div class="adCardFace adCardFace--back">
+                  <div class="adBack">
+                    <div class="adBackInner">
+                      <div class="adBackMark">A<span>·</span>D</div>
+                    </div>
+                  </div>
+                </div>
+                <!-- Front face: actual card image when known.
+                     The card PNG already shows the rank+suit in its own
+                     upper-left corner, so we don't overlay a separate
+                     label (avoids the duplicated "K♥" badge issue). -->
+                <div class="adCardFace adCardFace--front">
+                  <img
+                    v-if="cardFaceFor(slot.deckIdx)"
+                    :src="cardFaceFor(slot.deckIdx)"
+                    :alt="cardLabel(slot.deckIdx)"
+                    class="adCardImg"
+                    draggable="false"
+                  />
+                </div>
+              </div>
+              <div class="adSlotLabel">
+                <template v-if="slot.key === 'low'">LOW</template>
+                <template v-else-if="slot.key === 'high'">HIGH</template>
+                <template v-else>?</template>
+              </div>
+            </div>
+          </div>
+
+          <!-- Range bar: only meaningful once both anchors are flipped. -->
+          <div class="adRangeWrap" v-if="rangeText">
+            <div class="adRangeText">{{ rangeText }}</div>
+            <div class="adRangeBar">
+              <div
+                class="adRangeFill"
+                :style="{ left: rangeOffsetPct + '%', width: rangeWidthPct + '%' }"
+              ></div>
+              <div class="adRangeTicks">
+                <span v-for="t in 14" :key="t"></span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="verdict === 'win'" class="adVerdict adVerdict--win">YOU WIN</div>
+          <div v-else-if="verdict === 'pair'" class="adVerdict adVerdict--pair">PAIR · ANTE LOST</div>
+          <div v-else-if="verdict === 'rail'" class="adVerdict adVerdict--rail">RAIL HIT</div>
+          <div v-else-if="verdict === 'loss'" class="adVerdict adVerdict--loss">LOST</div>
+
+          <!-- Demo badge — only shown while the idle landing loop runs.
+               Disappears the moment the player antes up. -->
+          <div v-if="demoActive" class="adDemoBadge">DEMO</div>
+        </div>
+      </div>
+    </div>
+
     <div class="rowFlex">
       <div class="actionButtonHelp" @click="showLearnMore"> HOW TO PLAY </div>
       <div class="infoPopup" v-if="showInfo" @click="showLearnMore">
@@ -1193,79 +1266,6 @@ export default {
         >
           Auto-deal openers
         </button>
-      </div>
-    </div>
-
-    <!-- ─── New visual: felt table with three flippable cards ─────────── -->
-    <div class="adTableWrap">
-      <div :class="['adTable', verdict ? `adTable--${verdict}` : '']">
-        <div class="adRail" aria-hidden="true"></div>
-        <div class="adFelt">
-          <div class="adBrand">ACEY · DUECEY</div>
-
-          <div class="adCardRow">
-            <div
-              v-for="(slot, i) in slots"
-              :key="slot.key + '-' + i"
-              :class="['adCardSlot', `adCardSlot--${slot.key}`]"
-            >
-              <div
-                :class="['adCard', { 'adCard--flipped': slot.flipped }]"
-                :style="{ '--ad-card-tilt': slot.tilt + 'deg' }"
-              >
-                <!-- Back face: pure-CSS card back -->
-                <div class="adCardFace adCardFace--back">
-                  <div class="adBack">
-                    <div class="adBackInner">
-                      <div class="adBackMark">A<span>·</span>D</div>
-                    </div>
-                  </div>
-                </div>
-                <!-- Front face: actual card image when known.
-                     The card PNG already shows the rank+suit in its own
-                     upper-left corner, so we don't overlay a separate
-                     label (avoids the duplicated "K♥" badge issue). -->
-                <div class="adCardFace adCardFace--front">
-                  <img
-                    v-if="cardFaceFor(slot.deckIdx)"
-                    :src="cardFaceFor(slot.deckIdx)"
-                    :alt="cardLabel(slot.deckIdx)"
-                    class="adCardImg"
-                    draggable="false"
-                  />
-                </div>
-              </div>
-              <div class="adSlotLabel">
-                <template v-if="slot.key === 'low'">LOW</template>
-                <template v-else-if="slot.key === 'high'">HIGH</template>
-                <template v-else>?</template>
-              </div>
-            </div>
-          </div>
-
-          <!-- Range bar: only meaningful once both anchors are flipped. -->
-          <div class="adRangeWrap" v-if="rangeText">
-            <div class="adRangeText">{{ rangeText }}</div>
-            <div class="adRangeBar">
-              <div
-                class="adRangeFill"
-                :style="{ left: rangeOffsetPct + '%', width: rangeWidthPct + '%' }"
-              ></div>
-              <div class="adRangeTicks">
-                <span v-for="t in 14" :key="t"></span>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="verdict === 'win'" class="adVerdict adVerdict--win">YOU WIN</div>
-          <div v-else-if="verdict === 'pair'" class="adVerdict adVerdict--pair">PAIR · ANTE LOST</div>
-          <div v-else-if="verdict === 'rail'" class="adVerdict adVerdict--rail">RAIL HIT</div>
-          <div v-else-if="verdict === 'loss'" class="adVerdict adVerdict--loss">LOST</div>
-
-          <!-- Demo badge — only shown while the idle landing loop runs.
-               Disappears the moment the player antes up. -->
-          <div v-if="demoActive" class="adDemoBadge">DEMO</div>
-        </div>
       </div>
     </div>
 
@@ -1807,6 +1807,25 @@ export default {
 @media (max-width: 380px) {
   .adCardRow { gap: 6px; }
   .adBrand { font-size: 8px; letter-spacing: 2px; }
+}
+
+/* Mobile: collapse the play board's top margin and shave its internal
+   padding so the felt table sits flush at the top of the AD view —
+   keeps it above HOW TO PLAY / Game Id without the wallet/nav strip
+   pushing it off-screen on small viewports. */
+@media (max-width: 480px) {
+  .adTableWrap {
+    margin: 0 0 12px;
+    padding: 18px 12px 24px;
+    border-radius: 14px;
+  }
+  .adTableWrap::before {
+    /* Shrink the overhead bulb halo so it doesn't bleed past the
+       smaller wrap on phones. */
+    top: -12px;
+    width: 160px;
+    height: 160px;
+  }
 }
 
 /* ─── True-odds preview panel ─────────────────────────────────────── */

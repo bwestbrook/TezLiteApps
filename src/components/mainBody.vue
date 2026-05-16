@@ -66,6 +66,16 @@ export default {
         ...all.filter((a) => !a.mainnetReady),
       ]
     },
+    // Single-glyph status for the mobile wallet pill. The full text
+    // (long status strings, full address) stays in the DOM but is
+    // hidden via @media; this short version is shown in its place.
+    walletShort() {
+      const w = this.walletAddress || ''
+      if (w.startsWith('UNSYNC')) return '✓'
+      if (w.includes('CONNECTING')) return '…'
+      if (w.includes('error') || w.includes('failed') || w.includes('cancelled')) return '!'
+      return '🔗'
+    },
   },
   created() {
     this.socket.on('newWallet', (newWallet) => {
@@ -349,7 +359,10 @@ export default {
     <div class="centerBody">
       <div class="gameManagement">
         <div class="rowFlex topBanner">
-          <div class="actionButton topBanner__wallet" @click="toggleWallet">{{ walletAddress }}</div>
+          <div class="actionButton topBanner__wallet" @click="toggleWallet" :title="walletAddress">
+            <span class="topBanner__wallet__full">{{ walletAddress }}</span>
+            <span class="topBanner__wallet__short" aria-hidden="true">{{ walletShort }}</span>
+          </div>
           <div class="actionButton topBanner__cashOut" @click="payNftHolderBC"> Cash Out TXL Earnings </div>
           <div :class="['txlRank', 'topBanner__unclaimed', txlPoolFlash ? 'txlRank--flash' : '']"> Unclaimed: {{ txlPoolValue.toFixed(3) }} ꜩ </div>
           <div
@@ -919,6 +932,12 @@ export default {
   font-family: var(--ad-font-body);
 }
 
+/* Wallet pill: __short is the mobile-only single-glyph fallback. It's
+   hidden by default; the @media (max-width: 480px) block below flips
+   the two spans. Defined here (before the media block) so source order
+   doesn't accidentally re-hide it on mobile. */
+.topBanner__wallet__short { display: none; }
+
 /* ─── Site-wide mobile rules ─────────────────────────────────────────
    Two-tier responsive pass: ≤480px (phone portrait) and 481–768px
    (phone landscape / large phone). The shell is non-scoped, so
@@ -979,29 +998,35 @@ export default {
     margin: 0;
   }
   .topBanner__wallet {
-    /* Calc keeps the wallet button from running into the network
-       badge — pill width ≈ 96px on mobile, with 8px gap. */
-    flex: 1 1 calc(100% - 110px);
-    min-width: 0;
+    /* Icon-only on mobile — the full status string is in the DOM under
+       __full (hidden) for screen readers and the title tooltip; the
+       single-glyph __short is what renders. Square button matches the
+       44px tap target. */
+    flex: 0 0 44px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    font-size: 20px;
+    line-height: 44px;
+    text-align: center;
     font-weight: 700;
-    letter-spacing: 0.05em;
-    /* Connected addresses are 36 chars (tz1…); truncate cleanly so the
-       button never breaks the layout. The full address is still visible
-       in the wallet UI on tap. */
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
-    display: block;
-    text-align: center;
-    line-height: 24px;
   }
+  .topBanner__wallet__full { display: none; }
+  .topBanner__wallet__short { display: inline; }
   .topBanner__network {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     align-self: stretch;
-    /* Match the wallet button's height so the top row reads as a
-       single banded element rather than two mismatched bubbles. */
     min-height: 44px;
     padding: 0 12px;
+    /* Network badge fills the row beside the tiny wallet button. */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
   }
   .topBanner__cashOut,
   .topBanner__unclaimed {
