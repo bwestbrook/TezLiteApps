@@ -58,7 +58,7 @@ testing. Skip any address that still equals the placeholder pattern `KT1XXX…`.
 
 Existing test/oracle scripts you can study for style and dependencies:
 `scripts/test_oracle.py`, `scripts/oracle_worker.py`,
-`scripts/oracle_acey_duecey.py`, `scripts/deploy.py`, `scripts/new_test_wallet.py`.
+`scripts/deploy.py`, `scripts/new_test_wallet.py`.
 The repo uses **pytezos** as the Python Tezos client (look for
 `from pytezos import pytezos` or similar imports).
 
