@@ -423,15 +423,24 @@ def main():
 # Switch networks by swapping rngOracle / txlContract for the mainnet
 # KT1s before compiling under `--network mainnet`. Mainnet values:
 #   rngOracle   = sp.address("KT1VvcCnTPCUc7YaxyMT6opDrSPi2AUHnfvx")
-#                 (ORACLE_CONTRACT_MAINNET in src/constants.js)
-#   txlContract = <mainnet TXL distributor>  ← must be deployed first;
-#                 update TXL_CONTRACT_ADDRESS_MAINNET when it lands.
+#                 (ORACLE_CONTRACT_MAINNET in src/constants.js — not
+#                 yet originated on mainnet; placeholder until then.
+#                 rngOracle is stored-but-unused in v2 so wrong/empty
+#                 values are harmless until a future requestAxes flow.)
+#   txlContract = sp.address("KT1TYgt7SphtEQHLk4GySkXckhSctJww5hdj")
+#                 (TXL_CONTRACT_ADDRESS_MAINNET — v2 distributor, real,
+#                 has default(unit) which is all squares needs.)
 @sp.add_test()
 def test():
     s = sp.test_scenario("squares basic compile", main)
     admin       = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
     rngOracle   = sp.address("KT19V1YiyPtyCbxouhyeM96SekRTVC7Gw6qq")  # shadownet oracle
-    txlContract = sp.address("KT1Ro63rVDUx2x8pMChCLSySso8t6JH47oRQ")  # shadownet TXL distributor
+    # Shadownet TXL v2 distributor (KT1JukrFQ2…). The v1 distributor at
+    # KT1Ro63… is still live but is being deprecated — repointing squares
+    # at v2 keeps the holder fees flowing into the same accumulator the
+    # UI's Cash Out button reads from. Mainnet override at the comment
+    # above the def.
+    txlContract = sp.address("KT1JukrFQ2DtKPDRDBq4j3Z6HkXtXxuF2Evd")
     c = main.Squares(admin, rngOracle, txlContract)
     s += c
 

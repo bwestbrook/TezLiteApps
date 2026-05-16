@@ -22,7 +22,7 @@
                       "prim": "Pair",
                       "args": [
                         { "prim": "None" },
-                        { "prim": "Pair", "args": [ { "string": "KT19V1YiyPtyCbxouhyeM96SekRTVC7Gw6qq" }, { "string": "KT1Ro63rVDUx2x8pMChCLSySso8t6JH47oRQ" } ] }
+                        { "prim": "Pair", "args": [ { "string": "KT19V1YiyPtyCbxouhyeM96SekRTVC7Gw6qq" }, { "string": "KT1JukrFQ2DtKPDRDBq4j3Z6HkXtXxuF2Evd" } ] }
                       ]
                     }
                   ]
