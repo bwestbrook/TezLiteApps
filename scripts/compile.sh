@@ -130,14 +130,32 @@ echo -e "  using: ${C}${OASIS#$HOME/}${RESET}"
   "$VENV/bin/python" "$SRC_ABS"
 )
 
-# Flatten: SmartPy nested the artifacts one level deep. Move them up
-# so deploy.py finds them at $OUT/* (it accepts step_*.tz names).
+# Flatten: SmartPy nests artifacts one level deep, one subdir per
+# @sp.add_test scenario (sanitised scenario name). Move files up so
+# deploy.py finds them at $OUT/* (it accepts step_*.tz names).
+#
+# Convention: the canonical deploy storage comes from the
+# alphabetically-FIRST scenario (e.g. "squares basic compile" → subdir
+# squares_basic_compile/). We iterate subdirs in sorted order and skip
+# any filename that's already been claimed by an earlier subdir — so the
+# first scenario's `c = main.Squares(...)` produces the initial storage
+# deploy.py originates. Without this guard, multi-scenario contracts
+# (squares-v2 has 3) silently bake LAST-scenario artifacts because mv
+# overwrites on conflict, swapping real KT1 constructor args for the
+# sp.test_account placeholder tz1s from the test runtime scenarios.
 shopt -s nullglob
-for d in "$OUT"/*/; do
-  mv "$d"/* "$OUT/"
-  rmdir "$d"
-done
+SUBDIRS=("$OUT"/*/)
 shopt -u nullglob
+for d in "${SUBDIRS[@]}"; do
+  shopt -s nullglob
+  for f in "$d"/*; do
+    fname=$(basename "$f")
+    if [[ -e "$OUT/$fname" ]]; then continue; fi
+    mv "$f" "$OUT/"
+  done
+  shopt -u nullglob
+  rm -rf "$d"
+done
 
 # ─── done ─────────────────────────────────────────────────────────────
 codes=("$OUT"/*_contract.tz)
