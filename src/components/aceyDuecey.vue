@@ -1390,6 +1390,14 @@ export default {
   aspect-ratio: 2.5 / 3.5; /* real playing-card proportions */
   position: relative;
   transform-style: preserve-3d;
+  /* Lift EVERY slot off the felt plane in 3D. With the table tilted
+     26° and preserve-3d composing, a slot at Z=0 sits coplanar with
+     the felt and the slot's ::before halo, which causes z-fighting /
+     repaint glitches as the card lands — that was the blink that hit
+     cards 1 & 2 but not 3 (target was already at translateZ(6px), so
+     it had no plane to fight with). All slots now sit at the same Z
+     above the felt; target keeps an additional lift for visual focus. */
+  transform: translateZ(6px);
 }
 /* The "spot" on the felt — a soft gold halo showing where each card
    will land. Sits OUTSIDE the card footprint (inset: -8px, behind
@@ -1433,11 +1441,9 @@ export default {
 }
 .adCardSlot:has(.adCard--flipped)::after { opacity: 1; }
 .adCardSlot--target {
-  /* The middle card — slightly raised + spotlit so the moment of
-     reveal reads as the moment of reveal. The halo (::before) is now
-     defined uniformly on .adCardSlot, so we only override the slot
-     transform here. */
-  transform: translateY(-4px) translateZ(6px);
+  /* The middle card — extra Y lift on top of the shared Z elevation
+     so the focal slot still reads as raised. */
+  transform: translateY(-4px) translateZ(12px);
 }
 .adSlotLabel {
   position: absolute;

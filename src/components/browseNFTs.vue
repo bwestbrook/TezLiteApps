@@ -915,6 +915,27 @@ export default {
     this.getNftData()
   },
   methods: {
+    // Trait values arrive as "Black (66.18%)" — split the visible value from
+    // the embedded rarity percent (lower percent = rarer trait).
+    traitValue(raw) {
+      if (raw == null) return ''
+      const m = String(raw).match(/^(.*)\s*\(\s*[\d.]+\s*%\s*\)\s*$/)
+      return m ? m[1].trim() : String(raw)
+    },
+    traitRarity(raw) {
+      if (raw == null) return null
+      const m = String(raw).match(/\(\s*([\d.]+)\s*%\s*\)/)
+      return m ? Number(m[1]) : null
+    },
+    rarityTier(raw) {
+      const p = this.traitRarity(raw)
+      if (p == null) return 'rarityNone'
+      if (p <= 1)  return 'rarityLegendary'
+      if (p <= 5)  return 'rarityEpic'
+      if (p <= 15) return 'rarityRare'
+      if (p <= 35) return 'rarityUncommon'
+      return 'rarityCommon'
+    },
     // CSS animation handles the spin — we only flip `pauseAnimation`, which
     // toggles `animation-play-state` on the rotating card via :class binding.
     async toggleAnimation() {
@@ -1090,10 +1111,26 @@ export default {
             <div class="actionButton browserPanelBtn" @click="nextTxl()"> Next &rarr; </div>
           </div>
           <div class="browserPanelDivider"></div>
-          <div class="browserPanelChips">
-            <div class="txlRank"> Rank: {{ txlRanking }} </div>
-            <div class="txlRank"> ID: {{ txlId }} </div>
-            <div class="txlRank" v-for="(key, value) in txlData" :key="key" :value="value"> {{ value }}: {{ key }} </div>
+          <div class="attrGrid">
+            <div class="attrCell attrCell--meta">
+              <span class="attrLabel">Rank:</span>
+              <span class="attrValue">{{ txlRanking }}</span>
+            </div>
+            <div class="attrCell attrCell--meta">
+              <span class="attrLabel">ID:</span>
+              <span class="attrValue">{{ txlId }}</span>
+            </div>
+            <div
+              v-for="(raw, key) in txlData"
+              :key="key"
+              :class="['attrCell', rarityTier(raw)]"
+            >
+              <span class="attrLabel">{{ key }}:</span>
+              <span class="attrValue">{{ traitValue(raw) }}</span>
+              <span class="attrRarity" v-if="traitRarity(raw) != null">
+                {{ traitRarity(raw).toFixed(2) }}%
+              </span>
+            </div>
           </div>
         </div>
         <div class="rowFlex">
@@ -1186,15 +1223,85 @@ export default {
   background: var(--ad-border-faint);
   margin: 2px 0;
 }
-.browserPanelChips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+/* Trait grid — auto-flowing columns of "Label: value  XX%" inside a single
+   panel. Each cell is one line of text with a colored rarity pill on the
+   right; the grid tracks reflow to 1/2/3 columns based on width. */
+.attrGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  column-gap: 18px;
+  row-gap: 2px;
   width: 100%;
+  padding: 8px 12px;
+  background: var(--ad-bg-elev-1);
+  border: 1px solid var(--ad-border-faint);
+  border-radius: var(--ad-r-md);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ad-text-1);
+}
+.attrCell {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.attrCell--meta { font-weight: 600; }
+.attrLabel {
+  color: var(--ad-text-2, var(--ad-text-1));
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.attrValue {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attrRarity {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+/* Rarity tiers — lower percent = rarer = warmer/brighter accent. */
+.rarityLegendary .attrRarity {
+  color: #1a1208;
+  background: linear-gradient(135deg, #ffd76a, #f4a300);
+  box-shadow: 0 0 0 1px rgba(255, 200, 80, 0.5), 0 0 10px rgba(255, 175, 40, 0.35);
+}
+.rarityEpic .attrRarity {
+  color: #f5e8ff;
+  background: rgba(168, 85, 247, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.55);
+}
+.rarityRare .attrRarity {
+  color: #dceaff;
+  background: rgba(59, 130, 246, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.55);
+}
+.rarityUncommon .attrRarity {
+  color: #d8f5e1;
+  background: rgba(34, 197, 94, 0.20);
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.45);
+}
+.rarityCommon .attrRarity {
+  color: var(--ad-text-2, #b8b8b8);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
 }
 @media (max-width: 480px) {
   .browserPanel { padding: 8px; gap: 6px; }
   .browserPanelLabel { min-width: 44px; font-size: 11px; padding: 0 6px; }
+  .attrGrid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    column-gap: 12px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .attrRarity { font-size: 10.5px; padding: 1px 6px; }
 }
 /* Full-width band around the spinning card — anchors the owner badge to the
    right edge of the content, not the narrow centered card. */

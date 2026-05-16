@@ -200,48 +200,66 @@ export default {
    glows, mixed type. These vars are consumed by .actionButton, .gameInfo,
    etc. in mainBody.vue, and by every component's scoped styles when they
    reference var(--ad-...). Tweak them here to retheme globally. */
+/* ─── Theme: Imperial Bordeaux ──────────────────────────────────────
+   Wine-dark base, burnished brass primary, jade-teal secondary. Warm
+   ivory text instead of cool white. Replaces the prior navy / gold /
+   violet palette.
+
+   NAMING NOTE: token names (`--ad-gold-*`, `--ad-violet-*`) are
+   preserved as semantic slots — gold = primary accent, violet =
+   secondary accent — so the components don't need to be re-themed
+   one by one. The *values* are what changed. In this palette:
+       --ad-gold-*    → brass (cream-yellow → dark bronze)
+       --ad-violet-*  → jade / teal (mint highlight → deep teal)
+       --ad-red-*     → wine-red status
+       --ad-green-*   → forest (kept — table felt still reads correctly) */
 :root {
-  /* Surface */
-  --ad-bg-deep: #04030f;
-  --ad-bg-base: #0a0820;
-  --ad-bg-elev-1: rgba(255, 255, 255, 0.04);
-  --ad-bg-elev-2: rgba(255, 255, 255, 0.07);
-  --ad-bg-elev-3: rgba(255, 255, 255, 0.10);
+  /* Surface — wine-dark, not navy */
+  --ad-bg-deep: #0d0408;
+  --ad-bg-base: #1a0a0e;
+  --ad-bg-elev-1: rgba(245, 236, 225, 0.04);
+  --ad-bg-elev-2: rgba(245, 236, 225, 0.07);
+  --ad-bg-elev-3: rgba(245, 236, 225, 0.11);
 
-  /* Borders */
-  --ad-border-faint: rgba(255, 255, 255, 0.06);
-  --ad-border-soft:  rgba(255, 255, 255, 0.10);
-  --ad-border-mid:   rgba(255, 255, 255, 0.18);
+  /* Borders — warm-tinted instead of neutral white */
+  --ad-border-faint: rgba(245, 236, 225, 0.06);
+  --ad-border-soft:  rgba(245, 236, 225, 0.10);
+  --ad-border-mid:   rgba(245, 236, 225, 0.18);
 
-  /* Text */
-  --ad-text-1: #f3f1ee;
-  --ad-text-2: rgba(243, 241, 238, 0.72);
-  --ad-text-3: rgba(243, 241, 238, 0.45);
+  /* Text — warm ivory rather than cool white */
+  --ad-text-1: #f5ece1;
+  --ad-text-2: rgba(245, 236, 225, 0.74);
+  --ad-text-3: rgba(245, 236, 225, 0.46);
 
-  /* Accents */
-  --ad-gold-1: #ffe089;
-  --ad-gold-2: #f5c451;
-  --ad-gold-3: #d4a24e;
-  --ad-violet-1: #a78bfa;
-  --ad-violet-2: #7c3aed;
-  --ad-violet-3: #4c1d95;
-  --ad-red-1: #ff8a87;
-  --ad-red-2: #c4524f;
-  --ad-green-1: #76c48a;
+  /* Accents — brass (primary, mapped to the gold slot) */
+  --ad-gold-1: #f4d29a;   /* polished brass highlight */
+  --ad-gold-2: #c89a4e;   /* main brass */
+  --ad-gold-3: #8a6326;   /* dark brass */
+
+  /* Jade / teal (secondary, mapped to the violet slot — complementary
+     to brass, classic high-stakes table feel) */
+  --ad-violet-1: #7dd3c8;
+  --ad-violet-2: #14a094;
+  --ad-violet-3: #084f48;
+
+  /* Status */
+  --ad-red-1: #ff9d8a;
+  --ad-red-2: #b94838;
+  --ad-green-1: #88c89a;
   --ad-green-2: #1f5c3a;
 
   /* Gradients */
-  --ad-grad-gold:   linear-gradient(135deg, #ffe089 0%, #f5c451 50%, #d4a24e 100%);
-  --ad-grad-violet: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
-  --ad-grad-fire:   linear-gradient(135deg, #ffe089 0%, #f5c451 35%, #c4524f 100%);
-  --ad-grad-bg:     radial-gradient(ellipse at 50% -10%, rgba(124, 58, 237, 0.18) 0%, transparent 60%),
-                    radial-gradient(ellipse at 100% 100%, rgba(245, 196, 81, 0.10) 0%, transparent 50%),
-                    linear-gradient(180deg, #0a0820 0%, #04030f 100%);
+  --ad-grad-gold:   linear-gradient(135deg, #f4d29a 0%, #c89a4e 50%, #8a6326 100%);
+  --ad-grad-violet: linear-gradient(135deg, #7dd3c8 0%, #14a094 100%);
+  --ad-grad-fire:   linear-gradient(135deg, #f4d29a 0%, #c89a4e 35%, #b94838 100%);
+  --ad-grad-bg:     radial-gradient(ellipse at 50% -10%, rgba(20, 160, 148, 0.20) 0%, transparent 60%),
+                    radial-gradient(ellipse at 100% 100%, rgba(200, 154, 78, 0.12) 0%, transparent 50%),
+                    linear-gradient(180deg, #1a0a0e 0%, #0d0408 100%);
 
-  /* Shadows / glows */
-  --ad-shadow-card:  0 10px 30px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.4);
-  --ad-glow-gold:    0 0 0 1px rgba(245, 196, 81, 0.5), 0 6px 20px rgba(245, 196, 81, 0.18);
-  --ad-glow-violet:  0 0 0 1px rgba(167, 139, 250, 0.55), 0 6px 22px rgba(124, 58, 237, 0.25);
+  /* Shadows / glows — re-tuned for brass + teal */
+  --ad-shadow-card:  0 10px 30px rgba(0, 0, 0, 0.60), 0 1px 2px rgba(0, 0, 0, 0.45);
+  --ad-glow-gold:    0 0 0 1px rgba(200, 154, 78, 0.55), 0 6px 20px rgba(200, 154, 78, 0.22);
+  --ad-glow-violet:  0 0 0 1px rgba(125, 211, 200, 0.55), 0 6px 22px rgba(20, 160, 148, 0.26);
 
   /* Radius */
   --ad-r-sm: 6px;

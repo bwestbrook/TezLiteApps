@@ -222,13 +222,15 @@ def main():
             empty_bytes = sp.bytes('0x')
             self.data.commitLog[self.data.currentCommitId] = sp.record(
                 hash=params.hash,
-                postedAtBlock=sp.as_nat(sp.level),
+                postedAtBlock=sp.level,
                 revealedPreimage=empty_bytes,
             )
             sp.emit(
-                [self.data.currentCommitId,
-                 params.hash,
-                 sp.as_nat(sp.level)],
+                sp.record(
+                    commitId=self.data.currentCommitId,
+                    hash=params.hash,
+                    postedAtBlock=sp.level,
+                ),
                 tag='commitPosted',
             )
             self.data.currentCommitId += 1
@@ -244,14 +246,14 @@ def main():
             sp.cast(params.commitId, sp.nat)
             sp.cast(params.preimage, sp.bytes)
             assert sp.sender == self.data.oracle, "not oracle"
-            assert self.data.commitLog.contains(params.commitId), "no such commit"
+            assert params.commitId in self.data.commitLog, "no such commit"
             entry = self.data.commitLog[params.commitId]
             empty_bytes = sp.bytes('0x')
             assert entry.revealedPreimage == empty_bytes, "already revealed"
             assert sp.sha256(params.preimage) == entry.hash, "preimage mismatch"
             self.data.commitLog[params.commitId].revealedPreimage = params.preimage
             sp.emit(
-                [params.commitId, params.preimage],
+                sp.record(commitId=params.commitId, preimage=params.preimage),
                 tag='commitRevealed',
             )
 
@@ -290,9 +292,9 @@ def main():
             assert params.nRandoms >= 1, "nRandoms must be >= 1"
             assert params.nRandoms <= self.data.maxRandomsPerRequest, "nRandoms too large"
             assert params.maxValue >= 1, "maxValue must be >= 1"
-            assert self.data.commitLog.contains(params.commitId), "unknown commit"
+            assert params.commitId in self.data.commitLog, "unknown commit"
             commit = self.data.commitLog[params.commitId]
-            level_nat = sp.as_nat(sp.level)
+            level_nat = sp.level
             # Reject commits posted too recently to have been seen by the
             # player when they signed (defends against an oracle posting a
             # commit AFTER seeing a mempool request).
@@ -338,7 +340,7 @@ def main():
             inputs alone, so any third party can re-derive and verify.
             Checklist §1.4, §3.3, §4.1, §6.1, §6.2, §7.2, §8.3.'''
             sp.cast(params.requestId, sp.nat)
-            assert self.data.requests.contains(params.requestId), "no such request"
+            assert params.requestId in self.data.requests, "no such request"
             r = self.data.requests[params.requestId]
             assert r.requestStatus == 0, "already settled"
 
@@ -349,29 +351,26 @@ def main():
             # finalSeed = sha256(preimage ++ userNonce ++ pack(requestId))
             seed = sp.sha256(commit.revealedPreimage + r.userNonce + sp.pack(params.requestId))
 
-            # Derive nRandoms values. value[0] = bytes_to_nat(seed) mod (maxValue+1).
-            # value[i>=1] = bytes_to_nat(sha256(seed ++ pack(i))) mod (maxValue+1).
-            # Loop is hard-bounded at compile time to maxRandomsPerRequest (32)
-            # with a runtime guard `if sp.nat(k) < r.nRandoms`. Inner byte
-            # loop unrolls to 32 iterations (one per SHA-256 output byte).
+            # Derive nRandoms values, uniformly:
+            #   value[k] = bytes_to_nat(sha256(seed ++ pack(k))) mod (maxValue+1)
+            # for k in [0, nRandoms). Uniform per-index hashing (instead of
+            # the brief's "value[0] uses raw seed" variant) keeps the loop
+            # uniform under SmartPy's compile-time unrolling — see V3 doc
+            # for the derivation choice + rationale. Loop is hard-bounded
+            # at compile time to maxRandomsPerRequest (32) with a runtime
+            # guard `if k < r.nRandoms`. Inner byte loop unrolls 32
+            # iterations (one per SHA-256 output byte).
             divisor = r.maxValue + 1
             vals_rev = sp.cast([], sp.list[sp.nat])
-            # k is a Python loop variable (compile-time int). Comparisons
-            # against r.nRandoms auto-promote it to sp.nat; we wrap it in
-            # sp.nat() only where we need a literal nat constructor
-            # (SmartPy rejects sp.nat(<variable>); see compile attempts).
             for k in range(32):
                 if k < r.nRandoms:
-                    if k == 0:
-                        chunk = seed
-                    else:
-                        # Per-iteration sp.pack literal — k is a Python int
-                        # so the packed bytes are static at compile time.
-                        chunk = sp.sha256(seed + sp.pack(k))
+                    # k is a Python loop var (compile-time int) — sp.pack(k)
+                    # bakes a constant per unrolled iteration.
+                    chunk = sp.sha256(seed + sp.pack(k))
                     # Big-endian 32-byte chunk → nat via byte lookup.
                     acc = sp.nat(0)
                     for j in range(32):
-                        byte_bytes = sp.slice(chunk, j, 1).unwrap_some(error="slice")
+                        byte_bytes = sp.slice(j, 1, chunk).unwrap_some(error="slice")
                         acc = acc * 256 + self.data.byteLookup[byte_bytes]
                     vals_rev = sp.cons(sp.mod(acc, divisor), vals_rev)
             # cons builds reverse-order; flip once to get ascending [0..n-1].
@@ -414,7 +413,7 @@ def main():
             sp.transfer(callback_record, sp.mutez(0), callback_contract)
 
             sp.emit(
-                [params.requestId, values],
+                sp.record(requestId=params.requestId, randomValues=values),
                 tag='randomFulfilled',
             )
 

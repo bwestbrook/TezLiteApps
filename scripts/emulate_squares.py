@@ -437,50 +437,63 @@ def buy_out(primary, secondary, contract_primary, contract_secondary,
         warn("  --dry-run set, skipping buys")
         return
 
+    def looks_like_counter_race(e: Exception) -> bool:
+        # RpcError.__str__ stringifies the args tuple — the msg field
+        # ends up inside the tuple repr, but only via repr(). Be liberal
+        # and check both str(e) and repr(e).
+        blob = str(e) + " " + repr(e)
+        return any(
+            tag in blob
+            for tag in ("conflicting operation", "counter_in_the_past",
+                        "counter_in_the_future", "previously_revealed_key",
+                        "Operation is too long")
+        )
+
+    def send_with_retry(builder, label: str):
+        for attempt in range(5):
+            try:
+                return builder().send(min_confirmations=1)
+            except Exception as e:  # noqa: BLE001
+                if looks_like_counter_race(e) and attempt < 4:
+                    wait = 4 * (attempt + 1)
+                    warn(f"  {label} retry in {wait}s ({str(e)[:100]}…)")
+                    time.sleep(wait)
+                    continue
+                raise
+
     def batch_buy(client, contract, who: str, idxs: list[int]):
         # Tezos requires an account to reveal its public key on-chain
         # before signed ops can run. pytezos auto-appends a Reveal to a
         # *single* operation, but its bulk() builder doesn't — so a
         # freshly funded wallet hits 'contract.unrevealed_key' on its
         # first batch. Always send the first square as a single op to
-        # piggyback the reveal, then bulk the remainder.
+        # piggyback the reveal, then bulk the remainder. Sleep a few
+        # seconds between phases so pytezos's client-side counter cache
+        # catches up with the just-injected op.
         if not idxs:
             return
         head = idxs[0]
-        op = contract.buySquare(gameId=gid, squareIdx=head).with_amount(amount).send(
-            min_confirmations=1
+        op = send_with_retry(
+            lambda: contract.buySquare(gameId=gid, squareIdx=head).with_amount(amount),
+            f"{who} reveal+buy idx {head}",
         )
         info(f"  {who} reveal+buy idx {head:>2}: {op.hash()[:14]}…")
+        time.sleep(8)  # let the head op settle so counter cache refreshes
 
         rest = idxs[1:]
         # Chunk into 20-op batches so we don't trip Tezos's hard.gas_limit.
-        # 100 mutez × 20 ops is still <0.005 ꜩ per batch. Between batches
-        # we sleep a beat — pytezos caches the wallet's nonce/counter on
-        # the client, and a fresh bulk built right after a single op can
-        # otherwise reuse the just-spent counter and trip a mempool
-        # conflict ("conflicting operation, total fee of at least …").
+        # 100 mutez × 20 ops is still <0.005 ꜩ per batch.
         for chunk_start in range(0, len(rest), 20):
             chunk = rest[chunk_start:chunk_start + 20]
-            for attempt in range(3):
-                try:
-                    bulk = client.bulk(*[
-                        contract.buySquare(gameId=gid, squareIdx=i).with_amount(amount)
-                        for i in chunk
-                    ])
-                    op = bulk.send(min_confirmations=1)
-                    info(f"  {who} batch [{chunk[0]:>2}..{chunk[-1]:>2}]: {op.hash()[:14]}…")
-                    break
-                except Exception as e:  # noqa: BLE001
-                    msg = str(e)
-                    if "conflicting operation" in msg or "counter_in_the_past" in msg or "counter_in_the_future" in msg:
-                        wait = 6 * (attempt + 1)
-                        warn(f"  {who} batch retry in {wait}s ({msg[:80]}…)")
-                        time.sleep(wait)
-                        continue
-                    raise
-            else:
-                fail(f"  {who} batch [{chunk[0]:>2}..{chunk[-1]:>2}] gave up after 3 retries")
-                raise SystemExit(2)
+            op = send_with_retry(
+                lambda: client.bulk(*[
+                    contract.buySquare(gameId=gid, squareIdx=i).with_amount(amount)
+                    for i in chunk
+                ]),
+                f"{who} batch [{chunk[0]:>2}..{chunk[-1]:>2}]",
+            )
+            info(f"  {who} batch [{chunk[0]:>2}..{chunk[-1]:>2}]: {op.hash()[:14]}…")
+            time.sleep(2)
 
     batch_buy(primary, contract_primary, "primary  ", primary_idxs)
     batch_buy(secondary, contract_secondary, "secondary", secondary_idxs)
@@ -615,10 +628,18 @@ def main():
     info(f"primary   = {primary_addr}  ({balance_tez(primary):.3f} ꜩ)")
     info(f"secondary = {secondary_addr}  ({balance_tez(secondary):.3f} ꜩ)")
 
-    # Per-op cost ≈ ticket+fee + ~1000 mutez of gas. Reserve enough
-    # for the secondary's share + slack.
+    # Per-op cost in practice ≈ 5_000–10_000 mutez of fee+burn (gas
+    # dominates the ticket+fee outlay). Reserve enough for ~48 buys
+    # plus a reveal and some slack so the secondary doesn't underflow
+    # mid-batch ('subtraction_underflow' on the bulk).
     per_op_mutez = args.ticket_price_mutez + args.holder_fee_mutez
-    secondary_need_tez = max(0.2, (per_op_mutez * (SELLABLE_CELLS - PER_PLAYER_CAP)) / 1_000_000 + 0.10)
+    gas_budget_per_op_tez = 0.012        # 12_000 mutez upper bound per op
+    secondary_buys = SELLABLE_CELLS - PER_PLAYER_CAP
+    secondary_need_tez = (
+        (per_op_mutez * secondary_buys) / 1_000_000
+        + gas_budget_per_op_tez * secondary_buys
+        + 0.10                              # reveal + slack
+    )
     ensure_funded(primary, secondary, secondary_addr, secondary_need_tez, args.dry_run)
 
     # ─── 3. contract orchestration ──────────────────────────────────

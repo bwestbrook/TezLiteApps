@@ -49,10 +49,9 @@ const RIM_INSET = 0.22
 // tree on a turntable, never tumbling or rolling.
 const FIXED_PITCH = 0.52
 const DEFAULT_YAW = -0.42
-const DRAG_SENSITIVITY = 0.011   // radians of yaw per pixel dragged
-// Constant turntable spin: 360° per minute (6°/s). Drag pauses the
-// spin for as long as the pointer is down, then it resumes from
-// wherever the user left it.
+// Constant turntable spin: 360° per minute (6°/s). The board has no
+// user-rotate / drag controls — this is the single source of camera
+// motion.
 const SPIN_RAD_PER_S = (2 * Math.PI) / 60
 
 function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3) }
@@ -114,7 +113,6 @@ export default {
       spinAnchorYaw: DEFAULT_YAW,
       spinT0: 0,
       spinFrame: 0,
-      drag: null,   // { startX, startYaw } while dragging
     }
   },
   computed: {
@@ -388,51 +386,32 @@ export default {
       const z2 = wy * spit + z1 * cpit
       return { x: x1, y: y2, depth: z2 }
     },
-    // ── Drag-to-rotate (turntable: yaw only) ───────────────────────
-    // Pointer events cover mouse + touch. We capture the pointer so the
-    // drag keeps tracking even if it leaves the SVG. Only horizontal
-    // movement matters — it spins the board about its vertical axis.
-    // Drag pauses the constant spin; release re-anchors and resumes.
-    onBoardPointerDown(ev) {
-      this.stopSpin()
-      this.drag = { startX: ev.clientX, startYaw: this.yaw }
-      try { ev.target.setPointerCapture(ev.pointerId) } catch (_e) { /* noop */ }
-    },
-    onBoardPointerMove(ev) {
-      if (!this.drag) return
-      const dx = ev.clientX - this.drag.startX
-      // Turntable spin: horizontal drag → yaw. Pitch never changes, so
-      // the board rotates like a Christmas tree on a stand.
-      this.yaw = this.drag.startYaw + dx * DRAG_SENSITIVITY
-    },
-    onBoardPointerUp(ev) {
-      this.drag = null
-      try { ev.target.releasePointerCapture(ev.pointerId) } catch (_e) { /* noop */ }
-      // Resume the constant spin from wherever the user dragged to.
-      this.startSpin()
-    },
-    resetCamera() {
-      this.yaw = DEFAULT_YAW
-      // Re-anchor so the spin continues smoothly from the reset angle.
-      this.startSpin()
-    },
     // Drive the constant turntable rotation. yaw advances at
-    // SPIN_RAD_PER_S until stopSpin() — drag uses that pause window
-    // to take exclusive control of yaw.
+    // SPIN_RAD_PER_S; the loop runs from mount to beforeUnmount.
+    // User interaction (drag, reset view) has been removed — the
+    // board is non-interactive on purpose so the rotation is the
+    // single source of camera motion.
     startSpin() {
       if (this.spinFrame) cancelAnimationFrame(this.spinFrame)
       this.spinAnchorYaw = this.yaw
       this.spinT0 = performance.now()
+      // Throttle yaw updates to ~20fps (50ms). At 6°/s that's a 0.3°
+      // step per update — below the visible-jitter threshold for a
+      // slow rotation, but ~3× less reactivity churn than firing every
+      // rAF frame. Critical for 16-row boards where re-projecting
+      // ~500 pegs + ~300 bins per yaw change otherwise overruns the
+      // 16ms frame budget and shows as stutter.
+      let lastUpdate = 0
       const tick = () => {
-        const elapsed = (performance.now() - this.spinT0) / 1000
-        this.yaw = this.spinAnchorYaw + elapsed * SPIN_RAD_PER_S
+        const now = performance.now()
+        if (now - lastUpdate >= 50) {
+          const elapsed = (now - this.spinT0) / 1000
+          this.yaw = this.spinAnchorYaw + elapsed * SPIN_RAD_PER_S
+          lastUpdate = now
+        }
         this.spinFrame = requestAnimationFrame(tick)
       }
       this.spinFrame = requestAnimationFrame(tick)
-    },
-    stopSpin() {
-      if (this.spinFrame) cancelAnimationFrame(this.spinFrame)
-      this.spinFrame = 0
     },
     // Full-rainbow colour per ring: red at the centre ring, sweeping
     // through orange/yellow/green/blue to magenta at the corners. Every
@@ -735,11 +714,7 @@ export default {
     <div class="boardFrame">
       <svg
         :viewBox="viewBox"
-        :class="['board', drag ? 'board--dragging' : '']"
-        @pointerdown="onBoardPointerDown"
-        @pointermove="onBoardPointerMove"
-        @pointerup="onBoardPointerUp"
-        @pointercancel="onBoardPointerUp"
+        class="board"
       >
         <defs>
           <!-- Pegs: a soft neutral gray, lightly domed (not gold). -->
@@ -830,10 +805,6 @@ export default {
           class="peg"
         />
       </svg>
-      <div class="boardHint">
-        <span>drag the board to rotate</span>
-        <button type="button" class="boardReset" @click="resetCamera">reset view</button>
-      </div>
     </div>
 
     <!-- Ring → multiplier legend. The board cells are unlabeled; this
@@ -1052,10 +1023,11 @@ export default {
 }
 .board {
   width: 100%; display: block;
-  cursor: grab;
-  touch-action: none;   /* let pointer-drag rotate instead of scrolling */
+  cursor: default;
+  /* Block pointer-events so a stray click can't capture or interrupt
+     the constant turntable rotation. */
+  pointer-events: none;
 }
-.board--dragging { cursor: grabbing; }
 /* Neutral soft shadow — pegs are gray now, not glowing gold. */
 .peg { filter: drop-shadow(0 0.5px 1px rgba(0, 0, 0, 0.45)); }
 
@@ -1145,35 +1117,6 @@ export default {
     box-shadow: 0 0 9px 2px rgba(245, 196, 81, 0.6);
     transform: scale(1.06);
   }
-}
-
-/* Drag-to-rotate hint + reset-view control under the board. */
-.boardHint {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  margin-top: 6px;
-  font-family: var(--ad-font-mono);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ad-text-3);
-}
-.boardReset {
-  background: var(--ad-bg-elev-2);
-  border: 1px solid var(--ad-border-soft);
-  border-radius: var(--ad-r-sm);
-  color: var(--ad-text-2);
-  font-family: var(--ad-font-mono);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 3px 9px;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-.boardReset:hover {
-  background: var(--ad-bg-elev-3);
-  color: var(--ad-gold-1);
-  border-color: var(--ad-gold-3);
 }
 
 .statusPanel {
