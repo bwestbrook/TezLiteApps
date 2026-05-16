@@ -7,9 +7,12 @@ import smartpy as sp
 #   0. (continuous)  oracle posts hash(preimage) commits on a rolling
 #      schedule via postCommit(). Each commit becomes binding for new
 #      requests after `minCommitAge` blocks.
-#   1. requester contract calls requestRandom(callback, callbackEntrypoint,
-#      nRandoms, maxValue, userNonce, commitId, callbackContext) and
-#      attaches at least `fee` ꜩ. The request binds to `commitId` which
+#   1. requester contract calls requestRandom(callback, nRandoms, maxValue,
+#      userNonce, commitId, callbackContext) and attaches at least `fee` ꜩ.
+#      The callback contract MUST expose an entrypoint named
+#      `onRandomFulfilled` — the name is fixed at the contract level
+#      because SmartPy's `sp.contract(..., entrypoint=…)` requires a
+#      compile-time string literal. The request binds to `commitId` which
 #      must (a) exist, (b) be at least minCommitAge blocks old, and
 #      (c) NOT yet be revealed. userNonce is 32 bytes of caller-supplied
 #      entropy. callbackContext is opaque bytes echoed back in the callback
@@ -111,8 +114,7 @@ def main():
             #   2 = cancelled (admin reclaim — future use)
             self.data.requests = sp.cast({}, sp.map[sp.nat, sp.record(
                 requester=sp.address,
-                callback=sp.address,
-                callbackEntrypoint=sp.string,
+                callback=sp.address,          # must expose `onRandomFulfilled`
                 nRandoms=sp.nat,
                 maxValue=sp.nat,
                 feePaid=sp.mutez,
@@ -131,12 +133,75 @@ def main():
             # in fulfillRandom to interpret SHA-256 output bytes as a
             # big-endian nat for `mod (maxValue+1)`. 256 entries × ~32 B
             # ≈ 8 kB of one-time storage; the alternative (no primitive
-            # for bytes→nat in current SmartPy) would be an unrolled
-            # nibble-shift inline at every call site. See V3 doc.
-            self.data.byteLookup = sp.cast(
-                {sp.bytes('0x%02x' % i): sp.nat(i) for i in range(256)},
-                sp.map[sp.bytes, sp.nat],
-            )
+            # for bytes→nat in current SmartPy and no dict comprehensions
+            # accepted inside @sp.module) would be an unrolled nibble
+            # decoder inline at every call site. See V3 doc.
+            self.data.byteLookup = {
+                sp.bytes('0x00'): sp.nat(  0), sp.bytes('0x01'): sp.nat(  1), sp.bytes('0x02'): sp.nat(  2), sp.bytes('0x03'): sp.nat(  3),
+                sp.bytes('0x04'): sp.nat(  4), sp.bytes('0x05'): sp.nat(  5), sp.bytes('0x06'): sp.nat(  6), sp.bytes('0x07'): sp.nat(  7),
+                sp.bytes('0x08'): sp.nat(  8), sp.bytes('0x09'): sp.nat(  9), sp.bytes('0x0a'): sp.nat( 10), sp.bytes('0x0b'): sp.nat( 11),
+                sp.bytes('0x0c'): sp.nat( 12), sp.bytes('0x0d'): sp.nat( 13), sp.bytes('0x0e'): sp.nat( 14), sp.bytes('0x0f'): sp.nat( 15),
+                sp.bytes('0x10'): sp.nat( 16), sp.bytes('0x11'): sp.nat( 17), sp.bytes('0x12'): sp.nat( 18), sp.bytes('0x13'): sp.nat( 19),
+                sp.bytes('0x14'): sp.nat( 20), sp.bytes('0x15'): sp.nat( 21), sp.bytes('0x16'): sp.nat( 22), sp.bytes('0x17'): sp.nat( 23),
+                sp.bytes('0x18'): sp.nat( 24), sp.bytes('0x19'): sp.nat( 25), sp.bytes('0x1a'): sp.nat( 26), sp.bytes('0x1b'): sp.nat( 27),
+                sp.bytes('0x1c'): sp.nat( 28), sp.bytes('0x1d'): sp.nat( 29), sp.bytes('0x1e'): sp.nat( 30), sp.bytes('0x1f'): sp.nat( 31),
+                sp.bytes('0x20'): sp.nat( 32), sp.bytes('0x21'): sp.nat( 33), sp.bytes('0x22'): sp.nat( 34), sp.bytes('0x23'): sp.nat( 35),
+                sp.bytes('0x24'): sp.nat( 36), sp.bytes('0x25'): sp.nat( 37), sp.bytes('0x26'): sp.nat( 38), sp.bytes('0x27'): sp.nat( 39),
+                sp.bytes('0x28'): sp.nat( 40), sp.bytes('0x29'): sp.nat( 41), sp.bytes('0x2a'): sp.nat( 42), sp.bytes('0x2b'): sp.nat( 43),
+                sp.bytes('0x2c'): sp.nat( 44), sp.bytes('0x2d'): sp.nat( 45), sp.bytes('0x2e'): sp.nat( 46), sp.bytes('0x2f'): sp.nat( 47),
+                sp.bytes('0x30'): sp.nat( 48), sp.bytes('0x31'): sp.nat( 49), sp.bytes('0x32'): sp.nat( 50), sp.bytes('0x33'): sp.nat( 51),
+                sp.bytes('0x34'): sp.nat( 52), sp.bytes('0x35'): sp.nat( 53), sp.bytes('0x36'): sp.nat( 54), sp.bytes('0x37'): sp.nat( 55),
+                sp.bytes('0x38'): sp.nat( 56), sp.bytes('0x39'): sp.nat( 57), sp.bytes('0x3a'): sp.nat( 58), sp.bytes('0x3b'): sp.nat( 59),
+                sp.bytes('0x3c'): sp.nat( 60), sp.bytes('0x3d'): sp.nat( 61), sp.bytes('0x3e'): sp.nat( 62), sp.bytes('0x3f'): sp.nat( 63),
+                sp.bytes('0x40'): sp.nat( 64), sp.bytes('0x41'): sp.nat( 65), sp.bytes('0x42'): sp.nat( 66), sp.bytes('0x43'): sp.nat( 67),
+                sp.bytes('0x44'): sp.nat( 68), sp.bytes('0x45'): sp.nat( 69), sp.bytes('0x46'): sp.nat( 70), sp.bytes('0x47'): sp.nat( 71),
+                sp.bytes('0x48'): sp.nat( 72), sp.bytes('0x49'): sp.nat( 73), sp.bytes('0x4a'): sp.nat( 74), sp.bytes('0x4b'): sp.nat( 75),
+                sp.bytes('0x4c'): sp.nat( 76), sp.bytes('0x4d'): sp.nat( 77), sp.bytes('0x4e'): sp.nat( 78), sp.bytes('0x4f'): sp.nat( 79),
+                sp.bytes('0x50'): sp.nat( 80), sp.bytes('0x51'): sp.nat( 81), sp.bytes('0x52'): sp.nat( 82), sp.bytes('0x53'): sp.nat( 83),
+                sp.bytes('0x54'): sp.nat( 84), sp.bytes('0x55'): sp.nat( 85), sp.bytes('0x56'): sp.nat( 86), sp.bytes('0x57'): sp.nat( 87),
+                sp.bytes('0x58'): sp.nat( 88), sp.bytes('0x59'): sp.nat( 89), sp.bytes('0x5a'): sp.nat( 90), sp.bytes('0x5b'): sp.nat( 91),
+                sp.bytes('0x5c'): sp.nat( 92), sp.bytes('0x5d'): sp.nat( 93), sp.bytes('0x5e'): sp.nat( 94), sp.bytes('0x5f'): sp.nat( 95),
+                sp.bytes('0x60'): sp.nat( 96), sp.bytes('0x61'): sp.nat( 97), sp.bytes('0x62'): sp.nat( 98), sp.bytes('0x63'): sp.nat( 99),
+                sp.bytes('0x64'): sp.nat(100), sp.bytes('0x65'): sp.nat(101), sp.bytes('0x66'): sp.nat(102), sp.bytes('0x67'): sp.nat(103),
+                sp.bytes('0x68'): sp.nat(104), sp.bytes('0x69'): sp.nat(105), sp.bytes('0x6a'): sp.nat(106), sp.bytes('0x6b'): sp.nat(107),
+                sp.bytes('0x6c'): sp.nat(108), sp.bytes('0x6d'): sp.nat(109), sp.bytes('0x6e'): sp.nat(110), sp.bytes('0x6f'): sp.nat(111),
+                sp.bytes('0x70'): sp.nat(112), sp.bytes('0x71'): sp.nat(113), sp.bytes('0x72'): sp.nat(114), sp.bytes('0x73'): sp.nat(115),
+                sp.bytes('0x74'): sp.nat(116), sp.bytes('0x75'): sp.nat(117), sp.bytes('0x76'): sp.nat(118), sp.bytes('0x77'): sp.nat(119),
+                sp.bytes('0x78'): sp.nat(120), sp.bytes('0x79'): sp.nat(121), sp.bytes('0x7a'): sp.nat(122), sp.bytes('0x7b'): sp.nat(123),
+                sp.bytes('0x7c'): sp.nat(124), sp.bytes('0x7d'): sp.nat(125), sp.bytes('0x7e'): sp.nat(126), sp.bytes('0x7f'): sp.nat(127),
+                sp.bytes('0x80'): sp.nat(128), sp.bytes('0x81'): sp.nat(129), sp.bytes('0x82'): sp.nat(130), sp.bytes('0x83'): sp.nat(131),
+                sp.bytes('0x84'): sp.nat(132), sp.bytes('0x85'): sp.nat(133), sp.bytes('0x86'): sp.nat(134), sp.bytes('0x87'): sp.nat(135),
+                sp.bytes('0x88'): sp.nat(136), sp.bytes('0x89'): sp.nat(137), sp.bytes('0x8a'): sp.nat(138), sp.bytes('0x8b'): sp.nat(139),
+                sp.bytes('0x8c'): sp.nat(140), sp.bytes('0x8d'): sp.nat(141), sp.bytes('0x8e'): sp.nat(142), sp.bytes('0x8f'): sp.nat(143),
+                sp.bytes('0x90'): sp.nat(144), sp.bytes('0x91'): sp.nat(145), sp.bytes('0x92'): sp.nat(146), sp.bytes('0x93'): sp.nat(147),
+                sp.bytes('0x94'): sp.nat(148), sp.bytes('0x95'): sp.nat(149), sp.bytes('0x96'): sp.nat(150), sp.bytes('0x97'): sp.nat(151),
+                sp.bytes('0x98'): sp.nat(152), sp.bytes('0x99'): sp.nat(153), sp.bytes('0x9a'): sp.nat(154), sp.bytes('0x9b'): sp.nat(155),
+                sp.bytes('0x9c'): sp.nat(156), sp.bytes('0x9d'): sp.nat(157), sp.bytes('0x9e'): sp.nat(158), sp.bytes('0x9f'): sp.nat(159),
+                sp.bytes('0xa0'): sp.nat(160), sp.bytes('0xa1'): sp.nat(161), sp.bytes('0xa2'): sp.nat(162), sp.bytes('0xa3'): sp.nat(163),
+                sp.bytes('0xa4'): sp.nat(164), sp.bytes('0xa5'): sp.nat(165), sp.bytes('0xa6'): sp.nat(166), sp.bytes('0xa7'): sp.nat(167),
+                sp.bytes('0xa8'): sp.nat(168), sp.bytes('0xa9'): sp.nat(169), sp.bytes('0xaa'): sp.nat(170), sp.bytes('0xab'): sp.nat(171),
+                sp.bytes('0xac'): sp.nat(172), sp.bytes('0xad'): sp.nat(173), sp.bytes('0xae'): sp.nat(174), sp.bytes('0xaf'): sp.nat(175),
+                sp.bytes('0xb0'): sp.nat(176), sp.bytes('0xb1'): sp.nat(177), sp.bytes('0xb2'): sp.nat(178), sp.bytes('0xb3'): sp.nat(179),
+                sp.bytes('0xb4'): sp.nat(180), sp.bytes('0xb5'): sp.nat(181), sp.bytes('0xb6'): sp.nat(182), sp.bytes('0xb7'): sp.nat(183),
+                sp.bytes('0xb8'): sp.nat(184), sp.bytes('0xb9'): sp.nat(185), sp.bytes('0xba'): sp.nat(186), sp.bytes('0xbb'): sp.nat(187),
+                sp.bytes('0xbc'): sp.nat(188), sp.bytes('0xbd'): sp.nat(189), sp.bytes('0xbe'): sp.nat(190), sp.bytes('0xbf'): sp.nat(191),
+                sp.bytes('0xc0'): sp.nat(192), sp.bytes('0xc1'): sp.nat(193), sp.bytes('0xc2'): sp.nat(194), sp.bytes('0xc3'): sp.nat(195),
+                sp.bytes('0xc4'): sp.nat(196), sp.bytes('0xc5'): sp.nat(197), sp.bytes('0xc6'): sp.nat(198), sp.bytes('0xc7'): sp.nat(199),
+                sp.bytes('0xc8'): sp.nat(200), sp.bytes('0xc9'): sp.nat(201), sp.bytes('0xca'): sp.nat(202), sp.bytes('0xcb'): sp.nat(203),
+                sp.bytes('0xcc'): sp.nat(204), sp.bytes('0xcd'): sp.nat(205), sp.bytes('0xce'): sp.nat(206), sp.bytes('0xcf'): sp.nat(207),
+                sp.bytes('0xd0'): sp.nat(208), sp.bytes('0xd1'): sp.nat(209), sp.bytes('0xd2'): sp.nat(210), sp.bytes('0xd3'): sp.nat(211),
+                sp.bytes('0xd4'): sp.nat(212), sp.bytes('0xd5'): sp.nat(213), sp.bytes('0xd6'): sp.nat(214), sp.bytes('0xd7'): sp.nat(215),
+                sp.bytes('0xd8'): sp.nat(216), sp.bytes('0xd9'): sp.nat(217), sp.bytes('0xda'): sp.nat(218), sp.bytes('0xdb'): sp.nat(219),
+                sp.bytes('0xdc'): sp.nat(220), sp.bytes('0xdd'): sp.nat(221), sp.bytes('0xde'): sp.nat(222), sp.bytes('0xdf'): sp.nat(223),
+                sp.bytes('0xe0'): sp.nat(224), sp.bytes('0xe1'): sp.nat(225), sp.bytes('0xe2'): sp.nat(226), sp.bytes('0xe3'): sp.nat(227),
+                sp.bytes('0xe4'): sp.nat(228), sp.bytes('0xe5'): sp.nat(229), sp.bytes('0xe6'): sp.nat(230), sp.bytes('0xe7'): sp.nat(231),
+                sp.bytes('0xe8'): sp.nat(232), sp.bytes('0xe9'): sp.nat(233), sp.bytes('0xea'): sp.nat(234), sp.bytes('0xeb'): sp.nat(235),
+                sp.bytes('0xec'): sp.nat(236), sp.bytes('0xed'): sp.nat(237), sp.bytes('0xee'): sp.nat(238), sp.bytes('0xef'): sp.nat(239),
+                sp.bytes('0xf0'): sp.nat(240), sp.bytes('0xf1'): sp.nat(241), sp.bytes('0xf2'): sp.nat(242), sp.bytes('0xf3'): sp.nat(243),
+                sp.bytes('0xf4'): sp.nat(244), sp.bytes('0xf5'): sp.nat(245), sp.bytes('0xf6'): sp.nat(246), sp.bytes('0xf7'): sp.nat(247),
+                sp.bytes('0xf8'): sp.nat(248), sp.bytes('0xf9'): sp.nat(249), sp.bytes('0xfa'): sp.nat(250), sp.bytes('0xfb'): sp.nat(251),
+                sp.bytes('0xfc'): sp.nat(252), sp.bytes('0xfd'): sp.nat(253), sp.bytes('0xfe'): sp.nat(254), sp.bytes('0xff'): sp.nat(255),
+            }
 
         # ─── Funding ────────────────────────────────────────────────
         @sp.entrypoint
@@ -200,6 +265,11 @@ def main():
               - 1 <= nRandoms <= maxRandomsPerRequest
               - maxValue >= 1
               - commitId exists, age >= minCommitAge, NOT yet revealed
+              - callback must expose `onRandomFulfilled` entrypoint with
+                signature (requestId=nat, randomValues=list[nat],
+                callbackContext=bytes). The name is fixed at this
+                contract level because SmartPy requires a compile-time
+                literal for sp.contract(..., entrypoint=…).
               - userNonce: caller-supplied bytes (32 B recommended). Mixed
                 into finalSeed so the oracle's commit choice can't favor
                 any specific request — at commit time it didn't know
@@ -211,7 +281,6 @@ def main():
                 auto-incremented requestId at submit time).
             Checklist §1.1, §1.4, §2.1, §3.3, §6.2, §7.2, §8.3.'''
             sp.cast(params.callback, sp.address)
-            sp.cast(params.callbackEntrypoint, sp.string)
             sp.cast(params.nRandoms, sp.nat)
             sp.cast(params.maxValue, sp.nat)
             sp.cast(params.userNonce, sp.bytes)
@@ -238,7 +307,6 @@ def main():
             self.data.requests[self.data.currentRequestId] = sp.record(
                 requester=sp.sender,
                 callback=params.callback,
-                callbackEntrypoint=params.callbackEntrypoint,
                 nRandoms=params.nRandoms,
                 maxValue=params.maxValue,
                 feePaid=sp.amount,
@@ -288,18 +356,24 @@ def main():
             # loop unrolls to 32 iterations (one per SHA-256 output byte).
             divisor = r.maxValue + 1
             vals_rev = sp.cast([], sp.list[sp.nat])
+            # k is a Python loop variable (compile-time int). Comparisons
+            # against r.nRandoms auto-promote it to sp.nat; we wrap it in
+            # sp.nat() only where we need a literal nat constructor
+            # (SmartPy rejects sp.nat(<variable>); see compile attempts).
             for k in range(32):
-                if sp.nat(k) < r.nRandoms:
+                if k < r.nRandoms:
                     if k == 0:
                         chunk = seed
                     else:
-                        chunk = sp.sha256(seed + sp.pack(sp.nat(k)))
+                        # Per-iteration sp.pack literal — k is a Python int
+                        # so the packed bytes are static at compile time.
+                        chunk = sp.sha256(seed + sp.pack(k))
                     # Big-endian 32-byte chunk → nat via byte lookup.
                     acc = sp.nat(0)
                     for j in range(32):
                         byte_bytes = sp.slice(chunk, j, 1).unwrap_some(error="slice")
                         acc = acc * 256 + self.data.byteLookup[byte_bytes]
-                    vals_rev = sp.cons(acc % divisor, vals_rev)
+                    vals_rev = sp.cons(sp.mod(acc, divisor), vals_rev)
             # cons builds reverse-order; flip once to get ascending [0..n-1].
             values = sp.cast([], sp.list[sp.nat])
             for v in vals_rev:
@@ -311,7 +385,6 @@ def main():
             self.data.requests[params.requestId] = sp.record(
                 requester=r.requester,
                 callback=r.callback,
-                callbackEntrypoint=r.callbackEntrypoint,
                 nRandoms=r.nRandoms,
                 maxValue=r.maxValue,
                 feePaid=r.feePaid,
@@ -337,15 +410,7 @@ def main():
                 randomValues=values,
                 callbackContext=r.callbackContext,
             )
-            callback_contract = sp.contract(
-                sp.record(
-                    requestId=sp.nat,
-                    randomValues=sp.list[sp.nat],
-                    callbackContext=sp.bytes,
-                ),
-                r.callback,
-                entrypoint=r.callbackEntrypoint,
-            ).unwrap_some(error="callback not a contract or wrong entrypoint type")
+            callback_contract = sp.contract(sp.record(requestId=sp.nat, randomValues=sp.list[sp.nat], callbackContext=sp.bytes), r.callback, entrypoint="onRandomFulfilled").unwrap_some(error="callback not a contract or wrong entrypoint type")
             sp.transfer(callback_record, sp.mutez(0), callback_contract)
 
             sp.emit(

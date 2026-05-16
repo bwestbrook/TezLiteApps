@@ -50,10 +50,10 @@ const RIM_INSET = 0.22
 const FIXED_PITCH = 0.52
 const DEFAULT_YAW = -0.42
 const DRAG_SENSITIVITY = 0.011   // radians of yaw per pixel dragged
-// Constant turntable spin: 360° per 20 seconds. Drag pauses the spin
-// for as long as the pointer is down, then it resumes from wherever
-// the user left it.
-const SPIN_RAD_PER_S = (2 * Math.PI) / 20
+// Constant turntable spin: 360° per minute (6°/s). Drag pauses the
+// spin for as long as the pointer is down, then it resumes from
+// wherever the user left it.
+const SPIN_RAD_PER_S = (2 * Math.PI) / 60
 
 function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3) }
 
@@ -291,7 +291,6 @@ export default {
       const u = tNorm * (rows + SETTLE + SINK)
 
       let world
-      let sinkScale = 1
       if (u <= rows) {
         // Walking the pyramid. Which layer-segment are we in?
         const layer = Math.min(rows - 1, Math.floor(u))
@@ -317,21 +316,18 @@ export default {
         const wy = top[1] + BIN_DROP * (1 - Math.pow(1 - s, 2))
         world = [top[0], wy, top[2]]
       } else {
-        // Sinking into the tube — held at the rim's wy so the ball stays
-        // centred in its hole; only the scale changes, shrinking it down
-        // to a vanishing point inside the well.
-        const s = (u - rows - SETTLE) / SINK
-        const e = easeOutCubic(s)
+        // Landed — ball sits at the rim of its bin at full scale. The
+        // previous code shrank the ball to ~25% to read as "sinking
+        // into the tube", but the visual disappearing-act read worse
+        // than just parking the ball on its target square.
         const top = this.worldOf(this.ball.finalX, this.ball.finalZ, rows)
         world = [top[0], top[1] + BIN_DROP, top[2]]
-        sinkScale = 1 - e * 0.75
       }
       const p = this.project(...world)
-      // Constant size while the ball walks the pyramid + drops into the
-      // rim — orthographic projection means depth shouldn't grow it.
-      // sinkScale is the only intentional size change, applied during
-      // the tube-sink phase to read as falling away down the well.
-      const scale = sinkScale
+      // Constant size throughout — orthographic projection means depth
+      // shouldn't change it, and we don't shrink-on-sink anymore so the
+      // ball stays at full size when parked in its winning bin.
+      const scale = 1
       const spin = (elapsed * 540) % 360       // 1.5 rev/s — "for fun"
       return {
         sx: p.x, sy: p.y, depth: p.depth, scale, spin,

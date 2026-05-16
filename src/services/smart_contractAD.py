@@ -312,83 +312,119 @@ def main():
        
 @sp.add_test()
 def test():
-    s = sp.test_scenario("my first test", main)
-    player1 = sp.test_account("player1")
+    """Exhaustive gameplay emulation.
+
+    Plays through every final-status path AD can reach plus the new
+    spread-aware bet ceiling. Each scenario asserts the post-condition
+    (game status, pot delta), so a regression in payout / branching
+    will trip s.verify() and fail the scenario.
+
+    Card-index → rank: rank = (idx // 4) + 2, so:
+       idx  0..3   → 2 ·  idx  4..7   → 3 ·  idx  8..11 → 4
+       idx 16..19 → 6 ·  idx 20..23  → 7 ·  idx 24..27 → 8
+       idx 28..31 → 9 ·  idx 48..51  → A (14)
+
+    Game IDs are monotonic; we increment by hand to keep verify()
+    readable.
+    """
+    s = sp.test_scenario("AD payout exhaustion", main)
+    player = sp.test_account("player1")
     a = main.AceyDuecey()
     a.set_initial_balance(sp.tez(0))
     s += a
-    #s.set_initial_balance(sp.tez(2))
-    player1 = sp.test_account("player1")
-    player2 = sp.test_account("player2")
-    oracle = a.data.oracle    
-    # ante 0.2 + fee 0.1 — AD-1 now enforces the exact bet() price.
-    tzMutezBet = sp.mutez(300000)
-    a.data
-    #a.set_initial_balance(sp.tez(2))
-    s.show(a.balance)
-    a.default(_amount=sp.tez(1))
-    a.bet(
-        _sender=player1,
-        _amount=tzMutezBet,
-    )
-    a.firstCard(
-        _sender=oracle, 
-        card = sp.int_or_nat(51),
-        hash = 'adfao3',
-        gameId = 0
-    )
-    a.secondCard(
-        _sender=oracle,
-        card = sp.int_or_nat(8),
-        hash = 'adfayui657o3',
-        gameId = 0
-    )
-    a.continueBet(
-        _sender=player1, 
-        _amount=tzMutezBet, 
-        gameId = 0
-    )
-    a.lastCard(
-        _sender=oracle, 
-        gameId = 0,
-        card = sp.int_or_nat(33),
-        hash = 'adfeqweEQWFF3ui657o3',
-    )   
-    s.show(a.balance)
-    a.bet(
-        _sender=player1,
-        _amount=tzMutezBet,
-    )
+    oracle = a.data.oracle
+    BET = sp.mutez(300000)   # ante (0.2) + fee (0.1)
 
-    
-    a.firstCard(
-        _sender=oracle, 
-        card = sp.int_or_nat(30),
-        
-        hash = 'adfewrewrao3',
-        gameId = 1
-    )
-    a.secondCard(
-        _sender=oracle,
-        card = sp.int_or_nat(8),
-        hash = 'advncxvbzcx435fao3',
-        gameId = 1
-    )
-    
+    # Seed the pot reserve so refills are available throughout. The
+    # default entrypoint credits potReserve, not pot — pot stays at the
+    # 0.1 tez init value through this until games push it up.
+    a.default(_amount=sp.tez(10))
 
-    
-    s.show(a.balance)
-    a.continueBet(
-        _sender=player1, 
-        _amount=tzMutezBet, 
-        gameId = 1
-    )
-    s.show(a.balance)
-    a.lastCard(
-        _sender=oracle, 
-        gameId = 1,
-        card = sp.int_or_nat(33),
-        hash = 'adfPUIOYJDyui57o3',
-    ) 
-    s.show(a.balance)
-    
+    # ─── 1. PAIR (status 5) ─────────────────────────────────────────
+    s.h2("1. PAIR — cards 1+2 match, ante forfeit to pot")
+    a.bet(_sender=player, _amount=BET)
+    a.firstCard(_sender=oracle, card=sp.int_or_nat(20), gameId=0, hash="g0c1")  # 7
+    a.secondCard(_sender=oracle, card=sp.int_or_nat(23), gameId=0, hash="g0c2") # 7
+    s.verify(a.data.games[0].gameStatus == 5)
+    # init pot 100000 + ante 200000, no extra movement on pair.
+    s.verify(a.data.pot == sp.mutez(300000))
+
+    # ─── 2. WIN (status 3) ──────────────────────────────────────────
+    s.h2("2. WIN — third lands strictly inside")
+    # anchors 4 and 14 → spread = 9 → payout = bet * 12.35 / 9 ≈ 1.37x
+    a.bet(_sender=player, _amount=BET)
+    a.firstCard(_sender=oracle, card=sp.int_or_nat(8), gameId=1, hash="g1c1")   # 4
+    a.secondCard(_sender=oracle, card=sp.int_or_nat(48), gameId=1, hash="g1c2") # 14
+    a.continueBet(_sender=player, _amount=BET, gameId=1)
+    a.lastCard(_sender=oracle, gameId=1, card=sp.int_or_nat(30), hash="g1c3")   # 9 → win
+    s.verify(a.data.games[1].gameStatus == 3)
+    # +ante +bet -winAmount where winAmount = 200000 * 1235 / 900 = 274,444.
+    # Pot was 300000 going in. 300000 + 200000 + 200000 - 274444 = 425,556.
+    s.verify(a.data.pot == sp.mutez(425556))
+
+    # ─── 3. LOSS_UNDER (status 4) ───────────────────────────────────
+    s.h2("3. LOSS — third below low anchor (no extra transfer)")
+    a.bet(_sender=player, _amount=BET)
+    a.firstCard(_sender=oracle, card=sp.int_or_nat(20), gameId=2, hash="g2c1")  # 7
+    a.secondCard(_sender=oracle, card=sp.int_or_nat(48), gameId=2, hash="g2c2") # 14
+    a.continueBet(_sender=player, _amount=BET, gameId=2)
+    a.lastCard(_sender=oracle, gameId=2, card=sp.int_or_nat(4), hash="g2c3")    # 3 → under
+    s.verify(a.data.games[2].gameStatus == 4)
+    # +ante +bet, no payout (loss-under doesn't touch pot beyond accepting).
+    s.verify(a.data.pot == sp.mutez(425556 + 400000))   # 825,556
+
+    # ─── 4. LOSS_OVER (status 4) ────────────────────────────────────
+    s.h2("4. LOSS — third above high anchor (no extra transfer)")
+    a.bet(_sender=player, _amount=BET)
+    a.firstCard(_sender=oracle, card=sp.int_or_nat(4), gameId=3, hash="g3c1")   # 3
+    a.secondCard(_sender=oracle, card=sp.int_or_nat(20), gameId=3, hash="g3c2") # 7
+    a.continueBet(_sender=player, _amount=BET, gameId=3)
+    a.lastCard(_sender=oracle, gameId=3, card=sp.int_or_nat(48), hash="g3c3")   # 14 → over
+    s.verify(a.data.games[3].gameStatus == 4)
+    # +ante +bet, no payout (loss-over mirrors loss-under).
+    s.verify(a.data.pot == sp.mutez(825556 + 400000))   # 1,225,556
+
+    # ─── 5. RAIL_LOW (status 4 + bet+ante → txlContract) ────────────
+    s.h2("5. RAIL_LOW — third == low anchor")
+    a.bet(_sender=player, _amount=BET)
+    a.firstCard(_sender=oracle, card=sp.int_or_nat(20), gameId=4, hash="g4c1")  # 7
+    a.secondCard(_sender=oracle, card=sp.int_or_nat(48), gameId=4, hash="g4c2") # 14
+    a.continueBet(_sender=player, _amount=BET, gameId=4)
+    a.lastCard(_sender=oracle, gameId=4, card=sp.int_or_nat(22), hash="g4c3")   # 7 == low
+    s.verify(a.data.games[4].gameStatus == 4)
+    # +ante +bet then -(bet+ante) to txlContract — net pot change = 0.
+    s.verify(a.data.pot == sp.mutez(1225556))
+
+    # ─── 6. RAIL_HIGH (status 4 + bet+ante → txlContract) ───────────
+    s.h2("6. RAIL_HIGH — third == high anchor")
+    a.bet(_sender=player, _amount=BET)
+    a.firstCard(_sender=oracle, card=sp.int_or_nat(20), gameId=5, hash="g5c1")  # 7
+    a.secondCard(_sender=oracle, card=sp.int_or_nat(48), gameId=5, hash="g5c2") # 14
+    a.continueBet(_sender=player, _amount=BET, gameId=5)
+    a.lastCard(_sender=oracle, gameId=5, card=sp.int_or_nat(50), hash="g5c3")   # 14 == high
+    s.verify(a.data.games[5].gameStatus == 4)
+    # rail-high mirrors rail-low — net pot change = 0.
+    s.verify(a.data.pot == sp.mutez(1225556))
+
+    # ─── 7. BET_TOO_BIG — spread-aware cap rejects huge tight-spread bet
+    # Use spread=1 (anchors ranks 7 and 9). 0.2 tez bet would request
+    # 12.35× = 2.47 tez payout. Pot won't have that. The contract
+    # should reject with 'Bet Too Big' and refund the amount; gameStatus
+    # stays at 1 (continueBet didn't advance it).
+    s.h2("7. BET_TOO_BIG — spread-1 bet over the pot's headroom rejected")
+    a.bet(_sender=player, _amount=BET)
+    a.firstCard(_sender=oracle, card=sp.int_or_nat(20), gameId=6, hash="g6c1")  # 7
+    a.secondCard(_sender=oracle, card=sp.int_or_nat(28), gameId=6, hash="g6c2") # 9 → spread 1
+    # 0.5 tez bet on spread 1 → maxPayout ≈ 6.17 tez, pot ≪ that → reject.
+    a.continueBet(_sender=player, _amount=sp.mutez(500000), gameId=6)
+    s.verify(a.data.games[6].gameStatus == 1)   # still at 1 — bet refused
+    # The ante from bet() was already added, so pot grew by 200000.
+    # Rejected continueBet refunded the amount; no pot change there.
+    s.verify(a.data.pot == sp.mutez(1225556 + 200000))   # 1,425,556
+
+    # Now a TIGHT-but-acceptable bet on the same spread-1 game: small
+    # enough that maxPayout fits in pot+bet. Should advance to status 2.
+    s.h2("7b. spread-1 bet within the cap should be accepted")
+    a.continueBet(_sender=player, _amount=sp.mutez(120000), gameId=6)  # bet = 20k
+    s.verify(a.data.games[6].gameStatus == 2)
+    s.verify(a.data.pot == sp.mutez(1425556 + 20000))    # 1,445,556

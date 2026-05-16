@@ -356,14 +356,31 @@ def ensure_funded(primary, secondary, secondary_addr: str, min_tez: float, dry_r
     bal = balance_tez(secondary)
     if bal >= min_tez:
         info(f"secondary balance: {bal:.4f} ꜩ (≥ {min_tez:.2f}) — no top-up needed")
-        return
-    need = Decimal(str(min_tez - bal + 0.05))  # +0.05 ꜩ slack for fees
-    step(f"funding secondary: {primary.key.public_key_hash()[:12]}… → {secondary_addr[:12]}… ({need} ꜩ)")
+    else:
+        need = Decimal(str(min_tez - bal + 0.05))  # +0.05 ꜩ slack for fees
+        step(f"funding secondary: {primary.key.public_key_hash()[:12]}… → {secondary_addr[:12]}… ({need} ꜩ)")
+        if dry_run:
+            warn("  --dry-run set, skipping transfer")
+            return
+        op = primary.transaction(destination=secondary_addr, amount=need).send(min_confirmations=1)
+        ok(f"  funded: {op.hash()[:14]}…  ({balance_tez(secondary):.4f} ꜩ now)")
+
+    # Pytezos's contract.method().send() doesn't auto-prepend a Reveal
+    # operation reliably on this RPC, so an unrevealed wallet that gets
+    # funded above will fail its first buy with 'unrevealed_key'. Force
+    # the reveal explicitly here — it's a no-op if already revealed.
     if dry_run:
-        warn("  --dry-run set, skipping transfer")
         return
-    op = primary.transaction(destination=secondary_addr, amount=need).send(min_confirmations=1)
-    ok(f"  funded: {op.hash()[:14]}…  ({balance_tez(secondary):.4f} ꜩ now)")
+    try:
+        op = secondary.reveal().autofill().sign().inject(min_confirmations=1)
+        op_hash = getattr(op, "hash", None) or op.get("hash") if isinstance(op, dict) else None
+        ok(f"  reveal: {(op_hash or '(no hash)')[:14]}…")
+    except Exception as e:  # noqa: BLE001
+        msg = str(e)
+        if "already_revealed" in msg or "previously_revealed_key" in msg:
+            info("  reveal: already on chain")
+        else:
+            warn(f"  reveal failed (continuing): {msg[:120]}")
 
 
 # ─── Contract orchestration ─────────────────────────────────────────────
@@ -421,16 +438,49 @@ def buy_out(primary, secondary, contract_primary, contract_secondary,
         return
 
     def batch_buy(client, contract, who: str, idxs: list[int]):
+        # Tezos requires an account to reveal its public key on-chain
+        # before signed ops can run. pytezos auto-appends a Reveal to a
+        # *single* operation, but its bulk() builder doesn't — so a
+        # freshly funded wallet hits 'contract.unrevealed_key' on its
+        # first batch. Always send the first square as a single op to
+        # piggyback the reveal, then bulk the remainder.
+        if not idxs:
+            return
+        head = idxs[0]
+        op = contract.buySquare(gameId=gid, squareIdx=head).with_amount(amount).send(
+            min_confirmations=1
+        )
+        info(f"  {who} reveal+buy idx {head:>2}: {op.hash()[:14]}…")
+
+        rest = idxs[1:]
         # Chunk into 20-op batches so we don't trip Tezos's hard.gas_limit.
-        # 100 mutez × 20 ops is still <0.005 ꜩ per batch.
-        for chunk_start in range(0, len(idxs), 20):
-            chunk = idxs[chunk_start:chunk_start + 20]
-            bulk = client.bulk(*[
-                contract.buySquare(gameId=gid, squareIdx=i).with_amount(amount)
-                for i in chunk
-            ])
-            op = bulk.send(min_confirmations=1)
-            info(f"  {who} batch [{chunk[0]:>2}..{chunk[-1]:>2}]: {op.hash()[:14]}…")
+        # 100 mutez × 20 ops is still <0.005 ꜩ per batch. Between batches
+        # we sleep a beat — pytezos caches the wallet's nonce/counter on
+        # the client, and a fresh bulk built right after a single op can
+        # otherwise reuse the just-spent counter and trip a mempool
+        # conflict ("conflicting operation, total fee of at least …").
+        for chunk_start in range(0, len(rest), 20):
+            chunk = rest[chunk_start:chunk_start + 20]
+            for attempt in range(3):
+                try:
+                    bulk = client.bulk(*[
+                        contract.buySquare(gameId=gid, squareIdx=i).with_amount(amount)
+                        for i in chunk
+                    ])
+                    op = bulk.send(min_confirmations=1)
+                    info(f"  {who} batch [{chunk[0]:>2}..{chunk[-1]:>2}]: {op.hash()[:14]}…")
+                    break
+                except Exception as e:  # noqa: BLE001
+                    msg = str(e)
+                    if "conflicting operation" in msg or "counter_in_the_past" in msg or "counter_in_the_future" in msg:
+                        wait = 6 * (attempt + 1)
+                        warn(f"  {who} batch retry in {wait}s ({msg[:80]}…)")
+                        time.sleep(wait)
+                        continue
+                    raise
+            else:
+                fail(f"  {who} batch [{chunk[0]:>2}..{chunk[-1]:>2}] gave up after 3 retries")
+                raise SystemExit(2)
 
     batch_buy(primary, contract_primary, "primary  ", primary_idxs)
     batch_buy(secondary, contract_secondary, "secondary", secondary_idxs)
