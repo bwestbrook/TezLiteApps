@@ -52,12 +52,18 @@ instead of `.methodsObject` because v2 `claim`'s parameter is a bare
 
 ## What's still worth verifying
 
-- **Holder list is still empty as of this writing.** Both shadownet and
-  mainnet TXL had `activeSupply=0` at fix time — the TXL agent's
-  reconcile pass hadn't run, so `idLookUp` is empty and the UI fix is
-  exercised but not visually validated. Re-test once reconcile populates
-  the v2 ledger. The fix gracefully handles the empty case (zero owned
-  → "No TXL tokens owned" status, no revert).
+- **Mainnet reconcile is in progress** (as of May 16 2026, 20:00 UTC):
+  `activeSupply=16/271`, `accPerToken=62500`, `totalRewards=1 ꜩ` — the
+  first deposit has flowed and one of the 16 reconciled holders is
+  jamin_b's wallet (`tz1Vq5mY…`). That makes the UI fix **visually
+  testable on mainnet now**: connect jamin_b, the holder banner should
+  show owned token IDs from the sample (60694, 60491, 60367, …) and a
+  claimable share derived from `accPerToken − lastSeenAcc` per token.
+- **Shadownet reconcile hasn't started yet** (`activeSupply=0`,
+  `accPerToken=0`). The UI fix is exercised but can't be visually
+  validated on shadownet until the TXL agent populates `idLookUp` there
+  too. The fix gracefully handles the empty case (zero owned → "No TXL
+  tokens owned" status, no revert).
 - **Other game UIs.** Greppable via `payTxlHolder` and `idLookUp` —
   none found at fix time (only `mainBody.vue` referenced TXL UI flows),
   but worth a fresh grep after any future migration.
