@@ -210,7 +210,7 @@ export const CHESS_CONTRACT_ADDRESS_SHADOWNET      = 'KT1XXXXXXXXXXXXXXXXXXXXXXX
 export const WAR_CONTRACT_ADDRESS_SHADOWNET        = 'KT1Cbb7aTgWjhSCK4bXTEWp4aGoqQ2FNrZ4W'
 
 // ── Mainnet (last known Ghostnet leftovers; redeploy each before real use) ──
-export const ORACLE_CONTRACT_MAINNET             = 'KT1VvcCnTPCUc7YaxyMT6opDrSPi2AUHnfvx'
+export const ORACLE_CONTRACT_MAINNET             = 'KT1H3RJBs3SjoLyFRG3Q6LXMGtm4n5wJGa4N'
 export const TXL_CONTRACT_ADDRESS_MAINNET        = 'KT1HD71gj4ZdehpS4Ri8nasjpDTPDQ574Sxy'
 export const AD_CONTRACT_ADDRESS_MAINNET         = 'KT1LQTALXvukm56XA1p1BcRrGi36tMyWnXp5'
 export const TTT_CONTRACT_ADDRESS_MAINNET        = 'KT1FsKda1m7CR2YwXRM9Awzctq1Js7TjmTmM'
