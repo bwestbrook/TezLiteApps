@@ -69,7 +69,12 @@ def main():
             # Oracle: the off-chain worker's signing key — posts commits
             # and reveals preimages. fulfillRandom is permissionless.
             self.data.admin = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
-            self.data.oracle = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
+            # NOTE: mainnet build. Mirrors TXL's split-key pattern —
+            # admin (cold/deploy key) ≠ oracle (hot worker key). Revert
+            # this line to admin's address before any shadownet rebuild
+            # so shadownet doesn't ship the mainnet worker key as oracle.
+            # See task 12 in the AD deploy plan.
+            self.data.oracle = sp.address("tz1QtpR6hraURtjP9V1rMMYnrqfyaicJFPWv")
 
             # Minimum payment per request. Operator keeps whatever's
             # actually paid (over-pay is treated as a tip).

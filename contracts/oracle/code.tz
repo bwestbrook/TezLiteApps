@@ -1,3 +1,887 @@
-parameter (or (unit %default) (or (pair %logRequest (lambda %contractLambda (pair (pair (nat %card) (pair (nat %gameId) (string %hash))) (list operation)) (pair unit (list operation))) (nat %requestIndex)) (pair %makeRequest (address %contractAddress) (pair (string %entryPoint) (pair (string %entryPointParams) (pair (string %randomNumberExcludes) (pair (nat %randomNumberMax) (pair (nat %randomNumberType) (string %requestId)))))))));
-storage   (pair (address %adContract) (pair (address %admin) (pair (nat %currentRequestIndex) (pair (pair %entryPointParams (nat %card) (pair (nat %gameId) (string %hash))) (pair (mutez %fee) (pair (address %oracle) (pair (map %requests nat (pair (address %contractAddress) (pair (string %entryPoint) (pair (string %entryPointParams) (pair (string %opHash) (pair (nat %randomNumber) (pair (string %randomNumberExcludes) (pair (nat %randomNumberMax) (pair (timestamp %requestFillTime) (pair (string %requestId) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (nat %type)))))))))))))) (address %txlContract))))))));
-code   {     UNPAIR;     IF_LEFT       { DROP; NIL operation; }       { IF_LEFT { CAR; EMIT (lambda (pair (pair (nat %card) (pair (nat %gameId) (string %hash))) (list operation)) (pair unit (list operation))); NIL operation; SWAP; CONS; } { PUSH int 0; DUP 3; GET 11; SENDER; COMPARE; EQ; IF { DROP; PUSH int 1; NIL operation; } { NIL operation; PUSH string "wrongOracleFee"; EMIT %wrongOracleFee string; CONS; }; DUP 4; GET 9; AMOUNT; COMPARE; EQ; IF { SWAP; DROP; PUSH int 1; SWAP; } { PUSH string "noFeeNotAdmin"; EMIT %noFeeNotAdmin string; CONS; }; PUSH int 1; DUP 3; COMPARE; EQ; IF { PUSH int 1; PUSH nat 0; DUP 6; GET 5; DUP 2; COMPARE; LT; LOOP { DUP 5; GET 12; DUP 7; GET 13; DUP 3; GET; IF_NONE { PUSH int 93; FAILWITH; } {}; GET 17; COMPARE; EQ; IF { SWAP; DROP; PUSH int 0; SWAP; } {}; PUSH nat 1; ADD; DUP 6; GET 5; DUP 2; COMPARE; LT; }; PUSH int 1; DUP 3; COMPARE; EQ; IF { DUP 5; GET 11; SENDER; NOW; PUSH nat 0; DUP 9; GET 12; NOW; DUP 11; GET 9; DUP 12; GET 7; PUSH nat 0; PUSH string ""; DUP 15; GET 5; DUP 16; GET 3; DUP 17; CAR; PAIR 13; SWAP; DROP; SWAP; DROP; DIG 2; DROP; DIG 2; DROP; SWAP; NOW; SENDER; PAIR; EMIT %randomRequested (pair address timestamp); CONS; SWAP; DUP 3; DUP; GET 13; DIG 2; SOME; DIG 4; GET 5; UPDATE; UPDATE 13; DUP; GET 5; PUSH nat 1; ADD; UPDATE 5; SWAP; } { DROP 2; SWAP; DROP; SWAP; DROP; PUSH string "notNewRequest"; EMIT string; CONS; }; } { SWAP; DROP; SWAP; DROP; PUSH string "failed Oracle"; EMIT %failedOracle string; CONS; }; }; }; NIL operation; SWAP; ITER { CONS; }; PAIR; }
+parameter (or (or (or (unit %default) (or (nat %fulfillRandom) (bytes %postCommit))) (or (nat %pruneCommit) (or (nat %pruneRequest) (pair %requestRandom (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (nat %maxValue) (pair (nat %nRandoms) (bytes %userNonce))))))))) (or (or (pair %revealCommit (nat %commitId) (bytes %preimage)) (or (address %updateAdmin) (mutez %updateFee))) (or (or (nat %updateMaxRandoms) (nat %updateMinCommitAge)) (or (address %updateOracle) (address %withdrawEarnings)))));
+storage   (pair (address %admin) (pair (map %byteLookup bytes nat) (pair (map %commitLog nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage)))) (pair (nat %currentCommitId) (pair (nat %currentRequestId) (pair (mutez %fee) (pair (nat %maxRandomsPerRequest) (pair (nat %minCommitAge) (pair (mutez %operatorEarnings) (pair (address %oracle) (map %requests nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))))))))))))));
+code
+  {
+    UNPAIR;     # @parameter : @storage
+    IF_LEFT
+      {
+        IF_LEFT
+          {
+            IF_LEFT
+              {
+                DROP;       # @storage
+                # == default ==
+                # self.data.operatorEarnings += sp.amount # @storage
+                DUP;        # @storage : @storage
+                GET 17;     # mutez : @storage
+                AMOUNT;     # @amount : mutez : @storage
+                ADD;        # mutez : @storage
+                UPDATE 17;  # @storage
+                NIL operation; # list operation : @storage
+              }
+              {
+                IF_LEFT
+                  {
+                    # == fulfillRandom ==
+                    # assert params.requestId in self.data.requests, "no such request" # @parameter%fulfillRandom : @storage
+                    DUP 2;      # @storage : @parameter%fulfillRandom : @storage
+                    GET 20;     # map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @parameter%fulfillRandom : @storage
+                    DUP 2;      # @parameter%fulfillRandom : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @parameter%fulfillRandom : @storage
+                    MEM;        # bool : @parameter%fulfillRandom : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "no such request"; # string : @parameter%fulfillRandom : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%fulfillRandom : @storage
+                    # r = self.data.requests[params.requestId] # @parameter%fulfillRandom : @storage
+                    DUP 2;      # @storage : @parameter%fulfillRandom : @storage
+                    GET 20;     # map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @parameter%fulfillRandom : @storage
+                    DUP 2;      # @parameter%fulfillRandom : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @parameter%fulfillRandom : @storage
+                    GET;        # option (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @parameter%fulfillRandom : @storage
+                    IF_NONE
+                      {
+                        PUSH int 349; # int : @parameter%fulfillRandom : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @parameter%fulfillRandom : @storage
+                    # assert r.requestStatus == 0, "already settled" # @some : @parameter%fulfillRandom : @storage
+                    PUSH nat 0; # nat : @some : @parameter%fulfillRandom : @storage
+                    DUP 2;      # @some : nat : @some : @parameter%fulfillRandom : @storage
+                    GET 21;     # nat : nat : @some : @parameter%fulfillRandom : @storage
+                    COMPARE;    # int : @some : @parameter%fulfillRandom : @storage
+                    EQ;         # bool : @some : @parameter%fulfillRandom : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "already settled"; # string : @some : @parameter%fulfillRandom : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%fulfillRandom : @storage
+                    # commit = self.data.commitLog[r.commitId] # @some : @parameter%fulfillRandom : @storage
+                    DUP 3;      # @storage : @some : @parameter%fulfillRandom : @storage
+                    GET 5;      # map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @some : @parameter%fulfillRandom : @storage
+                    DUP 2;      # @some : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @some : @parameter%fulfillRandom : @storage
+                    GET 5;      # nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @some : @parameter%fulfillRandom : @storage
+                    GET;        # option (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @some : @parameter%fulfillRandom : @storage
+                    IF_NONE
+                      {
+                        PUSH int 352; # int : @some : @parameter%fulfillRandom : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @some : @parameter%fulfillRandom : @storage
+                    # empty_bytes = sp.bytes('0x') # @some : @some : @parameter%fulfillRandom : @storage
+                    PUSH bytes 0x; # bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    # assert commit.revealedPreimage != empty_bytes, "commit not yet revealed" # bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    DUP;        # bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    DUP 3;      # @some : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    GET 4;      # bytes : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    COMPARE;    # int : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    NEQ;        # bool : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "commit not yet revealed"; # string : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                        FAILWITH;   # FAILED
+                      }; # bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    # seed = sp.sha256(commit.revealedPreimage + r.userNonce + sp.pack(params.requestId)) # bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    DUP 4;      # @parameter%fulfillRandom : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    PACK;       # bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    DUP 4;      # @some : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    GET 26;     # bytes : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    DUP 4;      # @some : bytes : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    GET 4;      # bytes : bytes : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    CONCAT;     # bytes : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    CONCAT;     # bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    SHA256;     # bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    # divisor = r.maxValue + 1 # bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    PUSH nat 1; # nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    DUP 5;      # @some : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    GET 13;     # nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    ADD;        # nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    # vals_rev = sp.cast([], sp.list[sp.nat]) # nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    NIL nat;    # list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    # for k in range(32): # list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    PUSH nat 0; # nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    PUSH bool True; # bool : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    LOOP
+                      {
+                        # if k < r.nRandoms: # nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                        DUP 7;      # @some : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                        GET 15;     # nat : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                        DUP 2;      # nat : nat : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                        COMPARE;    # int : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                        LT;         # bool : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                        IF
+                          {
+                            # chunk = sp.sha256(seed + sp.pack(k)) # nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            DUP;        # nat : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            PACK;       # bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            DUP 5;      # bytes : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            CONCAT;     # bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            SHA256;     # bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            # acc = sp.nat(0) # bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            PUSH nat 0; # nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            # for j in range(32): # nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            PUSH nat 0; # nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            PUSH bool True; # bool : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            LOOP
+                              {
+                                # byte_bytes = sp.slice(j, 1, chunk).unwrap_some(error="slice") # nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                DUP 3;      # bytes : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                PUSH nat 1; # nat : bytes : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                DUP 3;      # nat : nat : bytes : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                SLICE;      # option bytes : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                IF_NONE
+                                  {
+                                    PUSH string "slice"; # string : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                    FAILWITH;   # FAILED
+                                  }
+                                  {}; # @some : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                # acc = acc * 256 + self.data.byteLookup[byte_bytes] # @some : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                DUP 13;     # @storage : @some : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                GET 3;      # map bytes nat : @some : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                SWAP;       # @some : map bytes nat : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                GET;        # option nat : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                IF_NONE
+                                  {
+                                    PUSH int 379; # int : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                    FAILWITH;   # FAILED
+                                  }
+                                  {}; # @some : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                PUSH nat 256; # nat : @some : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                DIG 3;      # nat : nat : @some : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                MUL;        # nat : @some : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                ADD;        # nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                SWAP;       # nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                # loop step # nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                PUSH nat 1; # nat : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                ADD;        # nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                DUP;        # nat : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                PUSH nat 32; # nat : nat : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                COMPARE;    # int : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                GT;         # bool : nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                              }; # nat : nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            DROP;       # nat : bytes : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            SWAP;       # bytes : nat : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            DROP;       # nat : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            # vals_rev = sp.cons(sp.mod(acc, divisor), vals_rev) # nat : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            DIG 2;      # list nat : nat : nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            DUP 4;      # nat : list nat : nat : nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            DIG 2;      # nat : nat : list nat : nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            EDIV;       # option (pair nat nat) : list nat : nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            IF_NONE
+                              {
+                                PUSH int 380; # int : list nat : nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                                FAILWITH;   # FAILED
+                              }
+                              {
+                                CDR;        # nat : list nat : nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                              }; # nat : list nat : nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            CONS;       # list nat : nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                            SWAP;       # nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                          }
+                          {}; # nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                        # loop step # nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                        PUSH nat 1; # nat : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                        ADD;        # nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                        DUP;        # nat : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                        PUSH nat 32; # nat : nat : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                        COMPARE;    # int : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                        GT;         # bool : nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                      }; # nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    DROP;       # list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    # values = sp.cast([], sp.list[sp.nat]) # list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    NIL nat;    # list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    # for v in vals_rev: # list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    DUP 2;      # list nat : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    ITER
+                      {
+                        # values = sp.cons(v, values) # nat : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                        CONS;       # list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                      }; # list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    # self.data.operatorEarnings += r.feePaid # list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom : @storage
+                    DIG 8;      # @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DUP;        # @storage : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    GET 17;     # mutez : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DUP 9;      # @some : mutez : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    GET 7;      # mutez : mutez : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    ADD;        # mutez : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    UPDATE 17;  # @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    # self.data.requests[params.requestId] = sp.record( # @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DUP;        # @storage : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    GET 20;     # map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DUP 9;      # @some : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    GET 26;     # bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DUP 10;     # @some : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    GET 25;     # address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DUP 11;     # @some : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    GET 23;     # timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    PUSH nat 1; # nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DUP 13;     # @some : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    GET 19;     # nat : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DUP 8;      # list nat : nat : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DUP 15;     # @some : list nat : nat : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    GET 15;     # nat : list nat : nat : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DUP 16;     # @some : nat : list nat : nat : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    GET 13;     # nat : nat : list nat : nat : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    NOW;        # @now : nat : nat : list nat : nat : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DUP 15;     # bytes : @now : nat : nat : list nat : nat : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DUP 19;     # @some : bytes : @now : nat : nat : list nat : nat : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    GET 7;      # mutez : bytes : @now : nat : nat : list nat : nat : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DUP 20;     # @some : mutez : bytes : @now : nat : nat : list nat : nat : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    GET 5;      # nat : mutez : bytes : @now : nat : nat : list nat : nat : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DUP 21;     # @some : nat : mutez : bytes : @now : nat : nat : list nat : nat : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    GET 3;      # bytes : nat : mutez : bytes : @now : nat : nat : list nat : nat : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DUP 22;     # @some : bytes : nat : mutez : bytes : @now : nat : nat : list nat : nat : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    CAR;        # address : bytes : nat : mutez : bytes : @now : nat : nat : list nat : nat : nat : timestamp : address : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    PAIR 14;    # pair address (pair bytes (pair nat (pair mutez (pair bytes (pair @now (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DIG 4;      # list nat : pair address (pair bytes (pair nat (pair mutez (pair bytes (pair @now (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DROP;       # pair address (pair bytes (pair nat (pair mutez (pair bytes (pair @now (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DIG 4;      # nat : pair address (pair bytes (pair nat (pair mutez (pair bytes (pair @now (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DROP;       # pair address (pair bytes (pair nat (pair mutez (pair bytes (pair @now (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : bytes : @some : @some : @parameter%fulfillRandom
+                    DIG 4;      # bytes : pair address (pair bytes (pair nat (pair mutez (pair bytes (pair @now (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @some : @some : @parameter%fulfillRandom
+                    DROP;       # pair address (pair bytes (pair nat (pair mutez (pair bytes (pair @now (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @some : @some : @parameter%fulfillRandom
+                    DIG 4;      # bytes : pair address (pair bytes (pair nat (pair mutez (pair bytes (pair @now (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : @some : @some : @parameter%fulfillRandom
+                    DROP;       # pair address (pair bytes (pair nat (pair mutez (pair bytes (pair @now (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : @some : @some : @parameter%fulfillRandom
+                    DIG 4;      # @some : pair address (pair bytes (pair nat (pair mutez (pair bytes (pair @now (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : @some : @parameter%fulfillRandom
+                    DROP;       # pair address (pair bytes (pair nat (pair mutez (pair bytes (pair @now (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : @some : @parameter%fulfillRandom
+                    SOME;       # option (pair address (pair bytes (pair nat (pair mutez (pair bytes (pair @now (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes))))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : @some : @parameter%fulfillRandom
+                    DUP 6;      # @parameter%fulfillRandom : option (pair address (pair bytes (pair nat (pair mutez (pair bytes (pair @now (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes))))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : @some : @parameter%fulfillRandom
+                    UPDATE;     # map nat (pair address (pair bytes (pair nat (pair mutez (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes))))))))))))) : @storage : list nat : @some : @parameter%fulfillRandom
+                    UPDATE 20;  # @storage : list nat : @some : @parameter%fulfillRandom
+                    DUG 3;      # list nat : @some : @parameter%fulfillRandom : @storage
+                    # callback_record = sp.record( # list nat : @some : @parameter%fulfillRandom : @storage
+                    DUP 3;      # @parameter%fulfillRandom : list nat : @some : @parameter%fulfillRandom : @storage
+                    DUP 2;      # list nat : @parameter%fulfillRandom : list nat : @some : @parameter%fulfillRandom : @storage
+                    DUP 4;      # @some : list nat : @parameter%fulfillRandom : list nat : @some : @parameter%fulfillRandom : @storage
+                    GET 3;      # bytes : list nat : @parameter%fulfillRandom : list nat : @some : @parameter%fulfillRandom : @storage
+                    PAIR 3;     # pair bytes (pair (list nat) @parameter%fulfillRandom) : list nat : @some : @parameter%fulfillRandom : @storage
+                    # callback_contract = sp.contract(sp.record(requestId=sp.nat, randomValues=sp.list[sp.nat], callbackContext=sp.bytes), r.callback, entrypoint="onRandomFulfilled").unwrap_some(error="callback not a contract or wrong entrypoint type") # pair bytes (pair (list nat) @parameter%fulfillRandom) : list nat : @some : @parameter%fulfillRandom : @storage
+                    DIG 2;      # @some : pair bytes (pair (list nat) @parameter%fulfillRandom) : list nat : @parameter%fulfillRandom : @storage
+                    CAR;        # address : pair bytes (pair (list nat) @parameter%fulfillRandom) : list nat : @parameter%fulfillRandom : @storage
+                    CONTRACT %onRandomFulfilled (pair (bytes %callbackContext) (pair (list %randomValues nat) (nat %requestId))); # option (contract (pair (bytes %callbackContext) (pair (list %randomValues nat) (nat %requestId)))) : pair bytes (pair (list nat) @parameter%fulfillRandom) : list nat : @parameter%fulfillRandom : @storage
+                    IF_NONE
+                      {
+                        PUSH string "callback not a contract or wrong entrypoint type"; # string : pair bytes (pair (list nat) @parameter%fulfillRandom) : list nat : @parameter%fulfillRandom : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : pair bytes (pair (list nat) @parameter%fulfillRandom) : list nat : @parameter%fulfillRandom : @storage
+                    # sp.transfer(callback_record, sp.mutez(0), callback_contract) # @some : pair bytes (pair (list nat) @parameter%fulfillRandom) : list nat : @parameter%fulfillRandom : @storage
+                    NIL operation; # list operation : @some : pair bytes (pair (list nat) @parameter%fulfillRandom) : list nat : @parameter%fulfillRandom : @storage
+                    SWAP;       # @some : list operation : pair bytes (pair (list nat) @parameter%fulfillRandom) : list nat : @parameter%fulfillRandom : @storage
+                    PUSH mutez 0; # mutez : @some : list operation : pair bytes (pair (list nat) @parameter%fulfillRandom) : list nat : @parameter%fulfillRandom : @storage
+                    DIG 3;      # pair bytes (pair (list nat) @parameter%fulfillRandom) : mutez : @some : list operation : list nat : @parameter%fulfillRandom : @storage
+                    TRANSFER_TOKENS; # operation : list operation : list nat : @parameter%fulfillRandom : @storage
+                    CONS;       # list operation : list nat : @parameter%fulfillRandom : @storage
+                    # sp.emit( # list operation : list nat : @parameter%fulfillRandom : @storage
+                    DUG 2;      # list nat : @parameter%fulfillRandom : list operation : @storage
+                    PAIR;       # pair (list nat) @parameter%fulfillRandom : list operation : @storage
+                    EMIT %randomFulfilled (pair (list %randomValues nat) (nat %requestId)); # operation : list operation : @storage
+                    CONS;       # list operation : @storage
+                  }
+                  {
+                    # == postCommit ==
+                    # assert sp.sender == self.data.oracle, "not oracle" # @parameter%postCommit : @storage
+                    DUP 2;      # @storage : @parameter%postCommit : @storage
+                    GET 19;     # address : @parameter%postCommit : @storage
+                    SENDER;     # @sender : address : @parameter%postCommit : @storage
+                    COMPARE;    # int : @parameter%postCommit : @storage
+                    EQ;         # bool : @parameter%postCommit : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "not oracle"; # string : @parameter%postCommit : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%postCommit : @storage
+                    # empty_bytes = sp.bytes('0x') # @parameter%postCommit : @storage
+                    PUSH bytes 0x; # bytes : @parameter%postCommit : @storage
+                    # self.data.commitLog[self.data.currentCommitId] = sp.record( # bytes : @parameter%postCommit : @storage
+                    DUP 3;      # @storage : bytes : @parameter%postCommit : @storage
+                    DUP;        # @storage : @storage : bytes : @parameter%postCommit : @storage
+                    GET 5;      # map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : bytes : @parameter%postCommit : @storage
+                    DUP 3;      # bytes : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : bytes : @parameter%postCommit : @storage
+                    LEVEL;      # @level : bytes : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : bytes : @parameter%postCommit : @storage
+                    DUP 6;      # @parameter%postCommit : @level : bytes : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : bytes : @parameter%postCommit : @storage
+                    PAIR 3;     # pair @parameter%postCommit (pair @level bytes) : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : bytes : @parameter%postCommit : @storage
+                    SOME;       # option (pair @parameter%postCommit (pair @level bytes)) : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : bytes : @parameter%postCommit : @storage
+                    DIG 5;      # @storage : option (pair @parameter%postCommit (pair @level bytes)) : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : bytes : @parameter%postCommit
+                    GET 7;      # nat : option (pair @parameter%postCommit (pair @level bytes)) : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : bytes : @parameter%postCommit
+                    UPDATE;     # map nat (pair bytes (pair nat bytes)) : @storage : bytes : @parameter%postCommit
+                    UPDATE 5;   # @storage : bytes : @parameter%postCommit
+                    DUG 2;      # bytes : @parameter%postCommit : @storage
+                    # sp.emit( # bytes : @parameter%postCommit : @storage
+                    NIL operation; # list operation : bytes : @parameter%postCommit : @storage
+                    DUP;        # list operation : list operation : bytes : @parameter%postCommit : @storage
+                    LEVEL;      # @level : list operation : list operation : bytes : @parameter%postCommit : @storage
+                    DIG 2;      # list operation : @level : list operation : bytes : @parameter%postCommit : @storage
+                    DROP;       # @level : list operation : bytes : @parameter%postCommit : @storage
+                    DIG 2;      # bytes : @level : list operation : @parameter%postCommit : @storage
+                    DROP;       # @level : list operation : @parameter%postCommit : @storage
+                    DIG 2;      # @parameter%postCommit : @level : list operation : @storage
+                    DUP 4;      # @storage : @parameter%postCommit : @level : list operation : @storage
+                    GET 7;      # nat : @parameter%postCommit : @level : list operation : @storage
+                    PAIR 3;     # pair nat (pair @parameter%postCommit @level) : list operation : @storage
+                    EMIT %commitPosted (pair (nat %commitId) (pair (bytes %hash) (nat %postedAtBlock))); # operation : list operation : @storage
+                    CONS;       # list operation : @storage
+                    SWAP;       # @storage : list operation
+                    # self.data.currentCommitId += 1 # @storage : list operation
+                    DUP;        # @storage : @storage : list operation
+                    GET 7;      # nat : @storage : list operation
+                    PUSH nat 1; # nat : nat : @storage : list operation
+                    ADD;        # nat : @storage : list operation
+                    UPDATE 7;   # @storage : list operation
+                    SWAP;       # list operation : @storage
+                  }; # list operation : @storage
+              }; # list operation : @storage
+          }
+          {
+            IF_LEFT
+              {
+                # == pruneCommit ==
+                # assert sp.sender == self.data.admin, "not admin" # @parameter%pruneCommit : @storage
+                DUP 2;      # @storage : @parameter%pruneCommit : @storage
+                CAR;        # address : @parameter%pruneCommit : @storage
+                SENDER;     # @sender : address : @parameter%pruneCommit : @storage
+                COMPARE;    # int : @parameter%pruneCommit : @storage
+                EQ;         # bool : @parameter%pruneCommit : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "not admin"; # string : @parameter%pruneCommit : @storage
+                    FAILWITH;   # FAILED
+                  }; # @parameter%pruneCommit : @storage
+                # c = self.data.commitLog[params.commitId] # @parameter%pruneCommit : @storage
+                DUP 2;      # @storage : @parameter%pruneCommit : @storage
+                GET 5;      # map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%pruneCommit : @storage
+                DUP 2;      # @parameter%pruneCommit : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%pruneCommit : @storage
+                GET;        # option (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%pruneCommit : @storage
+                IF_NONE
+                  {
+                    PUSH int 494; # int : @parameter%pruneCommit : @storage
+                    FAILWITH;   # FAILED
+                  }
+                  {}; # @some : @parameter%pruneCommit : @storage
+                # empty_bytes = sp.bytes('0x') # @some : @parameter%pruneCommit : @storage
+                PUSH bytes 0x; # bytes : @some : @parameter%pruneCommit : @storage
+                # assert c.revealedPreimage != empty_bytes, "commit not revealed" # bytes : @some : @parameter%pruneCommit : @storage
+                DUP 2;      # @some : bytes : @some : @parameter%pruneCommit : @storage
+                GET 4;      # bytes : bytes : @some : @parameter%pruneCommit : @storage
+                COMPARE;    # int : @some : @parameter%pruneCommit : @storage
+                NEQ;        # bool : @some : @parameter%pruneCommit : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "commit not revealed"; # string : @some : @parameter%pruneCommit : @storage
+                    FAILWITH;   # FAILED
+                  }; # @some : @parameter%pruneCommit : @storage
+                # sp.emit(c, tag='commitPruned') # @some : @parameter%pruneCommit : @storage
+                EMIT %commitPruned (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))); # operation : @parameter%pruneCommit : @storage
+                NIL operation; # list operation : operation : @parameter%pruneCommit : @storage
+                SWAP;       # operation : list operation : @parameter%pruneCommit : @storage
+                CONS;       # list operation : @parameter%pruneCommit : @storage
+                # del self.data.commitLog[params.commitId] # list operation : @parameter%pruneCommit : @storage
+                DIG 2;      # @storage : list operation : @parameter%pruneCommit
+                DUP;        # @storage : @storage : list operation : @parameter%pruneCommit
+                GET 5;      # map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : list operation : @parameter%pruneCommit
+                NONE (pair bytes (pair nat bytes)); # option (pair bytes (pair nat bytes)) : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : list operation : @parameter%pruneCommit
+                DIG 4;      # @parameter%pruneCommit : option (pair bytes (pair nat bytes)) : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : list operation
+                UPDATE;     # map nat (pair bytes (pair nat bytes)) : @storage : list operation
+                UPDATE 5;   # @storage : list operation
+                SWAP;       # list operation : @storage
+              }
+              {
+                IF_LEFT
+                  {
+                    # == pruneRequest ==
+                    # assert sp.sender == self.data.admin, "not admin" # @parameter%pruneRequest : @storage
+                    DUP 2;      # @storage : @parameter%pruneRequest : @storage
+                    CAR;        # address : @parameter%pruneRequest : @storage
+                    SENDER;     # @sender : address : @parameter%pruneRequest : @storage
+                    COMPARE;    # int : @parameter%pruneRequest : @storage
+                    EQ;         # bool : @parameter%pruneRequest : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "not admin"; # string : @parameter%pruneRequest : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%pruneRequest : @storage
+                    # r = self.data.requests[params.requestId] # @parameter%pruneRequest : @storage
+                    DUP 2;      # @storage : @parameter%pruneRequest : @storage
+                    GET 20;     # map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @parameter%pruneRequest : @storage
+                    DUP 2;      # @parameter%pruneRequest : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @parameter%pruneRequest : @storage
+                    GET;        # option (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @parameter%pruneRequest : @storage
+                    IF_NONE
+                      {
+                        PUSH int 482; # int : @parameter%pruneRequest : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @parameter%pruneRequest : @storage
+                    # assert r.requestStatus != 0, "request not settled" # @some : @parameter%pruneRequest : @storage
+                    PUSH nat 0; # nat : @some : @parameter%pruneRequest : @storage
+                    DUP 2;      # @some : nat : @some : @parameter%pruneRequest : @storage
+                    GET 21;     # nat : nat : @some : @parameter%pruneRequest : @storage
+                    COMPARE;    # int : @some : @parameter%pruneRequest : @storage
+                    NEQ;        # bool : @some : @parameter%pruneRequest : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "request not settled"; # string : @some : @parameter%pruneRequest : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%pruneRequest : @storage
+                    # sp.emit(r, tag='requestPruned') # @some : @parameter%pruneRequest : @storage
+                    EMIT %requestPruned (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))); # operation : @parameter%pruneRequest : @storage
+                    NIL operation; # list operation : operation : @parameter%pruneRequest : @storage
+                    SWAP;       # operation : list operation : @parameter%pruneRequest : @storage
+                    CONS;       # list operation : @parameter%pruneRequest : @storage
+                    # del self.data.requests[params.requestId] # list operation : @parameter%pruneRequest : @storage
+                    DIG 2;      # @storage : list operation : @parameter%pruneRequest
+                    DUP;        # @storage : @storage : list operation : @parameter%pruneRequest
+                    GET 20;     # map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list operation : @parameter%pruneRequest
+                    NONE (pair address (pair bytes (pair nat (pair mutez (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes))))))))))))); # option (pair address (pair bytes (pair nat (pair mutez (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes))))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list operation : @parameter%pruneRequest
+                    DIG 4;      # @parameter%pruneRequest : option (pair address (pair bytes (pair nat (pair mutez (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes))))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list operation
+                    UPDATE;     # map nat (pair address (pair bytes (pair nat (pair mutez (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes))))))))))))) : @storage : list operation
+                    UPDATE 20;  # @storage : list operation
+                    SWAP;       # list operation : @storage
+                  }
+                  {
+                    # == requestRandom ==
+                    # assert sp.amount >= self.data.fee, "fee too low" # @parameter%requestRandom : @storage
+                    DUP 2;      # @storage : @parameter%requestRandom : @storage
+                    GET 11;     # mutez : @parameter%requestRandom : @storage
+                    AMOUNT;     # @amount : mutez : @parameter%requestRandom : @storage
+                    COMPARE;    # int : @parameter%requestRandom : @storage
+                    GE;         # bool : @parameter%requestRandom : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "fee too low"; # string : @parameter%requestRandom : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%requestRandom : @storage
+                    # assert params.nRandoms >= 1, "nRandoms must be >= 1" # @parameter%requestRandom : @storage
+                    PUSH nat 1; # nat : @parameter%requestRandom : @storage
+                    DUP 2;      # @parameter%requestRandom : nat : @parameter%requestRandom : @storage
+                    GET 9;      # nat : nat : @parameter%requestRandom : @storage
+                    COMPARE;    # int : @parameter%requestRandom : @storage
+                    GE;         # bool : @parameter%requestRandom : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "nRandoms must be >= 1"; # string : @parameter%requestRandom : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%requestRandom : @storage
+                    # assert params.nRandoms <= self.data.maxRandomsPerRequest, "nRandoms too large" # @parameter%requestRandom : @storage
+                    DUP 2;      # @storage : @parameter%requestRandom : @storage
+                    GET 13;     # nat : @parameter%requestRandom : @storage
+                    DUP 2;      # @parameter%requestRandom : nat : @parameter%requestRandom : @storage
+                    GET 9;      # nat : nat : @parameter%requestRandom : @storage
+                    COMPARE;    # int : @parameter%requestRandom : @storage
+                    LE;         # bool : @parameter%requestRandom : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "nRandoms too large"; # string : @parameter%requestRandom : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%requestRandom : @storage
+                    # assert params.maxValue >= 1, "maxValue must be >= 1" # @parameter%requestRandom : @storage
+                    PUSH nat 1; # nat : @parameter%requestRandom : @storage
+                    DUP 2;      # @parameter%requestRandom : nat : @parameter%requestRandom : @storage
+                    GET 7;      # nat : nat : @parameter%requestRandom : @storage
+                    COMPARE;    # int : @parameter%requestRandom : @storage
+                    GE;         # bool : @parameter%requestRandom : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "maxValue must be >= 1"; # string : @parameter%requestRandom : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%requestRandom : @storage
+                    # assert params.commitId in self.data.commitLog, "unknown commit" # @parameter%requestRandom : @storage
+                    DUP 2;      # @storage : @parameter%requestRandom : @storage
+                    GET 5;      # map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%requestRandom : @storage
+                    DUP 2;      # @parameter%requestRandom : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%requestRandom : @storage
+                    GET 5;      # nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%requestRandom : @storage
+                    MEM;        # bool : @parameter%requestRandom : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "unknown commit"; # string : @parameter%requestRandom : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%requestRandom : @storage
+                    # commit = self.data.commitLog[params.commitId] # @parameter%requestRandom : @storage
+                    DUP 2;      # @storage : @parameter%requestRandom : @storage
+                    GET 5;      # map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%requestRandom : @storage
+                    DUP 2;      # @parameter%requestRandom : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%requestRandom : @storage
+                    GET 5;      # nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%requestRandom : @storage
+                    GET;        # option (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%requestRandom : @storage
+                    IF_NONE
+                      {
+                        PUSH int 301; # int : @parameter%requestRandom : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @parameter%requestRandom : @storage
+                    # level_nat = sp.level # @some : @parameter%requestRandom : @storage
+                    LEVEL;      # @level : @some : @parameter%requestRandom : @storage
+                    # assert level_nat >= commit.postedAtBlock + self.data.minCommitAge, "commit too fresh" # @level : @some : @parameter%requestRandom : @storage
+                    DUP 4;      # @storage : @level : @some : @parameter%requestRandom : @storage
+                    GET 15;     # nat : @level : @some : @parameter%requestRandom : @storage
+                    DUP 3;      # @some : nat : @level : @some : @parameter%requestRandom : @storage
+                    GET 3;      # nat : nat : @level : @some : @parameter%requestRandom : @storage
+                    ADD;        # nat : @level : @some : @parameter%requestRandom : @storage
+                    DUP 2;      # @level : nat : @level : @some : @parameter%requestRandom : @storage
+                    COMPARE;    # int : @level : @some : @parameter%requestRandom : @storage
+                    GE;         # bool : @level : @some : @parameter%requestRandom : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "commit too fresh"; # string : @level : @some : @parameter%requestRandom : @storage
+                        FAILWITH;   # FAILED
+                      }; # @level : @some : @parameter%requestRandom : @storage
+                    # empty_bytes = sp.bytes('0x') # @level : @some : @parameter%requestRandom : @storage
+                    PUSH bytes 0x; # bytes : @level : @some : @parameter%requestRandom : @storage
+                    # assert commit.revealedPreimage == empty_bytes, "commit already revealed" # bytes : @level : @some : @parameter%requestRandom : @storage
+                    DUP;        # bytes : bytes : @level : @some : @parameter%requestRandom : @storage
+                    DUP 4;      # @some : bytes : bytes : @level : @some : @parameter%requestRandom : @storage
+                    GET 4;      # bytes : bytes : bytes : @level : @some : @parameter%requestRandom : @storage
+                    COMPARE;    # int : bytes : @level : @some : @parameter%requestRandom : @storage
+                    EQ;         # bool : bytes : @level : @some : @parameter%requestRandom : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "commit already revealed"; # string : bytes : @level : @some : @parameter%requestRandom : @storage
+                        FAILWITH;   # FAILED
+                      }; # bytes : @level : @some : @parameter%requestRandom : @storage
+                    # empty_list = sp.cast([], sp.list[sp.nat]) # bytes : @level : @some : @parameter%requestRandom : @storage
+                    NIL nat;    # list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    # self.data.requests[self.data.currentRequestId] = sp.record( # list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    DUP 6;      # @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    DUP;        # @storage : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    GET 20;     # map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    DUP 7;      # @parameter%requestRandom : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    GET 10;     # bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    SENDER;     # @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    NOW;        # @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    PUSH nat 0; # nat : @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    DUP 9;      # @level : nat : @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    DUP 8;      # list nat : @level : nat : @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    DUP 13;     # @parameter%requestRandom : list nat : @level : nat : @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    GET 9;      # nat : list nat : @level : nat : @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    DUP 14;     # @parameter%requestRandom : nat : list nat : @level : nat : @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    GET 7;      # nat : nat : list nat : @level : nat : @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    PUSH timestamp "1970-01-01T00:00:00Z"; # timestamp : nat : nat : list nat : @level : nat : @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    DUP 13;     # bytes : timestamp : nat : nat : list nat : @level : nat : @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    AMOUNT;     # @amount : bytes : timestamp : nat : nat : list nat : @level : nat : @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    DUP 18;     # @parameter%requestRandom : @amount : bytes : timestamp : nat : nat : list nat : @level : nat : @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    GET 5;      # nat : @amount : bytes : timestamp : nat : nat : list nat : @level : nat : @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    DUP 19;     # @parameter%requestRandom : nat : @amount : bytes : timestamp : nat : nat : list nat : @level : nat : @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    GET 3;      # bytes : nat : @amount : bytes : timestamp : nat : nat : list nat : @level : nat : @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    DUP 20;     # @parameter%requestRandom : bytes : nat : @amount : bytes : timestamp : nat : nat : list nat : @level : nat : @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    CAR;        # address : bytes : nat : @amount : bytes : timestamp : nat : nat : list nat : @level : nat : @now : @sender : bytes : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    PAIR 14;    # pair address (pair bytes (pair nat (pair @amount (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair @level (pair nat (pair @now (pair @sender bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : list nat : bytes : @level : @some : @parameter%requestRandom : @storage
+                    DIG 3;      # list nat : pair address (pair bytes (pair nat (pair @amount (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair @level (pair nat (pair @now (pair @sender bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : bytes : @level : @some : @parameter%requestRandom : @storage
+                    DROP;       # pair address (pair bytes (pair nat (pair @amount (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair @level (pair nat (pair @now (pair @sender bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : bytes : @level : @some : @parameter%requestRandom : @storage
+                    DIG 3;      # bytes : pair address (pair bytes (pair nat (pair @amount (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair @level (pair nat (pair @now (pair @sender bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : @level : @some : @parameter%requestRandom : @storage
+                    DROP;       # pair address (pair bytes (pair nat (pair @amount (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair @level (pair nat (pair @now (pair @sender bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : @level : @some : @parameter%requestRandom : @storage
+                    DIG 3;      # @level : pair address (pair bytes (pair nat (pair @amount (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair @level (pair nat (pair @now (pair @sender bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : @some : @parameter%requestRandom : @storage
+                    DROP;       # pair address (pair bytes (pair nat (pair @amount (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair @level (pair nat (pair @now (pair @sender bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : @some : @parameter%requestRandom : @storage
+                    DIG 3;      # @some : pair address (pair bytes (pair nat (pair @amount (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair @level (pair nat (pair @now (pair @sender bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : @parameter%requestRandom : @storage
+                    DROP;       # pair address (pair bytes (pair nat (pair @amount (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair @level (pair nat (pair @now (pair @sender bytes)))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : @parameter%requestRandom : @storage
+                    SOME;       # option (pair address (pair bytes (pair nat (pair @amount (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair @level (pair nat (pair @now (pair @sender bytes))))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : @parameter%requestRandom : @storage
+                    DIG 4;      # @storage : option (pair address (pair bytes (pair nat (pair @amount (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair @level (pair nat (pair @now (pair @sender bytes))))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : @parameter%requestRandom
+                    GET 9;      # nat : option (pair address (pair bytes (pair nat (pair @amount (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair @level (pair nat (pair @now (pair @sender bytes))))))))))))) : map nat (pair (address %callback) (pair (bytes %callbackContext) (pair (nat %commitId) (pair (mutez %feePaid) (pair (bytes %finalSeed) (pair (timestamp %fulfillTime) (pair (nat %maxValue) (pair (nat %nRandoms) (pair (list %randomValues nat) (pair (nat %requestBlock) (pair (nat %requestStatus) (pair (timestamp %requestTime) (pair (address %requester) (bytes %userNonce)))))))))))))) : @storage : @parameter%requestRandom
+                    UPDATE;     # map nat (pair address (pair bytes (pair nat (pair mutez (pair bytes (pair timestamp (pair nat (pair nat (pair (list nat) (pair nat (pair nat (pair timestamp (pair address bytes))))))))))))) : @storage : @parameter%requestRandom
+                    UPDATE 20;  # @storage : @parameter%requestRandom
+                    SWAP;       # @parameter%requestRandom : @storage
+                    # sp.emit( # @parameter%requestRandom : @storage
+                    NIL operation; # list operation : @parameter%requestRandom : @storage
+                    NIL nat;    # list nat : list operation : @parameter%requestRandom : @storage
+                    DUP 3;      # @parameter%requestRandom : list nat : list operation : @parameter%requestRandom : @storage
+                    GET 5;      # nat : list nat : list operation : @parameter%requestRandom : @storage
+                    CONS;       # list nat : list operation : @parameter%requestRandom : @storage
+                    DUP 3;      # @parameter%requestRandom : list nat : list operation : @parameter%requestRandom : @storage
+                    GET 7;      # nat : list nat : list operation : @parameter%requestRandom : @storage
+                    CONS;       # list nat : list operation : @parameter%requestRandom : @storage
+                    DIG 2;      # @parameter%requestRandom : list nat : list operation : @storage
+                    GET 9;      # nat : list nat : list operation : @storage
+                    CONS;       # list nat : list operation : @storage
+                    DUP 3;      # @storage : list nat : list operation : @storage
+                    GET 9;      # nat : list nat : list operation : @storage
+                    CONS;       # list nat : list operation : @storage
+                    EMIT %randomRequested (list nat); # operation : list operation : @storage
+                    CONS;       # list operation : @storage
+                    SWAP;       # @storage : list operation
+                    # self.data.currentRequestId += 1 # @storage : list operation
+                    DUP;        # @storage : @storage : list operation
+                    GET 9;      # nat : @storage : list operation
+                    PUSH nat 1; # nat : nat : @storage : list operation
+                    ADD;        # nat : @storage : list operation
+                    UPDATE 9;   # @storage : list operation
+                    SWAP;       # list operation : @storage
+                  }; # list operation : @storage
+              }; # list operation : @storage
+          }; # list operation : @storage
+      }
+      {
+        IF_LEFT
+          {
+            IF_LEFT
+              {
+                # == revealCommit ==
+                # assert sp.sender == self.data.oracle, "not oracle" # @parameter%revealCommit : @storage
+                DUP 2;      # @storage : @parameter%revealCommit : @storage
+                GET 19;     # address : @parameter%revealCommit : @storage
+                SENDER;     # @sender : address : @parameter%revealCommit : @storage
+                COMPARE;    # int : @parameter%revealCommit : @storage
+                EQ;         # bool : @parameter%revealCommit : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "not oracle"; # string : @parameter%revealCommit : @storage
+                    FAILWITH;   # FAILED
+                  }; # @parameter%revealCommit : @storage
+                # assert params.commitId in self.data.commitLog, "no such commit" # @parameter%revealCommit : @storage
+                DUP 2;      # @storage : @parameter%revealCommit : @storage
+                GET 5;      # map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%revealCommit : @storage
+                DUP 2;      # @parameter%revealCommit : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%revealCommit : @storage
+                CAR;        # nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%revealCommit : @storage
+                MEM;        # bool : @parameter%revealCommit : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "no such commit"; # string : @parameter%revealCommit : @storage
+                    FAILWITH;   # FAILED
+                  }; # @parameter%revealCommit : @storage
+                # entry = self.data.commitLog[params.commitId] # @parameter%revealCommit : @storage
+                DUP 2;      # @storage : @parameter%revealCommit : @storage
+                GET 5;      # map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%revealCommit : @storage
+                DUP 2;      # @parameter%revealCommit : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%revealCommit : @storage
+                CAR;        # nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%revealCommit : @storage
+                GET;        # option (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @parameter%revealCommit : @storage
+                IF_NONE
+                  {
+                    PUSH int 255; # int : @parameter%revealCommit : @storage
+                    FAILWITH;   # FAILED
+                  }
+                  {}; # @some : @parameter%revealCommit : @storage
+                # empty_bytes = sp.bytes('0x') # @some : @parameter%revealCommit : @storage
+                PUSH bytes 0x; # bytes : @some : @parameter%revealCommit : @storage
+                # assert entry.revealedPreimage == empty_bytes, "already revealed" # bytes : @some : @parameter%revealCommit : @storage
+                DUP 2;      # @some : bytes : @some : @parameter%revealCommit : @storage
+                GET 4;      # bytes : bytes : @some : @parameter%revealCommit : @storage
+                COMPARE;    # int : @some : @parameter%revealCommit : @storage
+                EQ;         # bool : @some : @parameter%revealCommit : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "already revealed"; # string : @some : @parameter%revealCommit : @storage
+                    FAILWITH;   # FAILED
+                  }; # @some : @parameter%revealCommit : @storage
+                # assert sp.sha256(params.preimage) == entry.hash, "preimage mismatch" # @some : @parameter%revealCommit : @storage
+                CAR;        # bytes : @parameter%revealCommit : @storage
+                DUP 2;      # @parameter%revealCommit : bytes : @parameter%revealCommit : @storage
+                CDR;        # bytes : bytes : @parameter%revealCommit : @storage
+                SHA256;     # bytes : bytes : @parameter%revealCommit : @storage
+                COMPARE;    # int : @parameter%revealCommit : @storage
+                EQ;         # bool : @parameter%revealCommit : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "preimage mismatch"; # string : @parameter%revealCommit : @storage
+                    FAILWITH;   # FAILED
+                  }; # @parameter%revealCommit : @storage
+                SWAP;       # @storage : @parameter%revealCommit
+                # self.data.commitLog[params.commitId].revealedPreimage = params.preimage # @storage : @parameter%revealCommit
+                DUP;        # @storage : @storage : @parameter%revealCommit
+                GET 5;      # map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
+                DUP;        # map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
+                DUP 4;      # @parameter%revealCommit : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
+                CAR;        # nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
+                DUP;        # nat : nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
+                DUG 2;      # nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
+                GET;        # option (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
+                IF_NONE
+                  {
+                    PUSH int 259; # int : nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
+                    FAILWITH;   # FAILED
+                  }
+                  {}; # @some : nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
+                DUP 5;      # @parameter%revealCommit : @some : nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
+                CDR;        # bytes : @some : nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
+                UPDATE 4;   # @some : nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
+                SOME;       # option (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : nat : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
+                SWAP;       # nat : option (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
+                UPDATE;     # map nat (pair (bytes %hash) (pair (nat %postedAtBlock) (bytes %revealedPreimage))) : @storage : @parameter%revealCommit
+                UPDATE 5;   # @storage : @parameter%revealCommit
+                SWAP;       # @parameter%revealCommit : @storage
+                # sp.emit( # @parameter%revealCommit : @storage
+                EMIT %commitRevealed (pair (nat %commitId) (bytes %preimage)); # operation : @storage
+                NIL operation; # list operation : operation : @storage
+                SWAP;       # operation : list operation : @storage
+                CONS;       # list operation : @storage
+              }
+              {
+                IF_LEFT
+                  {
+                    # == updateAdmin ==
+                    # assert sp.sender == self.data.admin, "not admin" # @parameter%updateAdmin : @storage
+                    DUP 2;      # @storage : @parameter%updateAdmin : @storage
+                    CAR;        # address : @parameter%updateAdmin : @storage
+                    SENDER;     # @sender : address : @parameter%updateAdmin : @storage
+                    COMPARE;    # int : @parameter%updateAdmin : @storage
+                    EQ;         # bool : @parameter%updateAdmin : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "not admin"; # string : @parameter%updateAdmin : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%updateAdmin : @storage
+                    # self.data.admin = params.newAdmin # @parameter%updateAdmin : @storage
+                    UPDATE 1;   # @storage
+                  }
+                  {
+                    # == updateFee ==
+                    # assert sp.sender == self.data.admin, "not admin" # @parameter%updateFee : @storage
+                    DUP 2;      # @storage : @parameter%updateFee : @storage
+                    CAR;        # address : @parameter%updateFee : @storage
+                    SENDER;     # @sender : address : @parameter%updateFee : @storage
+                    COMPARE;    # int : @parameter%updateFee : @storage
+                    EQ;         # bool : @parameter%updateFee : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "not admin"; # string : @parameter%updateFee : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%updateFee : @storage
+                    # self.data.fee = params.newFee # @parameter%updateFee : @storage
+                    UPDATE 11;  # @storage
+                  }; # @storage
+                NIL operation; # list operation : @storage
+              }; # list operation : @storage
+          }
+          {
+            IF_LEFT
+              {
+                IF_LEFT
+                  {
+                    # == updateMaxRandoms ==
+                    # assert sp.sender == self.data.admin, "not admin" # @parameter%updateMaxRandoms : @storage
+                    DUP 2;      # @storage : @parameter%updateMaxRandoms : @storage
+                    CAR;        # address : @parameter%updateMaxRandoms : @storage
+                    SENDER;     # @sender : address : @parameter%updateMaxRandoms : @storage
+                    COMPARE;    # int : @parameter%updateMaxRandoms : @storage
+                    EQ;         # bool : @parameter%updateMaxRandoms : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "not admin"; # string : @parameter%updateMaxRandoms : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%updateMaxRandoms : @storage
+                    # assert params.newMax <= sp.nat(32), "loop unrolled at 32; widen first" # @parameter%updateMaxRandoms : @storage
+                    PUSH nat 32; # nat : @parameter%updateMaxRandoms : @storage
+                    DUP 2;      # @parameter%updateMaxRandoms : nat : @parameter%updateMaxRandoms : @storage
+                    COMPARE;    # int : @parameter%updateMaxRandoms : @storage
+                    LE;         # bool : @parameter%updateMaxRandoms : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "loop unrolled at 32; widen first"; # string : @parameter%updateMaxRandoms : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%updateMaxRandoms : @storage
+                    # self.data.maxRandomsPerRequest = params.newMax # @parameter%updateMaxRandoms : @storage
+                    UPDATE 13;  # @storage
+                  }
+                  {
+                    # == updateMinCommitAge ==
+                    # assert sp.sender == self.data.admin, "not admin" # @parameter%updateMinCommitAge : @storage
+                    DUP 2;      # @storage : @parameter%updateMinCommitAge : @storage
+                    CAR;        # address : @parameter%updateMinCommitAge : @storage
+                    SENDER;     # @sender : address : @parameter%updateMinCommitAge : @storage
+                    COMPARE;    # int : @parameter%updateMinCommitAge : @storage
+                    EQ;         # bool : @parameter%updateMinCommitAge : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "not admin"; # string : @parameter%updateMinCommitAge : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%updateMinCommitAge : @storage
+                    # self.data.minCommitAge = params.newAge # @parameter%updateMinCommitAge : @storage
+                    UPDATE 15;  # @storage
+                  }; # @storage
+                NIL operation; # list operation : @storage
+              }
+              {
+                IF_LEFT
+                  {
+                    # == updateOracle ==
+                    # assert sp.sender == self.data.admin, "not admin" # @parameter%updateOracle : @storage
+                    DUP 2;      # @storage : @parameter%updateOracle : @storage
+                    CAR;        # address : @parameter%updateOracle : @storage
+                    SENDER;     # @sender : address : @parameter%updateOracle : @storage
+                    COMPARE;    # int : @parameter%updateOracle : @storage
+                    EQ;         # bool : @parameter%updateOracle : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "not admin"; # string : @parameter%updateOracle : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%updateOracle : @storage
+                    # self.data.oracle = params.newOracle # @parameter%updateOracle : @storage
+                    UPDATE 19;  # @storage
+                    NIL operation; # list operation : @storage
+                  }
+                  {
+                    # == withdrawEarnings ==
+                    # assert sp.sender == self.data.admin, "not admin" # @parameter%withdrawEarnings : @storage
+                    DUP 2;      # @storage : @parameter%withdrawEarnings : @storage
+                    CAR;        # address : @parameter%withdrawEarnings : @storage
+                    SENDER;     # @sender : address : @parameter%withdrawEarnings : @storage
+                    COMPARE;    # int : @parameter%withdrawEarnings : @storage
+                    EQ;         # bool : @parameter%withdrawEarnings : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "not admin"; # string : @parameter%withdrawEarnings : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%withdrawEarnings : @storage
+                    # assert self.data.operatorEarnings > sp.mutez(0), "nothing to withdraw" # @parameter%withdrawEarnings : @storage
+                    PUSH mutez 0; # mutez : @parameter%withdrawEarnings : @storage
+                    DUP 3;      # @storage : mutez : @parameter%withdrawEarnings : @storage
+                    GET 17;     # mutez : mutez : @parameter%withdrawEarnings : @storage
+                    COMPARE;    # int : @parameter%withdrawEarnings : @storage
+                    GT;         # bool : @parameter%withdrawEarnings : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "nothing to withdraw"; # string : @parameter%withdrawEarnings : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%withdrawEarnings : @storage
+                    # sp.send(params.recipient, self.data.operatorEarnings) # @parameter%withdrawEarnings : @storage
+                    CONTRACT unit; # option (contract unit) : @storage
+                    IF_NONE
+                      {
+                        PUSH int 434; # int : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @storage
+                    NIL operation; # list operation : @some : @storage
+                    SWAP;       # @some : list operation : @storage
+                    DUP 3;      # @storage : @some : list operation : @storage
+                    GET 17;     # mutez : @some : list operation : @storage
+                    UNIT;       # unit : mutez : @some : list operation : @storage
+                    TRANSFER_TOKENS; # operation : list operation : @storage
+                    CONS;       # list operation : @storage
+                    SWAP;       # @storage : list operation
+                    # self.data.operatorEarnings = sp.mutez(0) # @storage : list operation
+                    PUSH mutez 0; # mutez : @storage : list operation
+                    UPDATE 17;  # @storage : list operation
+                    SWAP;       # list operation : @storage
+                  }; # list operation : @storage
+              }; # list operation : @storage
+          }; # list operation : @storage
+      }; # list operation : @storage
+    NIL operation; # list operation : list operation : @storage
+    SWAP;       # list operation : list operation : @storage
+    ITER
+      {
+        CONS;       # list operation : @storage
+      }; # list operation : @storage
+    PAIR;       # pair (list operation) @storage
+  };
