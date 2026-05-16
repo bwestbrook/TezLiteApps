@@ -366,4 +366,27 @@ button { cursor: pointer; }
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ─── Mobile baseline ─────────────────────────────────────────────────
+   App.vue scope: rules that need to win against everything, since the
+   shell + game components inherit body styles. mainBody.vue carries
+   the rest (button/nav touch targets). */
+
+/* Belt-and-suspenders: prevent ANY child from causing the page to
+   sideways-scroll on phones. Some game canvases briefly overflow during
+   animation; without this they push the whole viewport. */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+/* Phones: shrink ambient body padding, ensure tap-zoom doesn't kick in
+   for input controls (font-size >= 16px is iOS's threshold). */
+@media (max-width: 480px) {
+  body { padding: 6px 0; }
+  input, select, textarea {
+    /* iOS Safari auto-zooms any focused control whose font-size is
+       under 16px. Pinning to 16px keeps the viewport steady. */
+    font-size: 16px;
+  }
+}
 </style>

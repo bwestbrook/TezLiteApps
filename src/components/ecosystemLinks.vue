@@ -314,4 +314,21 @@ export default {
   overflow: hidden;
   white-space: nowrap;
 }
+
+/* ─── Mobile ────────────────────────────────────────────────────────
+   Link grid already auto-fits at 220px columns; on phones it'll
+   single-column naturally. Just tighten typography + paddings. */
+@media (max-width: 480px) {
+  .ecosystemRoot { padding: 10px 8px; }
+  .ecoTitle { font-size: 20px; letter-spacing: 0.10em; }
+  .ecoSub { font-size: 10.5px; }
+  .links { grid-template-columns: 1fr; }
+  .linkCard { padding: 10px 12px; }
+  .linkTitle { font-size: 13.5px; }
+  .linkBlurb { font-size: 11px; }
+  .linkUrl { font-size: 9.5px; }
+}
+@media (min-width: 481px) and (max-width: 768px) {
+  .links { grid-template-columns: repeat(2, 1fr); }
+}
 </style>

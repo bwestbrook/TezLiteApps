@@ -1211,4 +1211,17 @@ export default {
   line-height: 1.55;
 }
 .infoLine { padding: 1px 0; }
+
+/* ─── Mobile ────────────────────────────────────────────────────────
+   Plinko's 3D canvas (`canvasContainer canvas` in mainBody styles)
+   already caps at max-width: 100%. Here we tighten the surrounding
+   pill rows + info text so the screen isn't dominated by chrome. */
+@media (max-width: 480px) {
+  .infoBlock { font-size: 10px; }
+  .howToBtn { font-size: 11px; padding: 6px 10px; }
+  .howToBtn span { font-size: 8.5px; }
+}
+@media (min-width: 481px) and (max-width: 768px) {
+  .infoBlock { font-size: 11px; }
+}
 </style>

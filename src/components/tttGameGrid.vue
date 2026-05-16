@@ -720,4 +720,10 @@ export default {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 1; }
 }
+
+/* ─── Mobile ─ TTT canvas already sizes via gameSize prop; rules here
+   just keep the watch indicator + status chrome compact on phones. */
+@media (max-width: 480px) {
+  .watchDot { width: 8px; height: 8px; }
+}
 </style>

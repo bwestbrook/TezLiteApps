@@ -786,4 +786,55 @@ export default {
   margin: 12px auto 0;
   font-family: var(--ad-font-body);
 }
+
+/* ─── Site-wide mobile rules ─────────────────────────────────────────
+   Two-tier responsive pass: ≤480px (phone portrait) and 481–768px
+   (phone landscape / large phone). The shell is non-scoped, so
+   anything we tighten here also affects every game component via the
+   shared .actionButton / .gameInfo / .rowFlex classes — that's how
+   we get mobile coverage without editing every child component. */
+
+/* Phone portrait — most aggressive */
+@media (max-width: 480px) {
+  body { padding: 8px 0; }
+  .mainBody {
+    padding: 10px 8px 16px;
+    border-radius: var(--ad-r-md);
+  }
+  /* Lift every interactive surface to a ≥44px Apple-HIG touch target. */
+  .actionButton,
+  .actionButtonSelected,
+  .actionButtonHelp {
+    min-height: 44px;
+    padding: 10px 14px;
+    font-size: 13.5px;
+  }
+  .selectBox { min-height: 44px; }
+  .gameSelect { min-height: 44px; padding: 10px 12px; }
+  .gameInfo { font-size: 12.5px; padding: 8px 10px; }
+  .txlRank { min-height: 42px; font-size: 12px; padding: 8px 10px; }
+  /* Nav carousel: lift pill + arrow tap targets, shrink type slightly */
+  .navPill { min-height: 44px; padding: 10px 14px; font-size: 12px; }
+  .navArrow { width: 36px; height: 36px; font-size: 20px; }
+  /* When rows wrap, give items more breathing room */
+  .rowFlex { gap: 8px; }
+  /* Keep the network badge readable at thumb scale */
+  .networkBadge { font-size: 11px; padding: 6px 12px 6px 10px; }
+  .label { font-size: 10px; margin-top: 10px; }
+}
+
+/* Phone landscape / large phone — gentler */
+@media (min-width: 481px) and (max-width: 768px) {
+  .mainBody {
+    padding: 12px 12px 18px;
+    max-width: 100%;
+  }
+  .actionButton,
+  .actionButtonSelected,
+  .actionButtonHelp {
+    min-height: 42px;
+  }
+  .navPill { min-height: 40px; }
+  .navArrow { width: 34px; height: 34px; }
+}
 </style>

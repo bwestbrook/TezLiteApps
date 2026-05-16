@@ -682,4 +682,36 @@ def onRandomFulfilled(self, params):
 .warnBody p:last-child { margin-bottom: 0; }
 .warnBody strong { color: var(--ad-red-1); }
 .warnBody em { color: var(--ad-text-1); font-style: italic; }
+
+/* ─── Mobile ────────────────────────────────────────────────────────
+   Most of this page is text-heavy cards; the dense grids (.statGrid,
+   .workerGrid) already auto-fit. The hero collapses to a vertical
+   stack on small screens so the logo + title don't fight for width. */
+@media (max-width: 480px) {
+  .oracleRoot { padding: 10px 8px; gap: 12px; }
+  .hero {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    padding: 14px 12px;
+    gap: 10px;
+  }
+  .heroLogo { width: 72px; height: 72px; margin: 0 auto; }
+  .heroTitle { font-size: 22px; letter-spacing: 0.12em; }
+  .heroSub { font-size: 12.5px; }
+  .heroChips { justify-content: center; }
+  .card { padding: 12px 14px; }
+  .cardTitle { font-size: 14px; letter-spacing: 0.1em; }
+  .cardBlurb { font-size: 12px; }
+  .statGrid { grid-template-columns: 1fr; }
+  .workerGrid { grid-template-columns: 1fr; }
+  .stepList { font-size: 12.5px; }
+  .code { font-size: 11px; }
+  .codeInline { font-size: 10px; }
+}
+@media (min-width: 481px) and (max-width: 768px) {
+  .hero { padding: 14px 16px; }
+  .heroLogo { width: 78px; height: 78px; }
+  .heroTitle { font-size: 24px; }
+}
 </style>

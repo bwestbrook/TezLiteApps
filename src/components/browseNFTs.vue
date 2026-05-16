@@ -1246,4 +1246,26 @@ export default {
   0%, 100% { opacity: 0.7; transform: scaleX(1); }
   50%      { opacity: 0.45; transform: scaleX(0.85); }
 }
+
+/* ─── Mobile ────────────────────────────────────────────────────────
+   Most of the page uses shared classes (.gameInfo / .rowFlex /
+   .actionButton) that mainBody.vue already styles for mobile. Only
+   the NFT stage + owner badge need a tighter tune on phones. */
+@media (max-width: 480px) {
+  .nftCardStage {
+    /* Shrink the upper bound so the card never dominates the viewport
+       on small phones; let it occupy 75 vw if needed. */
+    width: clamp(180px, 75vw, 280px);
+    margin: 10px auto;
+  }
+  .ownerBadge {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+  }
+}
+@media (min-width: 481px) and (max-width: 768px) {
+  .nftCardStage {
+    width: clamp(220px, 55vw, 300px);
+  }
+}
 </style>
