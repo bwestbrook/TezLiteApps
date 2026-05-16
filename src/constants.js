@@ -36,7 +36,7 @@ export const DEFAULT_GAME_SIZE = 500
 
 const NETWORK_STORAGE_KEY = 'tezliteapps:network'
 const VALID_NETWORKS = ['shadownet', 'mainnet']
-const DEFAULT_NETWORK = 'shadownet'
+const DEFAULT_NETWORK = 'mainnet'
 
 function detectActiveNetwork() {
   try {

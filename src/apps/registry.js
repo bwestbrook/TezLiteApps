@@ -23,9 +23,29 @@ import aceyDuecey from '../components/aceyDuecey.vue'
 import tezTacToe from '../components/tezTacToe.vue'
 import squaresGame from '../components/squaresGame.vue'
 import plinkoGame from '../components/plinkoGame.vue'
+import fortuneCookie from '../components/fortuneCookie.vue'
 import chessGame from '../components/chessGame.vue'
 import warGame from '../components/warGame.vue'
+import mintTime from '../components/mintTime.vue'
 import ecosystemLinks from '../components/ecosystemLinks.vue'
+
+// Mainnet readiness — `mainnetReady: false` flags entries whose mainnet
+// KT1 in src/constants.js is still the KT1XXX… placeholder. The nav UI
+// surfaces a "soon" badge on those when NETWORK === 'mainnet'. On
+// shadownet every app is reachable, so the badge is suppressed there.
+import {
+  AD_CONTRACT_ADDRESS_MAINNET,
+  TTT_CONTRACT_ADDRESS_MAINNET,
+  SQUARES_CONTRACT_ADDRESS_MAINNET,
+  PLINKO_CONTRACT_ADDRESS_MAINNET,
+  CHESS_CONTRACT_ADDRESS_MAINNET,
+  WAR_CONTRACT_ADDRESS_MAINNET,
+  FORTUNE_CONTRACT_ADDRESS_MAINNET,
+  MINT_TIME_CONTRACT_ADDRESS_MAINNET,
+  OBJECT_CONTRACT_MAINNET,
+} from '../constants'
+import { isPlaceholderAddress } from '../services/tzkt'
+const isReady = (addr) => !isPlaceholderAddress(addr)
 
 // Statically-resolved tile images. Each call is a static webpack require
 // that resolves to a chunked URL at build time — no whole-folder scan.
@@ -52,6 +72,7 @@ export const APPS = [
     image: IMG.nftExample,
     component: browseNFTs,
     pinnedAsHome: true,
+    mainnetReady: isReady(OBJECT_CONTRACT_MAINNET),
   },
   {
     id: 'tezTacToe',
@@ -60,6 +81,7 @@ export const APPS = [
     tag: 'game',
     image: IMG.tezTacToe,
     component: tezTacToe,
+    mainnetReady: isReady(TTT_CONTRACT_ADDRESS_MAINNET),
   },
   {
     id: 'squares',
@@ -68,6 +90,7 @@ export const APPS = [
     tag: 'game',
     image: IMG.squares,
     component: squaresGame,
+    mainnetReady: isReady(SQUARES_CONTRACT_ADDRESS_MAINNET),
   },
   {
     id: 'plinko',
@@ -76,6 +99,15 @@ export const APPS = [
     tag: 'game',
     image: IMG.plinko,
     component: plinkoGame,
+    mainnetReady: isReady(PLINKO_CONTRACT_ADDRESS_MAINNET),
+  },
+  {
+    id: 'fortuneCookie',
+    name: 'Fortune Cookie',
+    blurb: 'Crack a cookie. Claude writes a deliberately mediocre fortune. Mint the good ones.',
+    tag: 'game',
+    component: fortuneCookie,
+    mainnetReady: isReady(FORTUNE_CONTRACT_ADDRESS_MAINNET),
   },
   {
     id: 'aceyDuecey',
@@ -84,6 +116,7 @@ export const APPS = [
     tag: 'game',
     image: IMG.aceyDuecey,
     component: aceyDuecey,
+    mainnetReady: isReady(AD_CONTRACT_ADDRESS_MAINNET),
   },
   {
     id: 'chess',
@@ -92,6 +125,7 @@ export const APPS = [
     tag: 'game',
     image: IMG.chess,
     component: chessGame,
+    mainnetReady: isReady(CHESS_CONTRACT_ADDRESS_MAINNET),
   },
   {
     id: 'war',
@@ -100,6 +134,16 @@ export const APPS = [
     tag: 'game',
     image: IMG.war,
     component: warGame,
+    mainnetReady: isReady(WAR_CONTRACT_ADDRESS_MAINNET),
+  },
+  {
+    id: 'mintTime',
+    name: 'Mint Time',
+    blurb: 'Claim a UTC minute on planet Earth. Pick a frame, drop a note + image, mint a capsule.',
+    tag: 'collection',
+    image: IMG.nftExample,
+    component: mintTime,
+    mainnetReady: isReady(MINT_TIME_CONTRACT_ADDRESS_MAINNET),
   },
   {
     id: 'oracleInfo',
@@ -108,6 +152,7 @@ export const APPS = [
     tag: 'tools',
     image: IMG.oracleLogo,
     component: oracleInfo,
+    mainnetReady: true,  // info page — works regardless of any contract state
   },
   {
     id: 'ecosystem',
@@ -116,6 +161,7 @@ export const APPS = [
     tag: 'tools',
     image: IMG.oracleLogo,
     component: ecosystemLinks,
+    mainnetReady: true,  // external links, no contract
   },
 ]
 

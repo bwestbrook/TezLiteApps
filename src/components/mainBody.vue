@@ -381,10 +381,20 @@ export default {
               type="button"
               role="tab"
               :aria-selected="activeView === app.id"
-              :class="['navPill', activeView === app.id ? 'navPill--active' : '']"
+              :class="[
+                'navPill',
+                activeView === app.id ? 'navPill--active' : '',
+                NETWORK === 'mainnet' && !app.mainnetReady ? 'navPill--soon' : '',
+              ]"
               @click="selectGame(app.id)"
+              :title="NETWORK === 'mainnet' && !app.mainnetReady ? `${app.name} isn't on mainnet yet — coming soon` : null"
             >
               {{ app.name }}
+              <span
+                v-if="NETWORK === 'mainnet' && !app.mainnetReady"
+                class="navPill__badge"
+                aria-label="coming soon"
+              >SOON</span>
             </button>
           </div>
           <button
@@ -414,8 +424,7 @@ export default {
       </div>
     </div>
     <div class="label">
-      Made with love by @jamin_b on telegram/discord and @jaminb12 on X... shhh all games on
-      shadownet
+      Made with love by @jamin_b on telegram/discord and @jaminb12 on X.
     </div>
   </div>
 </template>
@@ -780,6 +789,37 @@ export default {
   border-color: rgba(167, 139, 250, 0.55);
 }
 .navPill:active { transform: scale(0.97); }
+
+/* "SOON" badge inside the pill when on mainnet and the app's mainnet KT1
+   is still a placeholder. The pill itself stays clickable so users can
+   read about the game; the component's own placeholder guard handles
+   the empty-state inside the view. */
+.navPill--soon {
+  opacity: 0.62;
+}
+.navPill--soon:hover {
+  opacity: 0.9;
+}
+.navPill__badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background: rgba(167, 139, 250, 0.18);
+  color: rgba(245, 196, 81, 0.92);
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  vertical-align: middle;
+  line-height: 1.4;
+}
+.navPill--active .navPill__badge {
+  background: rgba(26, 16, 4, 0.18);
+  color: #1a1004;
+  border-color: rgba(26, 16, 4, 0.35);
+}
+
 .navPill--active {
   background: var(--ad-grad-gold);
   color: #1a1004;
