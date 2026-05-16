@@ -125,7 +125,7 @@ export default {
 
       wallet.client.subscribeToEvent(BeaconEvent.ACTIVE_ACCOUNT_SET, (account) => {
         this.broadcastWallet(account)
-        this.socket.emit('walletConnection', account.address)
+        this.socket.emit('walletConnection', account?.address ?? null)
         this.socket.emit('updateGames')
       })
 
@@ -134,12 +134,23 @@ export default {
       // out as an error; subscribing here disables both. Our own
       // try/catch in startGameBC/continueBetBC/dealCard handles user-facing
       // status updates instead.
+      //
+      // GENERIC_ERROR is included because beacon-sdk re-runs init() on
+      // session restore for non-p2p origins (extension, post-message);
+      // if its parallel P2P transport connect fails (relay probe race
+      // times out at 60s), DAppClient.js:589 emits GENERIC_ERROR with
+      // err.message "No server responded." — which the default handler
+      // surfaces as a modal alert with a Send Report button. The session
+      // also gets torn down by abortHandler regardless. Swallowing here
+      // hides the popup; the disconnect still happens (we don't control
+      // the SDK's abort), but the noisy modal is gone.
       const swallowed = [
         BeaconEvent.OPERATION_REQUEST_ERROR,
         BeaconEvent.PERMISSION_REQUEST_ERROR,
         BeaconEvent.SIGN_REQUEST_ERROR,
         BeaconEvent.BROADCAST_REQUEST_ERROR,
         BeaconEvent.NO_PERMISSIONS,
+        BeaconEvent.GENERIC_ERROR,
         BeaconEvent.UNKNOWN,
       ]
       for (const evt of swallowed) {
