@@ -21,7 +21,7 @@ Currently committed:
 | `oracle`       | `src/services/smart_contract_oracle.py`        | ✓ compiled |
 | `acey-duecey`  | `src/services/smart_contractAD.py`             | TODO       |
 | `ttt`          | `src/services/smart_contract_TTT.py`           | TODO       |
-| `squares`      | `src/services/smart_contract_squares.py`       | TODO       |
+| `squares`      | `src/services/smart_contract_squares_v2.py`    | TODO       |
 
 To add a new one:
 

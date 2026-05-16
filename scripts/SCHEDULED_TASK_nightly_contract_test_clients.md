@@ -47,7 +47,7 @@ Smart contracts (SmartPy source) live in `src/services/`:
 - `smart_contractAD.py` — Acey Duecey card gambling
 - `smart_contractPlinko.py` — Single-player Plinko with seed-based multipliers
 - `smart_contractWar.py` — High-card war H2H
-- `smart_contract_squares.py` — Squares grid game
+- `smart_contract_squares_v2.py` — Squares grid game
 - `smart_contract_oracle.py` — Oracle that signs/feeds randomness
 - `smart_contract_txl.py` — TXL holder reward distributor (the "house" beneficiary)
 
