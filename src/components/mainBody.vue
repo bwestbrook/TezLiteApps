@@ -383,11 +383,18 @@ export default {
   flex-direction: column;
   color: var(--ad-text-1);
   font-family: var(--ad-font-body);
+  /* Flex/grid children default to min-width:auto = min-content. Without this,
+     any long unbreakable token deep in the tree (an owner address, a select's
+     widest option) can push this container past the viewport on phones. */
+  min-width: 0;
+  box-sizing: border-box;
 }
 .gameManagement {
   justify-content: center;
   width: 100%;
   flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
   cursor: default;
 }
 /* Single-element root for <Transition mode="out-in"> — see template. */
@@ -454,6 +461,10 @@ export default {
   color: var(--ad-text-1);
   font-size: 12.5px;
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-align: center;
   cursor: default;
   min-height: 38px;
 }
@@ -800,6 +811,12 @@ export default {
   .mainBody {
     padding: 10px 8px 16px;
     border-radius: var(--ad-r-md);
+    min-width: 0;
+    overflow-x: hidden;
+  }
+  .centerBody {
+    overflow-x: hidden;
+    max-width: 100%;
   }
   /* Lift every interactive surface to a ≥44px Apple-HIG touch target. */
   .actionButton,

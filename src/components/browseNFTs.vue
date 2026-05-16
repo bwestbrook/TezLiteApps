@@ -23,6 +23,12 @@ export default {
       txlRanking: 1,
       txlData: {},
       owner: '',
+      // Raw owner tz/KT address — kept alongside the display label so we can
+      // compare against the connected wallet for the "owned by you" highlight.
+      ownerAddress: '',
+      // The connected wallet's address (filled from beacon on mount and on
+      // socket 'newWallet' events). Empty when no wallet is connected.
+      myAddress: '',
       // Collection-wide ownership metadata, loaded once via the txlOwners
       // service (snapshot for instant paint, live tzkt refresh in the
       // background). getOwner() reads `owners` instead of a per-card lookup.
@@ -51,6 +57,12 @@ export default {
     topHolderLabel() {
       const entry = this.topHolders.find(([addr]) => addr !== OBJKT_MARKETPLACE)
       return entry ? `${reduceAddress(entry[0])} (${entry[1]})` : ''
+    },
+    // True when the connected wallet is the owner of the currently-displayed
+    // NFT — gates the green "owned by you" highlight in the stats row.
+    isOwnedByMe() {
+      if (!this.myAddress || !this.ownerAddress) return false
+      return this.ownerAddress.toLowerCase() === this.myAddress.toLowerCase()
     },
   },
 
@@ -903,6 +915,9 @@ export default {
         this.refreshOwnerLabel()
       },
     })
+
+    // mainBody re-broadcasts wallet connect/disconnect via this socket event.
+    this.socket.on('newWallet', () => { this.refreshMyAddress() })
   },
   mounted() {
     // Single 1-second tick drives both the visible countdown and the actual
@@ -911,6 +926,7 @@ export default {
     // were two independent setIntervals started a few ms apart in mounted()
     // — they drifted over time and pause/resume could desync them further.
     this.tickInterval = setInterval(() => this.tick(), 1000)
+    this.refreshMyAddress()
     this.selectRandom()
     this.getNftData()
   },
@@ -994,7 +1010,10 @@ export default {
     // in-memory owners map — called when loadOwners() delivers fresh data.
     refreshOwnerLabel() {
       const address = this.owners[this.idLookUp[this.txlId]]
-      if (address) this.owner = this.labelForOwner(address)
+      if (address) {
+        this.ownerAddress = address
+        this.owner = this.labelForOwner(address)
+      }
     },
     async getOwner() {
       const kalaId = this.idLookUp[this.txlId]
@@ -1012,7 +1031,19 @@ export default {
         )
         address = data?.[0]?.address ?? data?.[0]?.key?.address
       }
+      this.ownerAddress = address || ''
       this.owner = this.labelForOwner(address)
+    },
+    // Read the active wallet address from beacon. Called on mount and on the
+    // 'newWallet' socket event so the "owned by you" highlight reacts when
+    // the user connects, disconnects, or switches accounts.
+    async refreshMyAddress() {
+      try {
+        const acct = await this.wallet?.client?.getActiveAccount?.()
+        this.myAddress = acct?.address || ''
+      } catch {
+        this.myAddress = ''
+      }
     },
     async setNewNftImage() {
       const ipfsHash = await this.getIpfsHash()
@@ -1093,30 +1124,16 @@ export default {
  
   <div class="centerBody">
     <div class="gameManagement" >
-        <div class="rowFlex">
-          <div class="actionButton" @click="selectRandom"> Select Random TXL </div>
-          <div class="actionButton" @click="checkThisOnObjkt(txlId)"> Buy {{ txlId.toString() }} On All Objkt.com </div>
-          <div class="actionButton" @click="browseAllOnObjkt"> Browse On All Objkt.com </div>
-          <div class="actionButtonHelp" @click="showLearnMore"> How 2.725K NFT holders earn a share of every game on thextz.life</div>
-        </div>
-        <div v-if="showInfo" @click="showLearnMore" class="infoPopup">
-          <div>
-            <ul >
-              <li class="listItem" v-for="(key, value) in nftInfo" :key="key" :value="value">{{ key }}</li>
-            </ul>
-          </div>
-        </div>
         <div class="nftStageRow">
           <div class="navColumn">
             <div class="navColumnLabel">Rank</div>
-            <div class="actionButton navColumnBtn" @click="prevRank()"> &larr; Prev </div>
-            <select class="selectBox navColumnSelect" v-model="txlRanking" @change="getNftDataRank()">
+            <div class="actionButton navColumnBtn" @click="prevRank()"> &larr; </div>
+            <select class="slotReel navColumnSelect" v-model="txlRanking" @change="getNftDataRank()">
               <option v-for="(key, value) in txlRevRankings" :key="key" :value="value"> {{ value }} </option>
             </select>
-            <div class="actionButton navColumnBtn" @click="nextRank()"> Next &rarr; </div>
+            <div class="actionButton navColumnBtn" @click="nextRank()"> &rarr; </div>
           </div>
           <div class="cardArea">
-            <div class="ownerBadge" v-if="owner"> Owner: {{ owner }} </div>
             <div class="nftCardStage">
               <div :class="['nftCard', pauseAnimation ? 'nftCard--paused' : '']">
                 <div class="nftCardFace nftCardFace--front">
@@ -1141,17 +1158,12 @@ export default {
           </div>
           <div class="navColumn">
             <div class="navColumnLabel">ID</div>
-            <div class="actionButton navColumnBtn" @click="prevTxl()"> &larr; Prev </div>
-            <select class="selectBox navColumnSelect" v-model="txlId" @change="getNftDataId()">
+            <div class="actionButton navColumnBtn" @click="prevTxl()"> &larr; </div>
+            <select class="slotReel navColumnSelect" v-model="txlId" @change="getNftDataId()">
               <option v-for="(key, value) in idLookUp" :key="key" :value="value"> {{ value }} </option>
             </select>
-            <div class="actionButton navColumnBtn" @click="nextTxl()"> Next &rarr; </div>
+            <div class="actionButton navColumnBtn" @click="nextTxl()"> &rarr; </div>
           </div>
-        </div>
-        <div class="rowFlex">
-          <div class="actionButton" @click="toggleAnimation"> {{pauseAnimationState}}  </div>
-          <div class="gameInfo"> Random TXL in {{ countDownSeconds }} </div>
-          <div class="actionButton" @click="togglePauseRandom"> {{pauseState}} Random </div>
         </div>
         <div class="attrGrid">
           <div class="attrCell attrCell--meta">
@@ -1174,10 +1186,31 @@ export default {
             </span>
           </div>
         </div>
-        <div class="rowFlex" v-if="distinctHolders">
-          <div class="txlRank"> Holders: {{ distinctHolders }}</div>
-          <div class="txlRank"> Listed on objkt: {{ onMarketplace }}</div>
+        <div class="rowFlex" v-if="owner || distinctHolders">
+          <div
+            v-if="owner"
+            :class="['txlRank', isOwnedByMe ? 'txlRank--mine' : '']"
+            :title="ownerAddress"
+          >
+            <span v-if="isOwnedByMe">Owner: You ({{ owner }})</span>
+            <span v-else>Owner: {{ owner }}</span>
+          </div>
+          <div class="txlRank" v-if="distinctHolders"> Holders: {{ distinctHolders }}</div>
+          <div class="txlRank" v-if="distinctHolders"> Listed on objkt: {{ onMarketplace }}</div>
           <div class="txlRank" v-if="topHolderLabel"> Top holder: {{ topHolderLabel }}</div>
+        </div>
+        <div class="rowFlex">
+          <div class="actionButton" @click="selectRandom"> Select Random TXL </div>
+          <div class="actionButton" @click="checkThisOnObjkt(txlId)"> Buy on Objkt </div>
+          <div class="actionButton" @click="browseAllOnObjkt"> Browse Objkt </div>
+          <div class="actionButtonHelp" @click="showLearnMore"> How 2.725K NFT holders earn a share of every game on thextz.life</div>
+        </div>
+        <div v-if="showInfo" @click="showLearnMore" class="infoPopup">
+          <div>
+            <ul >
+              <li class="listItem" v-for="(key, value) in nftInfo" :key="key" :value="value">{{ key }}</li>
+            </ul>
+          </div>
         </div>
       </div>
   </div>
@@ -1199,7 +1232,7 @@ export default {
   flex-direction: column;
   gap: 6px;
   flex: 0 0 auto;
-  width: clamp(110px, 18vw, 160px);
+  width: clamp(56px, 9vw, 80px);
 }
 .navColumnLabel {
   text-align: center;
@@ -1210,28 +1243,102 @@ export default {
   color: var(--ad-text-2, var(--ad-text-1));
   padding-bottom: 2px;
 }
-.navColumnBtn { width: 100%; }
-.navColumnSelect { width: 100%; }
+.navColumnBtn {
+  width: 100%;
+  padding: 8px 4px;
+  min-width: 0;
+  flex: 0 0 auto;
+  font-size: 15px;
+  line-height: 1;
+}
+.navColumnSelect { width: 100%; min-width: 0; }
+/* Slot-machine LED reel for the rank/ID picker. Still a native <select>, so
+   clicking it opens the full list — only the closed-state visuals change. */
+.slotReel {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 4px;
+  text-align: center;
+  text-align-last: center;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #ffd76a;
+  text-shadow: 0 0 6px rgba(255, 215, 106, 0.55), 0 0 1px rgba(255, 215, 106, 0.9);
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.025) 0px,
+      rgba(255, 255, 255, 0.025) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    linear-gradient(180deg, #0a0a14 0%, #14101e 50%, #0a0a14 100%);
+  border: 1px solid rgba(255, 200, 80, 0.35);
+  border-radius: 6px;
+  box-shadow:
+    inset 0 0 14px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 8px rgba(255, 175, 40, 0.15);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.slotReel:hover {
+  border-color: rgba(255, 200, 80, 0.6);
+  box-shadow:
+    inset 0 0 14px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 14px rgba(255, 175, 40, 0.4);
+}
+.slotReel:focus {
+  outline: none;
+  border-color: #ffd76a;
+}
+.slotReel option {
+  background: #0a0a14;
+  color: #ffd76a;
+  font-weight: 700;
+}
 @media (max-width: 600px) {
   .nftStageRow {
     flex-direction: column;
     gap: 10px;
+    max-width: 100%;
+    min-width: 0;
   }
   .navColumn {
     flex-direction: row;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     gap: 6px;
   }
   .navColumnLabel {
     flex: 0 0 auto;
-    min-width: 44px;
+    min-width: 36px;
     text-align: left;
     padding: 0;
   }
-  .navColumnBtn { flex: 1; }
-  .navColumnSelect { flex: 2; min-width: 0; }
+  /* Reset the desktop-narrow width:100% on button/select so flex sizing wins
+     in the horizontal mobile layout — otherwise every item tries to be full
+     row width and the row blows out. */
+  .navColumnBtn {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 36px;
+    padding: 8px 10px;
+  }
+  .navColumnSelect {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
 }
 /* Trait grid — auto-flowing columns of "Label: value  XX%" inside a single
    panel. Each cell is one line of text with a colored rarity pill on the
@@ -1303,14 +1410,33 @@ export default {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
 }
 @media (max-width: 480px) {
-  .browserPanel { padding: 8px; gap: 6px; }
-  .browserPanelLabel { min-width: 44px; font-size: 11px; padding: 0 6px; }
-  .attrGrid {
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    column-gap: 12px;
-    padding: 6px 10px;
-    font-size: 12px;
+  /* Safety net: any rogue child that ignores width constraints can't push
+     the page wider than the viewport. */
+  .centerBody {
+    overflow-x: hidden;
+    max-width: 100%;
+    min-width: 0;
   }
+  /* iOS Safari sometimes uses option intrinsic widths on appearance:none
+     selects. Cap it absolutely so the slot reel can't blow out the row.
+     Keep font-size 16px so iOS doesn't auto-zoom when tapping the select. */
+  .slotReel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    font-size: 16px;
+    padding: 7px 4px;
+  }
+  .attrGrid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    column-gap: 10px;
+    padding: 6px 8px;
+    font-size: 11.5px;
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+  .attrCell { min-width: 0; }
   .attrRarity { font-size: 10.5px; padding: 1px 6px; }
 }
 /* Full-width band around the spinning card — anchors the owner badge to the
@@ -1328,20 +1454,16 @@ export default {
 .nftStageRow .nftCardStage {
   margin: 0 auto;
 }
-/* Current NFT's owner, pinned to the top-right of the content, just below
-   the how-to button — white text on a transparent background. */
-.ownerBadge {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  z-index: 2;
-  padding: 2px 8px;
-  font-size: 0.8rem;
-  white-space: nowrap;
-  color: #fff;
-  background: transparent;
-  /* Keeps the white text legible over the NFT image behind it. */
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+/* Owner chip highlight — lights up green when the connected wallet matches
+   the current NFT's owner address. */
+.txlRank--mine {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.14);
+  border-color: rgba(74, 222, 128, 0.6);
+  box-shadow:
+    inset 0 0 0 1px rgba(74, 222, 128, 0.35),
+    0 0 12px rgba(74, 222, 128, 0.25);
+  font-weight: 700;
 }
 /* CSS 3D NFT card. Replaces the Three.js WebGLRenderer + rotating box. */
 .nftCardStage {
@@ -1427,10 +1549,6 @@ export default {
        on small phones; let it occupy 75 vw if needed. */
     width: clamp(180px, 75vw, 280px);
     margin: 10px auto;
-  }
-  .ownerBadge {
-    font-size: 0.7rem;
-    padding: 2px 6px;
   }
 }
 @media (min-width: 481px) and (max-width: 768px) {
