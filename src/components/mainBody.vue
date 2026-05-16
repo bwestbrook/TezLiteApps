@@ -49,8 +49,22 @@ export default {
     // The carousel order: TXL Manager (home) first, then every nav app.
     // Single source of truth so the template loop and scroll-into-view
     // logic stay in sync.
+    //
+    // On mainnet, push apps whose mainnet KT1 is still a placeholder to
+    // the right end so the "ready to play" pills sit on the left of the
+    // nav strip. We filter twice (ready-first, then not-ready) rather
+    // than .sort() so the registry's relative order within each group
+    // is preserved without depending on Array.prototype.sort stability
+    // across engines. On shadownet every contract resolves to a real
+    // KT1 (well, mostly — placeholders there are intentional gaps), so
+    // we skip the reorder and keep the registry order intact.
     navTiles() {
-      return [this.HOME_APP, ...this.NAV_APPS]
+      const all = [this.HOME_APP, ...this.NAV_APPS]
+      if (this.NETWORK !== 'mainnet') return all
+      return [
+        ...all.filter((a) => a.mainnetReady),
+        ...all.filter((a) => !a.mainnetReady),
+      ]
     },
   },
   created() {
