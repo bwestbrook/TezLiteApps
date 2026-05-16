@@ -240,3 +240,121 @@ against the network. No SmartPy needed locally.
   written under a different scenario name. `ls src/services/build/<id>/`
   to see what's there, then update the `find_artifacts` glob in
   `scripts/deploy.py` if needed.
+
+
+## 11. Squares: shadownet end-to-end smoke test
+
+A focused checklist for exercising a freshly-originated squares contract
+against a real ESPN game on shadownet. Run before promoting to mainnet —
+the contract's interesting paths (axis randomisation, per-quarter payout,
+pull-pattern claim) only get hit by a full game lifecycle. Two paths
+below; pick whichever fits the situation.
+
+Prereqs (one-time):
+- Shadownet squares contract originated — `SQUARES_CONTRACT_ADDRESS_SHADOWNET`
+  in `src/constants.js` is a real `KT1…`.
+- `.env` has `DEPLOY_MNEMONIC` funded on shadownet (faucet:
+  https://faucet.shadownet.teztnets.com — ~6 000 ꜩ per drip).
+- The squares contract's `admin` in storage matches the
+  `DEPLOY_MNEMONIC` key (the oracle worker won't authorise otherwise).
+
+### Path A — emulator (single-shot, ~5 min)
+
+`scripts/emulate_squares.py` drives the entire lifecycle from a wallet
+that has the `admin` key, against a *finished* NBA/WNBA/NFL game it
+picks off ESPN. It buys the grid out across two wallets (a deterministic
+secondary derived from `DEPLOY_MNEMONIC` + a fixed salt), randomises
+axes, reports each quarter from the real linescore, and prints the
+pending winnings. Useful when you need a green check that the contract
+behaves end-to-end without waiting for a live game.
+
+```
+.venv/bin/python scripts/emulate_squares.py                       # latest NBA final
+.venv/bin/python scripts/emulate_squares.py --league WNBA
+.venv/bin/python scripts/emulate_squares.py --league NFL --event-id 401671234
+.venv/bin/python scripts/emulate_squares.py --dry-run             # no signed ops
+```
+
+What to look for in the output:
+- `createGame` op hash and a tzkt link.
+- 98 successful `buySquare` ops alternating between the two wallets.
+- Phase transitions: `SELLING → LOCKED → AXES_SET → COMPLETE`.
+- Four `reportQuarter` ops with the real per-quarter scores.
+- Pending winnings printed per wallet at the end.
+
+If anything reverts: the script prints the on-chain error string. The
+common ones are `NotAdmin` (admin mismatch), `BadAmount` (ticket price
++ holder fee disagreement), and `NotPlayable` (script tried to report
+a quarter before setAxes ran). Each error tells you which test-scenario
+constant drifted.
+
+### Path B — live worker (closer to prod, ~15 min)
+
+Drives the actual oracle worker, the same code path that runs in
+production. Use this when you want to validate the worker logs / poll
+cadence / authorisation check, not just the contract.
+
+1. Pick an ESPN event id whose quarters are imminent (or freshly final).
+   Browse https://www.espn.com/nba/scoreboard, click the matchup, copy
+   the `gameId=...` from the URL.
+
+2. Create the pool, tagging the event id in the `name` so the worker
+   knows which ESPN game to follow (see `scripts/sports_api.parse_espn_id`
+   for the format):
+   ```
+   .venv/bin/python scripts/create_squares_game.py \
+       --name "ESPN:401871337 · CLE @ DET" \
+       --network shadownet
+   ```
+
+3. Sell the pool out so it can flip to `PHASE_LOCKED`. Either buy
+   squares manually through the UI (98 cells × the ticket price), or
+   reuse the emulator's buyout helpers, or call `closeSales` from the
+   admin key to skip ahead:
+   ```
+   .venv/bin/python -c "
+   from pytezos import pytezos, Key
+   import os, pathlib
+   for line in pathlib.Path('.env').read_text().splitlines():
+       if '=' in line and not line.strip().startswith('#'):
+           k, v = line.split('=', 1)
+           os.environ.setdefault(k.strip(), v.strip().strip('\"').strip(\"'\"))
+   key = Key.from_mnemonic(os.environ['DEPLOY_MNEMONIC'].split())
+   p = pytezos.using(shell='https://rpc.shadownet.teztnets.com', key=key)
+   addr = '<SQUARES_CONTRACT_ADDRESS_SHADOWNET from constants.js>'
+   p.contract(addr).closeSales(gameId=0).send(min_confirmations=1)
+   "
+   ```
+
+4. Start the worker:
+   ```
+   ./scripts/oracle-worker.sh --game squares --network shadownet
+   ```
+   First tick should log `authorised as oracle` (it actually checks
+   `storage.admin == my key` for squares — see SquaresHandler in
+   `scripts/oracle_worker.py`). Next tick should call `setAxes` with
+   two `[0..9]` permutations and flip the phase to `AXES_SET`.
+
+5. As ESPN finalises each period (or immediately, for an already-
+   finished game), the worker should call `reportQuarter` four times in
+   sequence. Watch for:
+   - `game N → reportQuarter(q=…, HOME=…, AWAY=…) · ESPN:<id>`
+   - tzkt link in the log for each op
+   - the contract's `quartersDone` advancing 0 → 4 and `phase` landing
+     on `COMPLETE`.
+
+6. From a wallet that won a quarter, call `claim()`:
+   ```
+   <winning-wallet client>.contract(addr).claim().send(min_confirmations=1)
+   ```
+   Verify the payout lands by diffing the wallet balance, or watching
+   `pending[<your tz1>]` drop to zero in storage.
+
+If a step stalls, the worker keeps re-trying on its poll cycle. A
+genuine block is usually one of:
+- Worker key has no shadownet ꜩ (faucet again).
+- Worker's `storage.admin` check failed — admin baked into storage
+  doesn't match `DEPLOY_MNEMONIC`. Fix the test scenario in
+  `src/services/smart_contract_squares_v2.py` and redeploy.
+- ESPN returned nothing for the event id — confirm the id in a browser
+  first.
