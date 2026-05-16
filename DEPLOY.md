@@ -358,3 +358,77 @@ genuine block is usually one of:
   `src/services/smart_contract_squares_v2.py` and redeploy.
 - ESPN returned nothing for the event id — confirm the id in a browser
   first.
+
+
+## 12. Squares: manual `reportQuarter` fallback
+
+The oracle worker drives `reportQuarter` from ESPN's API in production.
+Use this snippet when the worker can't (ESPN endpoint down, ESPN
+rate-limiting the worker IP, the worker box is offline, or the game has
+no ESPN coverage in the first place). The contract entrypoint is the
+same one the worker calls; only `sp.sender == self.data.admin` is
+enforced, so any wallet with the deploy key can call it directly.
+
+```python
+# .venv/bin/python scripts/manual_report_quarter.py
+# (Or paste into a one-off REPL.)
+import os, pathlib
+from pytezos import pytezos, Key
+
+# Load .env without echoing the mnemonic — mirrors scripts/deploy.py.
+for raw in pathlib.Path(".env").read_text().splitlines():
+    line = raw.strip()
+    if not line or line.startswith("#") or "=" not in line: continue
+    k, v = line.split("=", 1)
+    os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+NETWORK = "shadownet"   # or "mainnet"
+RPCS = {
+    "shadownet": "https://rpc.shadownet.teztnets.com",
+    "mainnet":   "https://mainnet.tezos.ecadinfra.com",
+}
+ADDR = {
+    "shadownet": "<SQUARES_CONTRACT_ADDRESS_SHADOWNET from constants.js>",
+    "mainnet":   "<SQUARES_CONTRACT_ADDRESS_MAINNET from constants.js>",
+}[NETWORK]
+
+key = Key.from_mnemonic(os.environ["DEPLOY_MNEMONIC"].split())
+client = pytezos.using(shell=RPCS[NETWORK], key=key)
+contract = client.contract(ADDR)
+
+# Fill these from the real linescore. quarter is 0-indexed (q1 = 0).
+GAME_ID = 0
+QUARTER = 0
+HOME_SCORE = 24    # cumulative-or-period total, see note below
+AWAY_SCORE = 17
+
+op = contract.reportQuarter(
+    gameId=GAME_ID, quarter=QUARTER,
+    homeScore=HOME_SCORE, awayScore=AWAY_SCORE,
+).send(min_confirmations=1)
+print("submitted:", getattr(op, "hash", None) or getattr(op, "opg_hash", None))
+```
+
+Notes:
+- The contract only looks at `homeScore mod 10` and `awayScore mod 10`,
+  so cumulative vs period-only totals don't matter — both reduce to the
+  same winning row/column. Use whichever ESPN exposes for the period
+  (the worker uses the cumulative total at end-of-quarter).
+- Re-calling `reportQuarter` for the same `(gameId, quarter)` reverts
+  with `QAlreadyReported`, so the snippet is safe to re-run.
+- `quarter` is 0-indexed and bounded by the game's configured
+  `numPeriods` (2 for soccer halves, 3 for hockey periods, 4 for
+  basketball / NFL quarters). Reporting `quarter >= numPeriods` reverts
+  with `BadQuarter`.
+- The op only credits winnings into `storage.pending[winner]` — winners
+  still need to call `claim()` themselves to receive the tez. There is
+  no admin-side payout entrypoint by design.
+- After the last quarter the contract auto-flips `phase` to `COMPLETE`.
+  If you need to recover from a misreport, there is no `unreportQuarter`
+  — the cleanest path is `refundUnsold` on a fresh game, or contact
+  affected winners off-chain.
+
+If ESPN is offline for a long stretch and you want the worker to skip
+the squares pool until it recovers, the worker idles silently on a
+missing `ESPN:<id>` tag fetch — no admin action needed, it'll resume on
+the next poll cycle when ESPN returns.
