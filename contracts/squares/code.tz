@@ -1,0 +1,1451 @@
+parameter (or (or (or (unit %acceptAdmin) (or (pair %buySquare (nat %gameId) (int %squareIdx)) (unit %claim))) (or (or (nat %closeSales) (pair %createGame (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (map %quarterWeights int nat) (mutez %ticketPrice)))))) (or (unit %default) (unit %pause)))) (or (or (address %proposeAdmin) (or (nat %refundUnsold) (pair %reportQuarter (int %awayScore) (pair (nat %gameId) (pair (int %homeScore) (int %quarter)))))) (or (or (pair %setAxes (map %axisAway int int) (pair (map %axisHome int int) (nat %gameId))) (unit %unpause)) (or (address %updateRngOracle) (address %updateTxlContract)))));
+storage   (pair (address %admin) (pair (nat %currentGameId) (pair (big_map %games nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice))))))))))))))))) (pair (bool %paused) (pair (big_map %pending address mutez) (pair (option %pendingAdmin address) (pair (address %rngOracle) (address %txlContract))))))));
+code
+  {
+    UNPAIR;     # @parameter : @storage
+    IF_LEFT
+      {
+        IF_LEFT
+          {
+            IF_LEFT
+              {
+                DROP;       # @storage
+                # == acceptAdmin ==
+                # proposed = self.data.pendingAdmin.unwrap_some(error="NoPendingAdmin") # @storage
+                DUP;        # @storage : @storage
+                GET 11;     # option address : @storage
+                IF_NONE
+                  {
+                    PUSH string "NoPendingAdmin"; # string : @storage
+                    FAILWITH;   # FAILED
+                  }
+                  {}; # @some : @storage
+                # assert sp.sender == proposed, "NotProposedAdmin" # @some : @storage
+                DUP;        # @some : @some : @storage
+                SENDER;     # @sender : @some : @some : @storage
+                COMPARE;    # int : @some : @storage
+                EQ;         # bool : @some : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "NotProposedAdmin"; # string : @some : @storage
+                    FAILWITH;   # FAILED
+                  }; # @some : @storage
+                # self.data.admin = proposed # @some : @storage
+                UPDATE 1;   # @storage
+                # self.data.pendingAdmin = sp.cast(None, sp.option[sp.address]) # @storage
+                NONE address; # option address : @storage
+                UPDATE 11;  # @storage
+                NIL operation; # list operation : @storage
+              }
+              {
+                IF_LEFT
+                  {
+                    # == buySquare ==
+                    # assert not self.data.paused, "Paused" # @parameter%buySquare : @storage
+                    DUP 2;      # @storage : @parameter%buySquare : @storage
+                    GET 7;      # bool : @parameter%buySquare : @storage
+                    IF
+                      {
+                        PUSH string "Paused"; # string : @parameter%buySquare : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @parameter%buySquare : @storage
+                    # assert params.gameId in self.data.games, "NoGame" # @parameter%buySquare : @storage
+                    DUP 2;      # @storage : @parameter%buySquare : @storage
+                    GET 5;      # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%buySquare : @storage
+                    DUP 2;      # @parameter%buySquare : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%buySquare : @storage
+                    CAR;        # nat : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%buySquare : @storage
+                    MEM;        # bool : @parameter%buySquare : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NoGame"; # string : @parameter%buySquare : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%buySquare : @storage
+                    # game = self.data.games[params.gameId] # @parameter%buySquare : @storage
+                    DUP 2;      # @storage : @parameter%buySquare : @storage
+                    GET 5;      # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%buySquare : @storage
+                    DUP 2;      # @parameter%buySquare : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%buySquare : @storage
+                    CAR;        # nat : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%buySquare : @storage
+                    GET;        # option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%buySquare : @storage
+                    IF_NONE
+                      {
+                        PUSH int 206; # int : @parameter%buySquare : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @parameter%buySquare : @storage
+                    # assert game.phase == PHASE_SELLING, "NotSelling" # @some : @parameter%buySquare : @storage
+                    PUSH int 0; # int : @some : @parameter%buySquare : @storage
+                    DUP 2;      # @some : int : @some : @parameter%buySquare : @storage
+                    GET 15;     # int : int : @some : @parameter%buySquare : @storage
+                    COMPARE;    # int : @some : @parameter%buySquare : @storage
+                    EQ;         # bool : @some : @parameter%buySquare : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NotSelling"; # string : @some : @parameter%buySquare : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%buySquare : @storage
+                    # assert params.squareIdx >= 0, "BadSquare" # @some : @parameter%buySquare : @storage
+                    PUSH int 0; # int : @some : @parameter%buySquare : @storage
+                    DUP 3;      # @parameter%buySquare : int : @some : @parameter%buySquare : @storage
+                    CDR;        # int : int : @some : @parameter%buySquare : @storage
+                    COMPARE;    # int : @some : @parameter%buySquare : @storage
+                    GE;         # bool : @some : @parameter%buySquare : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "BadSquare"; # string : @some : @parameter%buySquare : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%buySquare : @storage
+                    # assert params.squareIdx < 100, "BadSquare" # @some : @parameter%buySquare : @storage
+                    PUSH int 100; # int : @some : @parameter%buySquare : @storage
+                    DUP 3;      # @parameter%buySquare : int : @some : @parameter%buySquare : @storage
+                    CDR;        # int : int : @some : @parameter%buySquare : @storage
+                    COMPARE;    # int : @some : @parameter%buySquare : @storage
+                    LT;         # bool : @some : @parameter%buySquare : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "BadSquare"; # string : @some : @parameter%buySquare : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%buySquare : @storage
+                    # assert params.squareIdx != 44, "HouseSquare" # @some : @parameter%buySquare : @storage
+                    PUSH int 44; # int : @some : @parameter%buySquare : @storage
+                    DUP 3;      # @parameter%buySquare : int : @some : @parameter%buySquare : @storage
+                    CDR;        # int : int : @some : @parameter%buySquare : @storage
+                    COMPARE;    # int : @some : @parameter%buySquare : @storage
+                    NEQ;        # bool : @some : @parameter%buySquare : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "HouseSquare"; # string : @some : @parameter%buySquare : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%buySquare : @storage
+                    # assert params.squareIdx != 90, "HouseSquare" # @some : @parameter%buySquare : @storage
+                    PUSH int 90; # int : @some : @parameter%buySquare : @storage
+                    DUP 3;      # @parameter%buySquare : int : @some : @parameter%buySquare : @storage
+                    CDR;        # int : int : @some : @parameter%buySquare : @storage
+                    COMPARE;    # int : @some : @parameter%buySquare : @storage
+                    NEQ;        # bool : @some : @parameter%buySquare : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "HouseSquare"; # string : @some : @parameter%buySquare : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%buySquare : @storage
+                    # assert not (params.squareIdx in game.squares), "SquareTaken" # @some : @parameter%buySquare : @storage
+                    DUP;        # @some : @some : @parameter%buySquare : @storage
+                    GET 29;     # map int address : @some : @parameter%buySquare : @storage
+                    DUP 3;      # @parameter%buySquare : map int address : @some : @parameter%buySquare : @storage
+                    CDR;        # int : map int address : @some : @parameter%buySquare : @storage
+                    MEM;        # bool : @some : @parameter%buySquare : @storage
+                    IF
+                      {
+                        PUSH string "SquareTaken"; # string : @some : @parameter%buySquare : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @parameter%buySquare : @storage
+                    # assert sp.amount == game.ticketPrice + game.holderFee, "BadAmount" # @some : @parameter%buySquare : @storage
+                    DUP;        # @some : @some : @parameter%buySquare : @storage
+                    GET 9;      # mutez : @some : @parameter%buySquare : @storage
+                    DUP 2;      # @some : mutez : @some : @parameter%buySquare : @storage
+                    GET 30;     # mutez : mutez : @some : @parameter%buySquare : @storage
+                    ADD;        # mutez : @some : @parameter%buySquare : @storage
+                    AMOUNT;     # @amount : mutez : @some : @parameter%buySquare : @storage
+                    COMPARE;    # int : @some : @parameter%buySquare : @storage
+                    EQ;         # bool : @some : @parameter%buySquare : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "BadAmount"; # string : @some : @parameter%buySquare : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%buySquare : @storage
+                    # prior = sp.nat(0) # @some : @parameter%buySquare : @storage
+                    PUSH nat 0; # nat : @some : @parameter%buySquare : @storage
+                    # if sp.sender in game.playerCounts: # nat : @some : @parameter%buySquare : @storage
+                    DUP 2;      # @some : nat : @some : @parameter%buySquare : @storage
+                    GET 17;     # map address nat : nat : @some : @parameter%buySquare : @storage
+                    SENDER;     # @sender : map address nat : nat : @some : @parameter%buySquare : @storage
+                    MEM;        # bool : nat : @some : @parameter%buySquare : @storage
+                    IF
+                      {
+                        DROP;       # @some : @parameter%buySquare : @storage
+                        # prior = game.playerCounts[sp.sender] # @some : @parameter%buySquare : @storage
+                        DUP;        # @some : @some : @parameter%buySquare : @storage
+                        GET 17;     # map address nat : @some : @parameter%buySquare : @storage
+                        SENDER;     # @sender : map address nat : @some : @parameter%buySquare : @storage
+                        GET;        # option nat : @some : @parameter%buySquare : @storage
+                        IF_NONE
+                          {
+                            PUSH int 226; # int : @some : @parameter%buySquare : @storage
+                            FAILWITH;   # FAILED
+                          }
+                          {}; # @some : @some : @parameter%buySquare : @storage
+                      }
+                      {}; # nat : @some : @parameter%buySquare : @storage
+                    # assert prior < PER_PLAYER_PER_GAME, "PlayerCapReached" # nat : @some : @parameter%buySquare : @storage
+                    PUSH nat 50; # nat : nat : @some : @parameter%buySquare : @storage
+                    DUP 2;      # nat : nat : nat : @some : @parameter%buySquare : @storage
+                    COMPARE;    # int : nat : @some : @parameter%buySquare : @storage
+                    LT;         # bool : nat : @some : @parameter%buySquare : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "PlayerCapReached"; # string : nat : @some : @parameter%buySquare : @storage
+                        FAILWITH;   # FAILED
+                      }; # nat : @some : @parameter%buySquare : @storage
+                    SWAP;       # @some : nat : @parameter%buySquare : @storage
+                    # game.playerCounts[sp.sender] = prior + 1 # @some : nat : @parameter%buySquare : @storage
+                    DUP;        # @some : @some : nat : @parameter%buySquare : @storage
+                    GET 17;     # map address nat : @some : nat : @parameter%buySquare : @storage
+                    PUSH nat 1; # nat : map address nat : @some : nat : @parameter%buySquare : @storage
+                    DIG 3;      # nat : nat : map address nat : @some : @parameter%buySquare : @storage
+                    ADD;        # nat : map address nat : @some : @parameter%buySquare : @storage
+                    SOME;       # option nat : map address nat : @some : @parameter%buySquare : @storage
+                    SENDER;     # @sender : option nat : map address nat : @some : @parameter%buySquare : @storage
+                    UPDATE;     # map address nat : @some : @parameter%buySquare : @storage
+                    UPDATE 17;  # @some : @parameter%buySquare : @storage
+                    # holder = sp.contract(sp.unit, self.data.txlContract).unwrap_some( # @some : @parameter%buySquare : @storage
+                    DUP 3;      # @storage : @some : @parameter%buySquare : @storage
+                    GET 14;     # address : @some : @parameter%buySquare : @storage
+                    CONTRACT unit; # option (contract unit) : @some : @parameter%buySquare : @storage
+                    IF_NONE
+                      {
+                        PUSH string "NoTxlContract"; # string : @some : @parameter%buySquare : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @some : @parameter%buySquare : @storage
+                    # sp.transfer((), game.holderFee, holder) # @some : @some : @parameter%buySquare : @storage
+                    NIL operation; # list operation : @some : @some : @parameter%buySquare : @storage
+                    SWAP;       # @some : list operation : @some : @parameter%buySquare : @storage
+                    DUP 3;      # @some : @some : list operation : @some : @parameter%buySquare : @storage
+                    GET 9;      # mutez : @some : list operation : @some : @parameter%buySquare : @storage
+                    UNIT;       # unit : mutez : @some : list operation : @some : @parameter%buySquare : @storage
+                    TRANSFER_TOKENS; # operation : list operation : @some : @parameter%buySquare : @storage
+                    CONS;       # list operation : @some : @parameter%buySquare : @storage
+                    SWAP;       # @some : list operation : @parameter%buySquare : @storage
+                    # game.squares[params.squareIdx] = sp.sender # @some : list operation : @parameter%buySquare : @storage
+                    DUP;        # @some : @some : list operation : @parameter%buySquare : @storage
+                    GET 29;     # map int address : @some : list operation : @parameter%buySquare : @storage
+                    SENDER;     # @sender : map int address : @some : list operation : @parameter%buySquare : @storage
+                    SOME;       # option address : map int address : @some : list operation : @parameter%buySquare : @storage
+                    DUP 5;      # @parameter%buySquare : option address : map int address : @some : list operation : @parameter%buySquare : @storage
+                    CDR;        # int : option address : map int address : @some : list operation : @parameter%buySquare : @storage
+                    UPDATE;     # map int address : @some : list operation : @parameter%buySquare : @storage
+                    UPDATE 29;  # @some : list operation : @parameter%buySquare : @storage
+                    # game.sold += 1 # @some : list operation : @parameter%buySquare : @storage
+                    DUP;        # @some : @some : list operation : @parameter%buySquare : @storage
+                    GET 27;     # nat : @some : list operation : @parameter%buySquare : @storage
+                    PUSH nat 1; # nat : nat : @some : list operation : @parameter%buySquare : @storage
+                    ADD;        # nat : @some : list operation : @parameter%buySquare : @storage
+                    UPDATE 27;  # @some : list operation : @parameter%buySquare : @storage
+                    SWAP;       # list operation : @some : @parameter%buySquare : @storage
+                    # game.pot += game.ticketPrice # list operation : @some : @parameter%buySquare : @storage
+                    DUP 2;      # @some : list operation : @some : @parameter%buySquare : @storage
+                    DUP;        # @some : @some : list operation : @some : @parameter%buySquare : @storage
+                    GET 19;     # mutez : @some : list operation : @some : @parameter%buySquare : @storage
+                    DIG 3;      # @some : mutez : @some : list operation : @parameter%buySquare : @storage
+                    GET 30;     # mutez : mutez : @some : list operation : @parameter%buySquare : @storage
+                    ADD;        # mutez : @some : list operation : @parameter%buySquare : @storage
+                    UPDATE 19;  # @some : list operation : @parameter%buySquare : @storage
+                    SWAP;       # list operation : @some : @parameter%buySquare : @storage
+                    # if game.sold == SELLABLE_CELLS: # list operation : @some : @parameter%buySquare : @storage
+                    PUSH nat 98; # nat : list operation : @some : @parameter%buySquare : @storage
+                    DUP 3;      # @some : nat : list operation : @some : @parameter%buySquare : @storage
+                    GET 27;     # nat : nat : list operation : @some : @parameter%buySquare : @storage
+                    COMPARE;    # int : list operation : @some : @parameter%buySquare : @storage
+                    EQ;         # bool : list operation : @some : @parameter%buySquare : @storage
+                    IF
+                      {
+                        SWAP;       # @some : list operation : @parameter%buySquare : @storage
+                        # game.phase = PHASE_LOCKED # @some : list operation : @parameter%buySquare : @storage
+                        PUSH int 1; # int : @some : list operation : @parameter%buySquare : @storage
+                        UPDATE 15;  # @some : list operation : @parameter%buySquare : @storage
+                        SWAP;       # list operation : @some : @parameter%buySquare : @storage
+                        # sp.emit(params.gameId, tag="soldOut") # list operation : @some : @parameter%buySquare : @storage
+                        DUP 3;      # @parameter%buySquare : list operation : @some : @parameter%buySquare : @storage
+                        CAR;        # nat : list operation : @some : @parameter%buySquare : @storage
+                        EMIT %soldOut nat; # operation : list operation : @some : @parameter%buySquare : @storage
+                        CONS;       # list operation : @some : @parameter%buySquare : @storage
+                      }
+                      {}; # list operation : @some : @parameter%buySquare : @storage
+                    # self.data.games[params.gameId] = game # list operation : @some : @parameter%buySquare : @storage
+                    DIG 3;      # @storage : list operation : @some : @parameter%buySquare
+                    DUP;        # @storage : @storage : list operation : @some : @parameter%buySquare
+                    GET 5;      # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : list operation : @some : @parameter%buySquare
+                    DIG 3;      # @some : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : list operation : @parameter%buySquare
+                    SOME;       # option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : list operation : @parameter%buySquare
+                    DUP 5;      # @parameter%buySquare : option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : list operation : @parameter%buySquare
+                    CAR;        # nat : option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : list operation : @parameter%buySquare
+                    UPDATE;     # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : list operation : @parameter%buySquare
+                    UPDATE 5;   # @storage : list operation : @parameter%buySquare
+                    DUG 2;      # list operation : @parameter%buySquare : @storage
+                    SWAP;       # @parameter%buySquare : list operation : @storage
+                    # sp.emit( # @parameter%buySquare : list operation : @storage
+                    UNPAIR;     # nat : int : list operation : @storage
+                    SENDER;     # @sender : nat : int : list operation : @storage
+                    PAIR 3;     # pair @sender (pair nat int) : list operation : @storage
+                    EMIT %squareBought (pair (address %buyer) (pair (nat %gameId) (int %squareIdx))); # operation : list operation : @storage
+                    CONS;       # list operation : @storage
+                  }
+                  {
+                    DROP;       # @storage
+                    # == claim ==
+                    # assert sp.sender in self.data.pending, "NothingToClaim" # @storage
+                    DUP;        # @storage : @storage
+                    GET 9;      # big_map address mutez : @storage
+                    SENDER;     # @sender : big_map address mutez : @storage
+                    MEM;        # bool : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NothingToClaim"; # string : @storage
+                        FAILWITH;   # FAILED
+                      }; # @storage
+                    # amount = self.data.pending[sp.sender] # @storage
+                    DUP;        # @storage : @storage
+                    GET 9;      # big_map address mutez : @storage
+                    SENDER;     # @sender : big_map address mutez : @storage
+                    GET;        # option mutez : @storage
+                    IF_NONE
+                      {
+                        PUSH int 373; # int : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @storage
+                    # assert amount > sp.mutez(0), "NothingToClaim" # @some : @storage
+                    PUSH mutez 0; # mutez : @some : @storage
+                    DUP 2;      # @some : mutez : @some : @storage
+                    COMPARE;    # int : @some : @storage
+                    GT;         # bool : @some : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NothingToClaim"; # string : @some : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @storage
+                    SWAP;       # @storage : @some
+                    # del self.data.pending[sp.sender] # @storage : @some
+                    DUP;        # @storage : @storage : @some
+                    GET 9;      # big_map address mutez : @storage : @some
+                    NONE mutez; # option mutez : big_map address mutez : @storage : @some
+                    SENDER;     # @sender : option mutez : big_map address mutez : @storage : @some
+                    UPDATE;     # big_map address mutez : @storage : @some
+                    UPDATE 9;   # @storage : @some
+                    SWAP;       # @some : @storage
+                    # sp.send(sp.sender, amount) # @some : @storage
+                    NIL operation; # list operation : @some : @storage
+                    SENDER;     # @sender : list operation : @some : @storage
+                    CONTRACT unit; # option (contract unit) : list operation : @some : @storage
+                    IF_NONE
+                      {
+                        PUSH int 376; # int : list operation : @some : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : list operation : @some : @storage
+                    DUP 3;      # @some : @some : list operation : @some : @storage
+                    UNIT;       # unit : @some : @some : list operation : @some : @storage
+                    TRANSFER_TOKENS; # operation : list operation : @some : @storage
+                    CONS;       # list operation : @some : @storage
+                    # sp.emit(sp.record(who=sp.sender, amount=amount), tag="claimed") # list operation : @some : @storage
+                    SENDER;     # @sender : list operation : @some : @storage
+                    DIG 2;      # @some : @sender : list operation : @storage
+                    PAIR;       # pair @some @sender : list operation : @storage
+                    EMIT %claimed (pair (mutez %amount) (address %who)); # operation : list operation : @storage
+                    CONS;       # list operation : @storage
+                  }; # list operation : @storage
+              }; # list operation : @storage
+          }
+          {
+            IF_LEFT
+              {
+                IF_LEFT
+                  {
+                    # == closeSales ==
+                    # assert sp.sender == self.data.admin, "NotAdmin" # @parameter%closeSales : @storage
+                    DUP 2;      # @storage : @parameter%closeSales : @storage
+                    CAR;        # address : @parameter%closeSales : @storage
+                    SENDER;     # @sender : address : @parameter%closeSales : @storage
+                    COMPARE;    # int : @parameter%closeSales : @storage
+                    EQ;         # bool : @parameter%closeSales : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NotAdmin"; # string : @parameter%closeSales : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%closeSales : @storage
+                    # assert params.gameId in self.data.games, "NoGame" # @parameter%closeSales : @storage
+                    DUP 2;      # @storage : @parameter%closeSales : @storage
+                    GET 5;      # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%closeSales : @storage
+                    DUP 2;      # @parameter%closeSales : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%closeSales : @storage
+                    MEM;        # bool : @parameter%closeSales : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NoGame"; # string : @parameter%closeSales : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%closeSales : @storage
+                    # game = self.data.games[params.gameId] # @parameter%closeSales : @storage
+                    DUP 2;      # @storage : @parameter%closeSales : @storage
+                    GET 5;      # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%closeSales : @storage
+                    DUP 2;      # @parameter%closeSales : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%closeSales : @storage
+                    GET;        # option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%closeSales : @storage
+                    IF_NONE
+                      {
+                        PUSH int 261; # int : @parameter%closeSales : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @parameter%closeSales : @storage
+                    # assert game.phase == PHASE_SELLING, "NotSelling" # @some : @parameter%closeSales : @storage
+                    PUSH int 0; # int : @some : @parameter%closeSales : @storage
+                    DUP 2;      # @some : int : @some : @parameter%closeSales : @storage
+                    GET 15;     # int : int : @some : @parameter%closeSales : @storage
+                    COMPARE;    # int : @some : @parameter%closeSales : @storage
+                    EQ;         # bool : @some : @parameter%closeSales : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NotSelling"; # string : @some : @parameter%closeSales : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%closeSales : @storage
+                    # game.phase = PHASE_LOCKED # @some : @parameter%closeSales : @storage
+                    PUSH int 1; # int : @some : @parameter%closeSales : @storage
+                    UPDATE 15;  # @some : @parameter%closeSales : @storage
+                    # self.data.games[params.gameId] = game # @some : @parameter%closeSales : @storage
+                    DIG 2;      # @storage : @some : @parameter%closeSales
+                    DUP;        # @storage : @storage : @some : @parameter%closeSales
+                    GET 5;      # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : @some : @parameter%closeSales
+                    DIG 2;      # @some : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : @parameter%closeSales
+                    SOME;       # option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : @parameter%closeSales
+                    DUP 4;      # @parameter%closeSales : option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : @parameter%closeSales
+                    UPDATE;     # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : @parameter%closeSales
+                    UPDATE 5;   # @storage : @parameter%closeSales
+                    SWAP;       # @parameter%closeSales : @storage
+                    # sp.emit(params.gameId, tag="salesClosed") # @parameter%closeSales : @storage
+                    EMIT %salesClosed nat; # operation : @storage
+                    NIL operation; # list operation : operation : @storage
+                    SWAP;       # operation : list operation : @storage
+                    CONS;       # list operation : @storage
+                  }
+                  {
+                    # == createGame ==
+                    # assert not self.data.paused, "Paused" # @parameter%createGame : @storage
+                    DUP 2;      # @storage : @parameter%createGame : @storage
+                    GET 7;      # bool : @parameter%createGame : @storage
+                    IF
+                      {
+                        PUSH string "Paused"; # string : @parameter%createGame : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @parameter%createGame : @storage
+                    # assert params.ticketPrice > sp.mutez(0), "ZeroTicket" # @parameter%createGame : @storage
+                    PUSH mutez 0; # mutez : @parameter%createGame : @storage
+                    DUP 2;      # @parameter%createGame : mutez : @parameter%createGame : @storage
+                    GET 8;      # mutez : mutez : @parameter%createGame : @storage
+                    COMPARE;    # int : @parameter%createGame : @storage
+                    GT;         # bool : @parameter%createGame : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "ZeroTicket"; # string : @parameter%createGame : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%createGame : @storage
+                    # assert params.numPeriods >= sp.nat(1), "BadNumPeriods" # @parameter%createGame : @storage
+                    PUSH nat 1; # nat : @parameter%createGame : @storage
+                    DUP 2;      # @parameter%createGame : nat : @parameter%createGame : @storage
+                    GET 5;      # nat : nat : @parameter%createGame : @storage
+                    COMPARE;    # int : @parameter%createGame : @storage
+                    GE;         # bool : @parameter%createGame : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "BadNumPeriods"; # string : @parameter%createGame : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%createGame : @storage
+                    # assert params.numPeriods <= sp.nat(9), "BadNumPeriods" # @parameter%createGame : @storage
+                    PUSH nat 9; # nat : @parameter%createGame : @storage
+                    DUP 2;      # @parameter%createGame : nat : @parameter%createGame : @storage
+                    GET 5;      # nat : nat : @parameter%createGame : @storage
+                    COMPARE;    # int : @parameter%createGame : @storage
+                    LE;         # bool : @parameter%createGame : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "BadNumPeriods"; # string : @parameter%createGame : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%createGame : @storage
+                    # sumW = sp.nat(0) # @parameter%createGame : @storage
+                    PUSH nat 0; # nat : @parameter%createGame : @storage
+                    # idx = sp.nat(0) # nat : @parameter%createGame : @storage
+                    PUSH nat 0; # nat : nat : @parameter%createGame : @storage
+                    # for i in range(9): # nat : nat : @parameter%createGame : @storage
+                    PUSH int 0; # int : nat : nat : @parameter%createGame : @storage
+                    PUSH bool True; # bool : int : nat : nat : @parameter%createGame : @storage
+                    LOOP
+                      {
+                        # if idx < params.numPeriods: # int : nat : nat : @parameter%createGame : @storage
+                        DUP 4;      # @parameter%createGame : int : nat : nat : @parameter%createGame : @storage
+                        GET 5;      # nat : int : nat : nat : @parameter%createGame : @storage
+                        DUP 3;      # nat : nat : int : nat : nat : @parameter%createGame : @storage
+                        COMPARE;    # int : int : nat : nat : @parameter%createGame : @storage
+                        LT;         # bool : int : nat : nat : @parameter%createGame : @storage
+                        IF
+                          {
+                            # assert i in params.quarterWeights, "MissingPeriod" # int : nat : nat : @parameter%createGame : @storage
+                            DUP 4;      # @parameter%createGame : int : nat : nat : @parameter%createGame : @storage
+                            GET 7;      # map int nat : int : nat : nat : @parameter%createGame : @storage
+                            DUP 2;      # int : map int nat : int : nat : nat : @parameter%createGame : @storage
+                            MEM;        # bool : int : nat : nat : @parameter%createGame : @storage
+                            IF
+                              {}
+                              {
+                                PUSH string "MissingPeriod"; # string : int : nat : nat : @parameter%createGame : @storage
+                                FAILWITH;   # FAILED
+                              }; # int : nat : nat : @parameter%createGame : @storage
+                            # sumW = sumW + params.quarterWeights[i] # int : nat : nat : @parameter%createGame : @storage
+                            DIG 2;      # nat : int : nat : @parameter%createGame : @storage
+                            DUP 4;      # @parameter%createGame : nat : int : nat : @parameter%createGame : @storage
+                            GET 7;      # map int nat : nat : int : nat : @parameter%createGame : @storage
+                            DUP 3;      # int : map int nat : nat : int : nat : @parameter%createGame : @storage
+                            GET;        # option nat : nat : int : nat : @parameter%createGame : @storage
+                            IF_NONE
+                              {
+                                PUSH int 166; # int : nat : int : nat : @parameter%createGame : @storage
+                                FAILWITH;   # FAILED
+                              }
+                              {}; # @some : nat : int : nat : @parameter%createGame : @storage
+                            ADD;        # nat : int : nat : @parameter%createGame : @storage
+                            DUG 2;      # int : nat : nat : @parameter%createGame : @storage
+                          }
+                          {}; # int : nat : nat : @parameter%createGame : @storage
+                        SWAP;       # nat : int : nat : @parameter%createGame : @storage
+                        # idx = idx + 1 # nat : int : nat : @parameter%createGame : @storage
+                        PUSH nat 1; # nat : nat : int : nat : @parameter%createGame : @storage
+                        ADD;        # nat : int : nat : @parameter%createGame : @storage
+                        SWAP;       # int : nat : nat : @parameter%createGame : @storage
+                        # loop step # int : nat : nat : @parameter%createGame : @storage
+                        PUSH int 1; # int : int : nat : nat : @parameter%createGame : @storage
+                        ADD;        # int : nat : nat : @parameter%createGame : @storage
+                        DUP;        # int : int : nat : nat : @parameter%createGame : @storage
+                        PUSH int 9; # int : int : int : nat : nat : @parameter%createGame : @storage
+                        COMPARE;    # int : int : nat : nat : @parameter%createGame : @storage
+                        GT;         # bool : int : nat : nat : @parameter%createGame : @storage
+                      }; # int : nat : nat : @parameter%createGame : @storage
+                    DROP;       # nat : nat : @parameter%createGame : @storage
+                    # assert sumW == sp.nat(100), "WeightsMustSumTo100" # nat : nat : @parameter%createGame : @storage
+                    PUSH nat 100; # nat : nat : nat : @parameter%createGame : @storage
+                    DUP 3;      # nat : nat : nat : nat : @parameter%createGame : @storage
+                    COMPARE;    # int : nat : nat : @parameter%createGame : @storage
+                    EQ;         # bool : nat : nat : @parameter%createGame : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "WeightsMustSumTo100"; # string : nat : nat : @parameter%createGame : @storage
+                        FAILWITH;   # FAILED
+                      }; # nat : nat : @parameter%createGame : @storage
+                    # gid = self.data.currentGameId # nat : nat : @parameter%createGame : @storage
+                    DUP 4;      # @storage : nat : nat : @parameter%createGame : @storage
+                    GET 3;      # nat : nat : nat : @parameter%createGame : @storage
+                    # self.data.games[gid] = sp.record( # nat : nat : nat : @parameter%createGame : @storage
+                    DIG 4;      # @storage : nat : nat : nat : @parameter%createGame
+                    DUP;        # @storage : @storage : nat : nat : nat : @parameter%createGame
+                    GET 5;      # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    DUP 6;      # @parameter%createGame : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    GET 8;      # mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    EMPTY_MAP int address; # map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    PUSH nat 0; # nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    PUSH int 0; # int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    DUP 10;     # @parameter%createGame : int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    GET 7;      # map int nat : int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    PUSH (map int bool) {Elt 0 False; Elt 1 False; Elt 2 False; Elt 3 False; Elt 4 False; Elt 5 False; Elt 6 False; Elt 7 False; Elt 8 False}; # map int bool : map int nat : int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    PUSH mutez 0; # mutez : map int bool : map int nat : int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    EMPTY_MAP address nat; # map address nat : mutez : map int bool : map int nat : int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    PUSH int 0; # int : map address nat : mutez : map int bool : map int nat : int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    DUP 15;     # @parameter%createGame : int : map address nat : mutez : map int bool : map int nat : int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    GET 5;      # nat : int : map address nat : mutez : map int bool : map int nat : int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    DUP 16;     # @parameter%createGame : nat : int : map address nat : mutez : map int bool : map int nat : int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    GET 3;      # string : nat : int : map address nat : mutez : map int bool : map int nat : int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    DUP 17;     # @parameter%createGame : string : nat : int : map address nat : mutez : map int bool : map int nat : int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    CAR;        # mutez : string : nat : int : map address nat : mutez : map int bool : map int nat : int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    SENDER;     # @sender : mutez : string : nat : int : map address nat : mutez : map int bool : map int nat : int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    EMPTY_MAP int int; # map int int : @sender : mutez : string : nat : int : map address nat : mutez : map int bool : map int nat : int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    EMPTY_MAP int int; # map int int : map int int : @sender : mutez : string : nat : int : map address nat : mutez : map int bool : map int nat : int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    PUSH bool False; # bool : map int int : map int int : @sender : mutez : string : nat : int : map address nat : mutez : map int bool : map int nat : int : nat : map int address : mutez : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    PAIR 16;    # pair bool (pair (map int int) (pair (map int int) (pair @sender (pair mutez (pair string (pair nat (pair int (pair (map address nat) (pair mutez (pair (map int bool) (pair (map int nat) (pair int (pair nat (pair (map int address) mutez)))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : nat : @parameter%createGame
+                    DIG 4;      # nat : pair bool (pair (map int int) (pair (map int int) (pair @sender (pair mutez (pair string (pair nat (pair int (pair (map address nat) (pair mutez (pair (map int bool) (pair (map int nat) (pair int (pair nat (pair (map int address) mutez)))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : @parameter%createGame
+                    DROP;       # pair bool (pair (map int int) (pair (map int int) (pair @sender (pair mutez (pair string (pair nat (pair int (pair (map address nat) (pair mutez (pair (map int bool) (pair (map int nat) (pair int (pair nat (pair (map int address) mutez)))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : nat : @parameter%createGame
+                    DIG 4;      # nat : pair bool (pair (map int int) (pair (map int int) (pair @sender (pair mutez (pair string (pair nat (pair int (pair (map address nat) (pair mutez (pair (map int bool) (pair (map int nat) (pair int (pair nat (pair (map int address) mutez)))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : @parameter%createGame
+                    DROP;       # pair bool (pair (map int int) (pair (map int int) (pair @sender (pair mutez (pair string (pair nat (pair int (pair (map address nat) (pair mutez (pair (map int bool) (pair (map int nat) (pair int (pair nat (pair (map int address) mutez)))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat : @parameter%createGame
+                    DIG 4;      # @parameter%createGame : pair bool (pair (map int int) (pair (map int int) (pair @sender (pair mutez (pair string (pair nat (pair int (pair (map address nat) (pair mutez (pair (map int bool) (pair (map int nat) (pair int (pair nat (pair (map int address) mutez)))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat
+                    DROP;       # pair bool (pair (map int int) (pair (map int int) (pair @sender (pair mutez (pair string (pair nat (pair int (pair (map address nat) (pair mutez (pair (map int bool) (pair (map int nat) (pair int (pair nat (pair (map int address) mutez)))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat
+                    SOME;       # option (pair bool (pair (map int int) (pair (map int int) (pair @sender (pair mutez (pair string (pair nat (pair int (pair (map address nat) (pair mutez (pair (map int bool) (pair (map int nat) (pair int (pair nat (pair (map int address) mutez))))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat
+                    DUP 4;      # nat : option (pair bool (pair (map int int) (pair (map int int) (pair @sender (pair mutez (pair string (pair nat (pair int (pair (map address nat) (pair mutez (pair (map int bool) (pair (map int nat) (pair int (pair nat (pair (map int address) mutez))))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : nat
+                    UPDATE;     # big_map nat (pair bool (pair (map int int) (pair (map int int) (pair address (pair mutez (pair string (pair nat (pair int (pair (map address nat) (pair mutez (pair (map int bool) (pair (map int nat) (pair int (pair nat (pair (map int address) mutez))))))))))))))) : @storage : nat
+                    UPDATE 5;   # @storage : nat
+                    SWAP;       # nat : @storage
+                    # sp.emit(gid, tag="gameCreated") # nat : @storage
+                    EMIT %gameCreated nat; # operation : @storage
+                    NIL operation; # list operation : operation : @storage
+                    SWAP;       # operation : list operation : @storage
+                    CONS;       # list operation : @storage
+                    SWAP;       # @storage : list operation
+                    # self.data.currentGameId += 1 # @storage : list operation
+                    DUP;        # @storage : @storage : list operation
+                    GET 3;      # nat : @storage : list operation
+                    PUSH nat 1; # nat : nat : @storage : list operation
+                    ADD;        # nat : @storage : list operation
+                    UPDATE 3;   # @storage : list operation
+                    SWAP;       # list operation : @storage
+                  }; # list operation : @storage
+              }
+              {
+                IF_LEFT
+                  {
+                    DROP;       # @storage
+                    # == default == # @storage
+                  }
+                  {
+                    DROP;       # @storage
+                    # == pause ==
+                    # assert sp.sender == self.data.admin, "NotAdmin" # @storage
+                    DUP;        # @storage : @storage
+                    CAR;        # address : @storage
+                    SENDER;     # @sender : address : @storage
+                    COMPARE;    # int : @storage
+                    EQ;         # bool : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NotAdmin"; # string : @storage
+                        FAILWITH;   # FAILED
+                      }; # @storage
+                    # self.data.paused = True # @storage
+                    PUSH bool True; # bool : @storage
+                    UPDATE 7;   # @storage
+                  }; # @storage
+                NIL operation; # list operation : @storage
+              }; # list operation : @storage
+          }; # list operation : @storage
+      }
+      {
+        IF_LEFT
+          {
+            IF_LEFT
+              {
+                # == proposeAdmin ==
+                # assert sp.sender == self.data.admin, "NotAdmin" # @parameter%proposeAdmin : @storage
+                DUP 2;      # @storage : @parameter%proposeAdmin : @storage
+                CAR;        # address : @parameter%proposeAdmin : @storage
+                SENDER;     # @sender : address : @parameter%proposeAdmin : @storage
+                COMPARE;    # int : @parameter%proposeAdmin : @storage
+                EQ;         # bool : @parameter%proposeAdmin : @storage
+                IF
+                  {}
+                  {
+                    PUSH string "NotAdmin"; # string : @parameter%proposeAdmin : @storage
+                    FAILWITH;   # FAILED
+                  }; # @parameter%proposeAdmin : @storage
+                # self.data.pendingAdmin = sp.Some(params.newAdmin) # @parameter%proposeAdmin : @storage
+                SOME;       # option address : @storage
+                UPDATE 11;  # @storage
+                NIL operation; # list operation : @storage
+              }
+              {
+                IF_LEFT
+                  {
+                    # == refundUnsold ==
+                    # assert sp.sender == self.data.admin, "NotAdmin" # @parameter%refundUnsold : @storage
+                    DUP 2;      # @storage : @parameter%refundUnsold : @storage
+                    CAR;        # address : @parameter%refundUnsold : @storage
+                    SENDER;     # @sender : address : @parameter%refundUnsold : @storage
+                    COMPARE;    # int : @parameter%refundUnsold : @storage
+                    EQ;         # bool : @parameter%refundUnsold : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NotAdmin"; # string : @parameter%refundUnsold : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%refundUnsold : @storage
+                    # assert params.gameId in self.data.games, "NoGame" # @parameter%refundUnsold : @storage
+                    DUP 2;      # @storage : @parameter%refundUnsold : @storage
+                    GET 5;      # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%refundUnsold : @storage
+                    DUP 2;      # @parameter%refundUnsold : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%refundUnsold : @storage
+                    MEM;        # bool : @parameter%refundUnsold : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NoGame"; # string : @parameter%refundUnsold : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%refundUnsold : @storage
+                    # game = self.data.games[params.gameId] # @parameter%refundUnsold : @storage
+                    DUP 2;      # @storage : @parameter%refundUnsold : @storage
+                    GET 5;      # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%refundUnsold : @storage
+                    DUP 2;      # @parameter%refundUnsold : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%refundUnsold : @storage
+                    GET;        # option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%refundUnsold : @storage
+                    IF_NONE
+                      {
+                        PUSH int 386; # int : @parameter%refundUnsold : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @parameter%refundUnsold : @storage
+                    # assert ( # @some : @parameter%refundUnsold : @storage
+                    PUSH int 0; # int : @some : @parameter%refundUnsold : @storage
+                    DUP 2;      # @some : int : @some : @parameter%refundUnsold : @storage
+                    GET 15;     # int : int : @some : @parameter%refundUnsold : @storage
+                    COMPARE;    # int : @some : @parameter%refundUnsold : @storage
+                    EQ;         # bool : @some : @parameter%refundUnsold : @storage
+                    IF
+                      {
+                        PUSH bool True; # bool : @some : @parameter%refundUnsold : @storage
+                      }
+                      {
+                        PUSH int 1; # int : @some : @parameter%refundUnsold : @storage
+                        DUP 2;      # @some : int : @some : @parameter%refundUnsold : @storage
+                        GET 15;     # int : int : @some : @parameter%refundUnsold : @storage
+                        COMPARE;    # int : @some : @parameter%refundUnsold : @storage
+                        EQ;         # bool : @some : @parameter%refundUnsold : @storage
+                      }; # bool : @some : @parameter%refundUnsold : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "GameTooFar"; # string : @some : @parameter%refundUnsold : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%refundUnsold : @storage
+                    # for i in range(100): # @some : @parameter%refundUnsold : @storage
+                    PUSH int 0; # int : @some : @parameter%refundUnsold : @storage
+                    PUSH bool True; # bool : int : @some : @parameter%refundUnsold : @storage
+                    LOOP
+                      {
+                        # if i in game.squares: # int : @some : @parameter%refundUnsold : @storage
+                        DUP 2;      # @some : int : @some : @parameter%refundUnsold : @storage
+                        GET 29;     # map int address : int : @some : @parameter%refundUnsold : @storage
+                        DUP 2;      # int : map int address : int : @some : @parameter%refundUnsold : @storage
+                        MEM;        # bool : int : @some : @parameter%refundUnsold : @storage
+                        IF
+                          {
+                            # buyer = game.squares[i] # int : @some : @parameter%refundUnsold : @storage
+                            DUP 2;      # @some : int : @some : @parameter%refundUnsold : @storage
+                            GET 29;     # map int address : int : @some : @parameter%refundUnsold : @storage
+                            DUP 2;      # int : map int address : int : @some : @parameter%refundUnsold : @storage
+                            GET;        # option address : int : @some : @parameter%refundUnsold : @storage
+                            IF_NONE
+                              {
+                                PUSH int 395; # int : int : @some : @parameter%refundUnsold : @storage
+                                FAILWITH;   # FAILED
+                              }
+                              {}; # @some : int : @some : @parameter%refundUnsold : @storage
+                            # current = self.data.pending.get(buyer, default=sp.mutez(0)) # @some : int : @some : @parameter%refundUnsold : @storage
+                            DUP 5;      # @storage : @some : int : @some : @parameter%refundUnsold : @storage
+                            GET 9;      # big_map address mutez : @some : int : @some : @parameter%refundUnsold : @storage
+                            DUP 2;      # @some : big_map address mutez : @some : int : @some : @parameter%refundUnsold : @storage
+                            GET;        # option mutez : @some : int : @some : @parameter%refundUnsold : @storage
+                            IF_NONE
+                              {
+                                PUSH mutez 0; # mutez : @some : int : @some : @parameter%refundUnsold : @storage
+                              }
+                              {}; # mutez : @some : int : @some : @parameter%refundUnsold : @storage
+                            # self.data.pending[buyer] = current + game.ticketPrice # mutez : @some : int : @some : @parameter%refundUnsold : @storage
+                            DIG 5;      # @storage : mutez : @some : int : @some : @parameter%refundUnsold
+                            DUP;        # @storage : @storage : mutez : @some : int : @some : @parameter%refundUnsold
+                            GET 9;      # big_map address mutez : @storage : mutez : @some : int : @some : @parameter%refundUnsold
+                            DUP 6;      # @some : big_map address mutez : @storage : mutez : @some : int : @some : @parameter%refundUnsold
+                            GET 30;     # mutez : big_map address mutez : @storage : mutez : @some : int : @some : @parameter%refundUnsold
+                            DIG 3;      # mutez : mutez : big_map address mutez : @storage : @some : int : @some : @parameter%refundUnsold
+                            ADD;        # mutez : big_map address mutez : @storage : @some : int : @some : @parameter%refundUnsold
+                            SOME;       # option mutez : big_map address mutez : @storage : @some : int : @some : @parameter%refundUnsold
+                            DIG 3;      # @some : option mutez : big_map address mutez : @storage : int : @some : @parameter%refundUnsold
+                            UPDATE;     # big_map address mutez : @storage : int : @some : @parameter%refundUnsold
+                            UPDATE 9;   # @storage : int : @some : @parameter%refundUnsold
+                            DUG 3;      # int : @some : @parameter%refundUnsold : @storage
+                          }
+                          {}; # int : @some : @parameter%refundUnsold : @storage
+                        # loop step # int : @some : @parameter%refundUnsold : @storage
+                        PUSH int 1; # int : int : @some : @parameter%refundUnsold : @storage
+                        ADD;        # int : @some : @parameter%refundUnsold : @storage
+                        DUP;        # int : int : @some : @parameter%refundUnsold : @storage
+                        PUSH int 100; # int : int : int : @some : @parameter%refundUnsold : @storage
+                        COMPARE;    # int : int : @some : @parameter%refundUnsold : @storage
+                        GT;         # bool : int : @some : @parameter%refundUnsold : @storage
+                      }; # int : @some : @parameter%refundUnsold : @storage
+                    DROP;       # @some : @parameter%refundUnsold : @storage
+                    # game.pot = sp.mutez(0) # @some : @parameter%refundUnsold : @storage
+                    PUSH mutez 0; # mutez : @some : @parameter%refundUnsold : @storage
+                    UPDATE 19;  # @some : @parameter%refundUnsold : @storage
+                    # game.phase = PHASE_COMPLETE # @some : @parameter%refundUnsold : @storage
+                    PUSH int 3; # int : @some : @parameter%refundUnsold : @storage
+                    UPDATE 15;  # @some : @parameter%refundUnsold : @storage
+                    # self.data.games[params.gameId] = game # @some : @parameter%refundUnsold : @storage
+                    DIG 2;      # @storage : @some : @parameter%refundUnsold
+                    DUP;        # @storage : @storage : @some : @parameter%refundUnsold
+                    GET 5;      # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : @some : @parameter%refundUnsold
+                    DIG 2;      # @some : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : @parameter%refundUnsold
+                    SOME;       # option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : @parameter%refundUnsold
+                    DUP 4;      # @parameter%refundUnsold : option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : @parameter%refundUnsold
+                    UPDATE;     # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : @parameter%refundUnsold
+                    UPDATE 5;   # @storage : @parameter%refundUnsold
+                    SWAP;       # @parameter%refundUnsold : @storage
+                    # sp.emit(params.gameId, tag="refunded") # @parameter%refundUnsold : @storage
+                    EMIT %refunded nat; # operation : @storage
+                    NIL operation; # list operation : operation : @storage
+                    SWAP;       # operation : list operation : @storage
+                    CONS;       # list operation : @storage
+                  }
+                  {
+                    # == reportQuarter ==
+                    # assert sp.sender == self.data.admin, "NotAdmin" # @parameter%reportQuarter : @storage
+                    DUP 2;      # @storage : @parameter%reportQuarter : @storage
+                    CAR;        # address : @parameter%reportQuarter : @storage
+                    SENDER;     # @sender : address : @parameter%reportQuarter : @storage
+                    COMPARE;    # int : @parameter%reportQuarter : @storage
+                    EQ;         # bool : @parameter%reportQuarter : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NotAdmin"; # string : @parameter%reportQuarter : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%reportQuarter : @storage
+                    # assert not self.data.paused, "Paused" # @parameter%reportQuarter : @storage
+                    DUP 2;      # @storage : @parameter%reportQuarter : @storage
+                    GET 7;      # bool : @parameter%reportQuarter : @storage
+                    IF
+                      {
+                        PUSH string "Paused"; # string : @parameter%reportQuarter : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @parameter%reportQuarter : @storage
+                    # assert params.gameId in self.data.games, "NoGame" # @parameter%reportQuarter : @storage
+                    DUP 2;      # @storage : @parameter%reportQuarter : @storage
+                    GET 5;      # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%reportQuarter : @storage
+                    DUP 2;      # @parameter%reportQuarter : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%reportQuarter : @storage
+                    GET 3;      # nat : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%reportQuarter : @storage
+                    MEM;        # bool : @parameter%reportQuarter : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NoGame"; # string : @parameter%reportQuarter : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%reportQuarter : @storage
+                    # game = self.data.games[params.gameId] # @parameter%reportQuarter : @storage
+                    DUP 2;      # @storage : @parameter%reportQuarter : @storage
+                    GET 5;      # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%reportQuarter : @storage
+                    DUP 2;      # @parameter%reportQuarter : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%reportQuarter : @storage
+                    GET 3;      # nat : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%reportQuarter : @storage
+                    GET;        # option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%reportQuarter : @storage
+                    IF_NONE
+                      {
+                        PUSH int 297; # int : @parameter%reportQuarter : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @parameter%reportQuarter : @storage
+                    # assert game.phase == PHASE_AXES_SET, "NotPlayable" # @some : @parameter%reportQuarter : @storage
+                    PUSH int 2; # int : @some : @parameter%reportQuarter : @storage
+                    DUP 2;      # @some : int : @some : @parameter%reportQuarter : @storage
+                    GET 15;     # int : int : @some : @parameter%reportQuarter : @storage
+                    COMPARE;    # int : @some : @parameter%reportQuarter : @storage
+                    EQ;         # bool : @some : @parameter%reportQuarter : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NotPlayable"; # string : @some : @parameter%reportQuarter : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%reportQuarter : @storage
+                    # assert params.quarter >= 0, "BadQuarter" # @some : @parameter%reportQuarter : @storage
+                    PUSH int 0; # int : @some : @parameter%reportQuarter : @storage
+                    DUP 3;      # @parameter%reportQuarter : int : @some : @parameter%reportQuarter : @storage
+                    GET 6;      # int : int : @some : @parameter%reportQuarter : @storage
+                    COMPARE;    # int : @some : @parameter%reportQuarter : @storage
+                    GE;         # bool : @some : @parameter%reportQuarter : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "BadQuarter"; # string : @some : @parameter%reportQuarter : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%reportQuarter : @storage
+                    # assert params.quarter < sp.to_int(game.numPeriods), "BadQuarter" # @some : @parameter%reportQuarter : @storage
+                    DUP;        # @some : @some : @parameter%reportQuarter : @storage
+                    GET 13;     # nat : @some : @parameter%reportQuarter : @storage
+                    INT;        # int : @some : @parameter%reportQuarter : @storage
+                    DUP 3;      # @parameter%reportQuarter : int : @some : @parameter%reportQuarter : @storage
+                    GET 6;      # int : int : @some : @parameter%reportQuarter : @storage
+                    COMPARE;    # int : @some : @parameter%reportQuarter : @storage
+                    LT;         # bool : @some : @parameter%reportQuarter : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "BadQuarter"; # string : @some : @parameter%reportQuarter : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%reportQuarter : @storage
+                    # assert params.quarter in game.quarterReported, "UnknownQ" # @some : @parameter%reportQuarter : @storage
+                    DUP;        # @some : @some : @parameter%reportQuarter : @storage
+                    GET 21;     # map int bool : @some : @parameter%reportQuarter : @storage
+                    DUP 3;      # @parameter%reportQuarter : map int bool : @some : @parameter%reportQuarter : @storage
+                    GET 6;      # int : map int bool : @some : @parameter%reportQuarter : @storage
+                    MEM;        # bool : @some : @parameter%reportQuarter : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "UnknownQ"; # string : @some : @parameter%reportQuarter : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%reportQuarter : @storage
+                    # assert not game.quarterReported[params.quarter], "QAlreadyReported" # @some : @parameter%reportQuarter : @storage
+                    DUP;        # @some : @some : @parameter%reportQuarter : @storage
+                    GET 21;     # map int bool : @some : @parameter%reportQuarter : @storage
+                    DUP 3;      # @parameter%reportQuarter : map int bool : @some : @parameter%reportQuarter : @storage
+                    GET 6;      # int : map int bool : @some : @parameter%reportQuarter : @storage
+                    GET;        # option bool : @some : @parameter%reportQuarter : @storage
+                    IF_NONE
+                      {
+                        PUSH int 304; # int : @some : @parameter%reportQuarter : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @some : @parameter%reportQuarter : @storage
+                    IF
+                      {
+                        PUSH string "QAlreadyReported"; # string : @some : @parameter%reportQuarter : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @parameter%reportQuarter : @storage
+                    # homeDigit = sp.to_int(sp.mod(params.homeScore, 10)) # @some : @parameter%reportQuarter : @storage
+                    PUSH int 10; # int : @some : @parameter%reportQuarter : @storage
+                    DUP 3;      # @parameter%reportQuarter : int : @some : @parameter%reportQuarter : @storage
+                    GET 5;      # int : int : @some : @parameter%reportQuarter : @storage
+                    EDIV;       # option (pair int nat) : @some : @parameter%reportQuarter : @storage
+                    IF_NONE
+                      {
+                        PUSH int 306; # int : @some : @parameter%reportQuarter : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {
+                        CDR;        # nat : @some : @parameter%reportQuarter : @storage
+                      }; # nat : @some : @parameter%reportQuarter : @storage
+                    INT;        # int : @some : @parameter%reportQuarter : @storage
+                    # awayDigit = sp.to_int(sp.mod(params.awayScore, 10)) # int : @some : @parameter%reportQuarter : @storage
+                    PUSH int 10; # int : int : @some : @parameter%reportQuarter : @storage
+                    DUP 4;      # @parameter%reportQuarter : int : int : @some : @parameter%reportQuarter : @storage
+                    CAR;        # int : int : int : @some : @parameter%reportQuarter : @storage
+                    EDIV;       # option (pair int nat) : int : @some : @parameter%reportQuarter : @storage
+                    IF_NONE
+                      {
+                        PUSH int 307; # int : int : @some : @parameter%reportQuarter : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {
+                        CDR;        # nat : int : @some : @parameter%reportQuarter : @storage
+                      }; # nat : int : @some : @parameter%reportQuarter : @storage
+                    INT;        # int : int : @some : @parameter%reportQuarter : @storage
+                    # winRow = sp.int(-1) # int : int : @some : @parameter%reportQuarter : @storage
+                    PUSH int -1; # int : int : int : @some : @parameter%reportQuarter : @storage
+                    # winCol = sp.int(-1) # int : int : int : @some : @parameter%reportQuarter : @storage
+                    PUSH int -1; # int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    # for i in range(10): # int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    PUSH int 0; # int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    PUSH bool True; # bool : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    LOOP
+                      {
+                        # if game.axisHome[i] == homeDigit: # int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 5;      # int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 7;      # @some : int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        GET 5;      # map int int : int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 3;      # int : map int int : int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        GET;        # option int : int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        IF_NONE
+                          {
+                            PUSH int 315; # int : int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                            FAILWITH;   # FAILED
+                          }
+                          {}; # @some : int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        COMPARE;    # int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        EQ;         # bool : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        IF
+                          {
+                            DIG 2;      # int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                            DROP;       # int : int : int : int : @some : @parameter%reportQuarter : @storage
+                            # winRow = i # int : int : int : int : @some : @parameter%reportQuarter : @storage
+                            DUP;        # int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                            DUG 2;      # int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                          }
+                          {}; # int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        # if game.axisAway[i] == awayDigit: # int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 4;      # int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 7;      # @some : int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        GET 3;      # map int int : int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 3;      # int : map int int : int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        GET;        # option int : int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        IF_NONE
+                          {
+                            PUSH int 317; # int : int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                            FAILWITH;   # FAILED
+                          }
+                          {}; # @some : int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        COMPARE;    # int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        EQ;         # bool : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        IF
+                          {
+                            SWAP;       # int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                            DROP;       # int : int : int : int : @some : @parameter%reportQuarter : @storage
+                            # winCol = i # int : int : int : int : @some : @parameter%reportQuarter : @storage
+                            DUP;        # int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                          }
+                          {}; # int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        # loop step # int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        PUSH int 1; # int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        ADD;        # int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP;        # int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        PUSH int 10; # int : int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        COMPARE;    # int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        GT;         # bool : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                      }; # int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    DROP;       # int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    # winSquare = winRow * 10 + winCol # int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    DUP;        # int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    PUSH int 10; # int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    DUP 4;      # int : int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    MUL;        # int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    ADD;        # int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    # weight = game.quarterWeights[params.quarter] # int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    DUP 6;      # @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    GET 23;     # map int nat : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    DUP 8;      # @parameter%reportQuarter : map int nat : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    GET 6;      # int : map int nat : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    GET;        # option nat : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    IF_NONE
+                      {
+                        PUSH int 322; # int : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    # payout = sp.split_tokens(game.pot, weight, sp.nat(100)) # @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    PUSH nat 100; # nat : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    DUP 2;      # @some : nat : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    DUP 9;      # @some : @some : nat : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    GET 19;     # mutez : @some : nat : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    MUL;        # mutez : nat : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    EDIV;       # option (pair mutez mutez) : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    IF_NONE
+                      {
+                        PUSH int 323; # int : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {
+                        # payout = sp.split_tokens(game.pot, weight, sp.nat(100)) # @some : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                      }; # @some : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    CAR;        # mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    # if payout > game.pot: # mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    DUP 8;      # @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    GET 19;     # mutez : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    DUP 2;      # mutez : mutez : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    COMPARE;    # int : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    GT;         # bool : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    IF
+                      {
+                        DROP;       # @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        # payout = game.pot # @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 7;      # @some : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        GET 19;     # mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                      }
+                      {}; # mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    # if winSquare in game.squares: # mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    DUP 8;      # @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    GET 29;     # map int address : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    DUP 4;      # int : map int address : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    MEM;        # bool : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                    IF
+                      {
+                        # winner = game.squares[winSquare] # mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 8;      # @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        GET 29;     # map int address : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 4;      # int : map int address : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        GET;        # option address : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        IF_NONE
+                          {
+                            PUSH int 328; # int : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                            FAILWITH;   # FAILED
+                          }
+                          {}; # @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        # current = self.data.pending.get(winner, default=sp.mutez(0)) # @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 11;     # @storage : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        GET 9;      # big_map address mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 2;      # @some : big_map address mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        GET;        # option mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        IF_NONE
+                          {
+                            PUSH mutez 0; # mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                          }
+                          {}; # mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        # self.data.pending[winner] = current + payout # mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 11;     # @storage : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter
+                        DUP;        # @storage : @storage : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter
+                        GET 9;      # big_map address mutez : @storage : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter
+                        DUP 5;      # mutez : big_map address mutez : @storage : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter
+                        DUP 4;      # mutez : mutez : big_map address mutez : @storage : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter
+                        ADD;        # mutez : big_map address mutez : @storage : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter
+                        SOME;       # option mutez : big_map address mutez : @storage : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter
+                        DUP 5;      # @some : option mutez : big_map address mutez : @storage : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter
+                        UPDATE;     # big_map address mutez : @storage : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter
+                        UPDATE 9;   # @storage : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter
+                        DUG 11;     # mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        # game.pot -= payout # mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 9;      # @some : mutez : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                        DUP;        # @some : @some : mutez : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                        GET 19;     # mutez : @some : mutez : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                        DUP 5;      # mutez : mutez : @some : mutez : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                        SWAP;       # mutez : mutez : @some : mutez : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                        SUB_MUTEZ;  # option mutez : @some : mutez : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                        IF_NONE
+                          {
+                            PUSH int 332; # int : @some : mutez : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                            FAILWITH;   # FAILED
+                          }
+                          {}; # @some : @some : mutez : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                        UPDATE 19;  # @some : mutez : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                        DUG 9;      # mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        # sp.emit( # mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        NIL operation; # list operation : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP;        # list operation : list operation : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 4;      # @some : list operation : list operation : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 8;      # int : @some : list operation : list operation : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 15;     # @parameter%reportQuarter : int : @some : list operation : list operation : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        GET 6;      # int : int : @some : list operation : list operation : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 8;      # mutez : int : int : @some : list operation : list operation : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 17;     # @parameter%reportQuarter : mutez : int : int : @some : list operation : list operation : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        GET 3;      # nat : mutez : int : int : @some : list operation : list operation : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        PAIR 5;     # pair nat (pair mutez (pair int (pair int @some))) : list operation : list operation : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # list operation : pair nat (pair mutez (pair int (pair int @some))) : list operation : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int (pair int @some))) : list operation : mutez : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # mutez : pair nat (pair mutez (pair int (pair int @some))) : list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int (pair int @some))) : list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # @some : pair nat (pair mutez (pair int (pair int @some))) : list operation : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int (pair int @some))) : list operation : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # mutez : pair nat (pair mutez (pair int (pair int @some))) : list operation : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int (pair int @some))) : list operation : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # @some : pair nat (pair mutez (pair int (pair int @some))) : list operation : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int (pair int @some))) : list operation : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # int : pair nat (pair mutez (pair int (pair int @some))) : list operation : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int (pair int @some))) : list operation : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # int : pair nat (pair mutez (pair int (pair int @some))) : list operation : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int (pair int @some))) : list operation : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # int : pair nat (pair mutez (pair int (pair int @some))) : list operation : int : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int (pair int @some))) : list operation : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # int : pair nat (pair mutez (pair int (pair int @some))) : list operation : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int (pair int @some))) : list operation : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # int : pair nat (pair mutez (pair int (pair int @some))) : list operation : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int (pair int @some))) : list operation : @some : @parameter%reportQuarter : @storage
+                        EMIT %quarterPaid (pair (nat %gameId) (pair (mutez %payout) (pair (int %quarter) (pair (int %square) (address %winner))))); # operation : list operation : @some : @parameter%reportQuarter : @storage
+                        CONS;       # list operation : @some : @parameter%reportQuarter : @storage
+                      }
+                      {
+                        # holder = sp.contract(sp.unit, self.data.txlContract).unwrap_some( # mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 10;     # @storage : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        GET 14;     # address : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        CONTRACT unit; # option (contract unit) : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        IF_NONE
+                          {
+                            PUSH string "NoTxlContract"; # string : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                            FAILWITH;   # FAILED
+                          }
+                          {}; # @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        # sp.transfer((), payout, holder) # @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        NIL operation; # list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 2;      # @some : list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 4;      # mutez : @some : list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        UNIT;       # unit : mutez : @some : list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        TRANSFER_TOKENS; # operation : list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        CONS;       # list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        # game.pot -= payout # list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 9;      # @some : list operation : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                        DUP;        # @some : @some : list operation : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                        GET 19;     # mutez : @some : list operation : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                        DUP 5;      # mutez : mutez : @some : list operation : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                        SWAP;       # mutez : mutez : @some : list operation : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                        SUB_MUTEZ;  # option mutez : @some : list operation : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                        IF_NONE
+                          {
+                            PUSH int 349; # int : @some : list operation : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                            FAILWITH;   # FAILED
+                          }
+                          {}; # @some : @some : list operation : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                        UPDATE 19;  # @some : list operation : @some : mutez : @some : int : int : int : int : int : @parameter%reportQuarter : @storage
+                        DUG 9;      # list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        # sp.emit( # list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP;        # list operation : list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 6;      # int : list operation : list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 13;     # @parameter%reportQuarter : int : list operation : list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        GET 6;      # int : int : list operation : list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 6;      # mutez : int : int : list operation : list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DUP 15;     # @parameter%reportQuarter : mutez : int : int : list operation : list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        GET 3;      # nat : mutez : int : int : list operation : list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        PAIR 4;     # pair nat (pair mutez (pair int int)) : list operation : list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # list operation : pair nat (pair mutez (pair int int)) : list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int int)) : list operation : @some : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # @some : pair nat (pair mutez (pair int int)) : list operation : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int int)) : list operation : mutez : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # mutez : pair nat (pair mutez (pair int int)) : list operation : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int int)) : list operation : @some : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # @some : pair nat (pair mutez (pair int int)) : list operation : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int int)) : list operation : int : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # int : pair nat (pair mutez (pair int int)) : list operation : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int int)) : list operation : int : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # int : pair nat (pair mutez (pair int int)) : list operation : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int int)) : list operation : int : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # int : pair nat (pair mutez (pair int int)) : list operation : int : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int int)) : list operation : int : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # int : pair nat (pair mutez (pair int int)) : list operation : int : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int int)) : list operation : int : @some : @parameter%reportQuarter : @storage
+                        DIG 2;      # int : pair nat (pair mutez (pair int int)) : list operation : @some : @parameter%reportQuarter : @storage
+                        DROP;       # pair nat (pair mutez (pair int int)) : list operation : @some : @parameter%reportQuarter : @storage
+                        EMIT %quarterUnowned (pair (nat %gameId) (pair (mutez %payout) (pair (int %quarter) (int %square)))); # operation : list operation : @some : @parameter%reportQuarter : @storage
+                        CONS;       # list operation : @some : @parameter%reportQuarter : @storage
+                      }; # list operation : @some : @parameter%reportQuarter : @storage
+                    SWAP;       # @some : list operation : @parameter%reportQuarter : @storage
+                    # game.quarterReported[params.quarter] = True # @some : list operation : @parameter%reportQuarter : @storage
+                    DUP;        # @some : @some : list operation : @parameter%reportQuarter : @storage
+                    GET 21;     # map int bool : @some : list operation : @parameter%reportQuarter : @storage
+                    PUSH (option bool) (Some True); # option bool : map int bool : @some : list operation : @parameter%reportQuarter : @storage
+                    DUP 5;      # @parameter%reportQuarter : option bool : map int bool : @some : list operation : @parameter%reportQuarter : @storage
+                    GET 6;      # int : option bool : map int bool : @some : list operation : @parameter%reportQuarter : @storage
+                    UPDATE;     # map int bool : @some : list operation : @parameter%reportQuarter : @storage
+                    UPDATE 21;  # @some : list operation : @parameter%reportQuarter : @storage
+                    # game.quartersDone += 1 # @some : list operation : @parameter%reportQuarter : @storage
+                    DUP;        # @some : @some : list operation : @parameter%reportQuarter : @storage
+                    GET 25;     # int : @some : list operation : @parameter%reportQuarter : @storage
+                    PUSH int 1; # int : int : @some : list operation : @parameter%reportQuarter : @storage
+                    ADD;        # int : @some : list operation : @parameter%reportQuarter : @storage
+                    UPDATE 25;  # @some : list operation : @parameter%reportQuarter : @storage
+                    SWAP;       # list operation : @some : @parameter%reportQuarter : @storage
+                    # if game.quartersDone == sp.to_int(game.numPeriods): # list operation : @some : @parameter%reportQuarter : @storage
+                    DUP 2;      # @some : list operation : @some : @parameter%reportQuarter : @storage
+                    GET 13;     # nat : list operation : @some : @parameter%reportQuarter : @storage
+                    INT;        # int : list operation : @some : @parameter%reportQuarter : @storage
+                    DUP 3;      # @some : int : list operation : @some : @parameter%reportQuarter : @storage
+                    GET 25;     # int : int : list operation : @some : @parameter%reportQuarter : @storage
+                    COMPARE;    # int : list operation : @some : @parameter%reportQuarter : @storage
+                    EQ;         # bool : list operation : @some : @parameter%reportQuarter : @storage
+                    IF
+                      {
+                        SWAP;       # @some : list operation : @parameter%reportQuarter : @storage
+                        # game.phase = PHASE_COMPLETE # @some : list operation : @parameter%reportQuarter : @storage
+                        PUSH int 3; # int : @some : list operation : @parameter%reportQuarter : @storage
+                        UPDATE 15;  # @some : list operation : @parameter%reportQuarter : @storage
+                        SWAP;       # list operation : @some : @parameter%reportQuarter : @storage
+                        # sp.emit(params.gameId, tag="gameComplete") # list operation : @some : @parameter%reportQuarter : @storage
+                        DUP 3;      # @parameter%reportQuarter : list operation : @some : @parameter%reportQuarter : @storage
+                        GET 3;      # nat : list operation : @some : @parameter%reportQuarter : @storage
+                        EMIT %gameComplete nat; # operation : list operation : @some : @parameter%reportQuarter : @storage
+                        CONS;       # list operation : @some : @parameter%reportQuarter : @storage
+                      }
+                      {}; # list operation : @some : @parameter%reportQuarter : @storage
+                    # self.data.games[params.gameId] = game # list operation : @some : @parameter%reportQuarter : @storage
+                    DIG 3;      # @storage : list operation : @some : @parameter%reportQuarter
+                    DUP;        # @storage : @storage : list operation : @some : @parameter%reportQuarter
+                    GET 5;      # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : list operation : @some : @parameter%reportQuarter
+                    DIG 3;      # @some : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : list operation : @parameter%reportQuarter
+                    SOME;       # option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : list operation : @parameter%reportQuarter
+                    DIG 4;      # @parameter%reportQuarter : option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : list operation
+                    GET 3;      # nat : option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : list operation
+                    UPDATE;     # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : list operation
+                    UPDATE 5;   # @storage : list operation
+                    SWAP;       # list operation : @storage
+                  }; # list operation : @storage
+              }; # list operation : @storage
+          }
+          {
+            IF_LEFT
+              {
+                IF_LEFT
+                  {
+                    # == setAxes ==
+                    # assert sp.sender == self.data.admin, "NotAdmin" # @parameter%setAxes : @storage
+                    DUP 2;      # @storage : @parameter%setAxes : @storage
+                    CAR;        # address : @parameter%setAxes : @storage
+                    SENDER;     # @sender : address : @parameter%setAxes : @storage
+                    COMPARE;    # int : @parameter%setAxes : @storage
+                    EQ;         # bool : @parameter%setAxes : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NotAdmin"; # string : @parameter%setAxes : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%setAxes : @storage
+                    # assert params.gameId in self.data.games, "NoGame" # @parameter%setAxes : @storage
+                    DUP 2;      # @storage : @parameter%setAxes : @storage
+                    GET 5;      # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%setAxes : @storage
+                    DUP 2;      # @parameter%setAxes : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%setAxes : @storage
+                    GET 4;      # nat : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%setAxes : @storage
+                    MEM;        # bool : @parameter%setAxes : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NoGame"; # string : @parameter%setAxes : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%setAxes : @storage
+                    # game = self.data.games[params.gameId] # @parameter%setAxes : @storage
+                    DUP 2;      # @storage : @parameter%setAxes : @storage
+                    GET 5;      # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%setAxes : @storage
+                    DUP 2;      # @parameter%setAxes : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%setAxes : @storage
+                    GET 4;      # nat : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%setAxes : @storage
+                    GET;        # option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @parameter%setAxes : @storage
+                    IF_NONE
+                      {
+                        PUSH int 276; # int : @parameter%setAxes : @storage
+                        FAILWITH;   # FAILED
+                      }
+                      {}; # @some : @parameter%setAxes : @storage
+                    # assert game.phase == PHASE_LOCKED, "NotLocked" # @some : @parameter%setAxes : @storage
+                    PUSH int 1; # int : @some : @parameter%setAxes : @storage
+                    DUP 2;      # @some : int : @some : @parameter%setAxes : @storage
+                    GET 15;     # int : int : @some : @parameter%setAxes : @storage
+                    COMPARE;    # int : @some : @parameter%setAxes : @storage
+                    EQ;         # bool : @some : @parameter%setAxes : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NotLocked"; # string : @some : @parameter%setAxes : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%setAxes : @storage
+                    # assert 0 in params.axisHome, "BadHome" # @some : @parameter%setAxes : @storage
+                    DUP 2;      # @parameter%setAxes : @some : @parameter%setAxes : @storage
+                    GET 3;      # map int int : @some : @parameter%setAxes : @storage
+                    PUSH int 0; # int : map int int : @some : @parameter%setAxes : @storage
+                    MEM;        # bool : @some : @parameter%setAxes : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "BadHome"; # string : @some : @parameter%setAxes : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%setAxes : @storage
+                    # assert 9 in params.axisHome, "BadHome" # @some : @parameter%setAxes : @storage
+                    DUP 2;      # @parameter%setAxes : @some : @parameter%setAxes : @storage
+                    GET 3;      # map int int : @some : @parameter%setAxes : @storage
+                    PUSH int 9; # int : map int int : @some : @parameter%setAxes : @storage
+                    MEM;        # bool : @some : @parameter%setAxes : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "BadHome"; # string : @some : @parameter%setAxes : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%setAxes : @storage
+                    # assert 0 in params.axisAway, "BadAway" # @some : @parameter%setAxes : @storage
+                    DUP 2;      # @parameter%setAxes : @some : @parameter%setAxes : @storage
+                    CAR;        # map int int : @some : @parameter%setAxes : @storage
+                    PUSH int 0; # int : map int int : @some : @parameter%setAxes : @storage
+                    MEM;        # bool : @some : @parameter%setAxes : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "BadAway"; # string : @some : @parameter%setAxes : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%setAxes : @storage
+                    # assert 9 in params.axisAway, "BadAway" # @some : @parameter%setAxes : @storage
+                    DUP 2;      # @parameter%setAxes : @some : @parameter%setAxes : @storage
+                    CAR;        # map int int : @some : @parameter%setAxes : @storage
+                    PUSH int 9; # int : map int int : @some : @parameter%setAxes : @storage
+                    MEM;        # bool : @some : @parameter%setAxes : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "BadAway"; # string : @some : @parameter%setAxes : @storage
+                        FAILWITH;   # FAILED
+                      }; # @some : @parameter%setAxes : @storage
+                    # game.axisHome = params.axisHome # @some : @parameter%setAxes : @storage
+                    DUP 2;      # @parameter%setAxes : @some : @parameter%setAxes : @storage
+                    GET 3;      # map int int : @some : @parameter%setAxes : @storage
+                    UPDATE 5;   # @some : @parameter%setAxes : @storage
+                    # game.axisAway = params.axisAway # @some : @parameter%setAxes : @storage
+                    DUP 2;      # @parameter%setAxes : @some : @parameter%setAxes : @storage
+                    CAR;        # map int int : @some : @parameter%setAxes : @storage
+                    UPDATE 3;   # @some : @parameter%setAxes : @storage
+                    # game.axesAssigned = True # @some : @parameter%setAxes : @storage
+                    PUSH bool True; # bool : @some : @parameter%setAxes : @storage
+                    UPDATE 1;   # @some : @parameter%setAxes : @storage
+                    # game.phase = PHASE_AXES_SET # @some : @parameter%setAxes : @storage
+                    PUSH int 2; # int : @some : @parameter%setAxes : @storage
+                    UPDATE 15;  # @some : @parameter%setAxes : @storage
+                    # self.data.games[params.gameId] = game # @some : @parameter%setAxes : @storage
+                    DIG 2;      # @storage : @some : @parameter%setAxes
+                    DUP;        # @storage : @storage : @some : @parameter%setAxes
+                    GET 5;      # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : @some : @parameter%setAxes
+                    DIG 2;      # @some : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : @parameter%setAxes
+                    SOME;       # option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : @parameter%setAxes
+                    DUP 4;      # @parameter%setAxes : option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : @parameter%setAxes
+                    GET 4;      # nat : option (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : @parameter%setAxes
+                    UPDATE;     # big_map nat (pair (bool %axesAssigned) (pair (map %axisAway int int) (pair (map %axisHome int int) (pair (address %creator) (pair (mutez %holderFee) (pair (string %name) (pair (nat %numPeriods) (pair (int %phase) (pair (map %playerCounts address nat) (pair (mutez %pot) (pair (map %quarterReported int bool) (pair (map %quarterWeights int nat) (pair (int %quartersDone) (pair (nat %sold) (pair (map %squares int address) (mutez %ticketPrice)))))))))))))))) : @storage : @parameter%setAxes
+                    UPDATE 5;   # @storage : @parameter%setAxes
+                    SWAP;       # @parameter%setAxes : @storage
+                    # sp.emit(params.gameId, tag="axesSet") # @parameter%setAxes : @storage
+                    GET 4;      # nat : @storage
+                    EMIT %axesSet nat; # operation : @storage
+                    NIL operation; # list operation : operation : @storage
+                    SWAP;       # operation : list operation : @storage
+                    CONS;       # list operation : @storage
+                  }
+                  {
+                    DROP;       # @storage
+                    # == unpause ==
+                    # assert sp.sender == self.data.admin, "NotAdmin" # @storage
+                    DUP;        # @storage : @storage
+                    CAR;        # address : @storage
+                    SENDER;     # @sender : address : @storage
+                    COMPARE;    # int : @storage
+                    EQ;         # bool : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NotAdmin"; # string : @storage
+                        FAILWITH;   # FAILED
+                      }; # @storage
+                    # self.data.paused = False # @storage
+                    PUSH bool False; # bool : @storage
+                    UPDATE 7;   # @storage
+                    NIL operation; # list operation : @storage
+                  }; # list operation : @storage
+              }
+              {
+                IF_LEFT
+                  {
+                    # == updateRngOracle ==
+                    # assert sp.sender == self.data.admin, "NotAdmin" # @parameter%updateRngOracle : @storage
+                    DUP 2;      # @storage : @parameter%updateRngOracle : @storage
+                    CAR;        # address : @parameter%updateRngOracle : @storage
+                    SENDER;     # @sender : address : @parameter%updateRngOracle : @storage
+                    COMPARE;    # int : @parameter%updateRngOracle : @storage
+                    EQ;         # bool : @parameter%updateRngOracle : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NotAdmin"; # string : @parameter%updateRngOracle : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%updateRngOracle : @storage
+                    # self.data.rngOracle = params.newOracle # @parameter%updateRngOracle : @storage
+                    UPDATE 13;  # @storage
+                  }
+                  {
+                    # == updateTxlContract ==
+                    # assert sp.sender == self.data.admin, "NotAdmin" # @parameter%updateTxlContract : @storage
+                    DUP 2;      # @storage : @parameter%updateTxlContract : @storage
+                    CAR;        # address : @parameter%updateTxlContract : @storage
+                    SENDER;     # @sender : address : @parameter%updateTxlContract : @storage
+                    COMPARE;    # int : @parameter%updateTxlContract : @storage
+                    EQ;         # bool : @parameter%updateTxlContract : @storage
+                    IF
+                      {}
+                      {
+                        PUSH string "NotAdmin"; # string : @parameter%updateTxlContract : @storage
+                        FAILWITH;   # FAILED
+                      }; # @parameter%updateTxlContract : @storage
+                    # self.data.txlContract = params.newContract # @parameter%updateTxlContract : @storage
+                    UPDATE 14;  # @storage
+                  }; # @storage
+                NIL operation; # list operation : @storage
+              }; # list operation : @storage
+          }; # list operation : @storage
+      }; # list operation : @storage
+    NIL operation; # list operation : list operation : @storage
+    SWAP;       # list operation : list operation : @storage
+    ITER
+      {
+        CONS;       # list operation : @storage
+      }; # list operation : @storage
+    PAIR;       # pair (list operation) @storage
+  };
