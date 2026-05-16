@@ -1,45 +1,49 @@
 #!/usr/bin/env python3
 """
-oracle_worker.py — off-chain oracle daemon for TezLiteApps games.
+oracle_worker.py — off-chain oracle daemon for TezLiteApps games (v3).
 
 Supports multiple games behind one process. Pick which to run with
 `--game`:
 
-    --game acey-duecey   only AD (deals cards)
-    --game plinko        only Plinko (resolves drops)
-    --game all           both (default)
+    --game randomness   the v3 commit-reveal randomness flow (AD, Plinko,
+                        TTT all consume this — no per-game handlers needed)
+    --game war          legacy War handler (still oracle-keyed)
+    --game reversi      legacy Reversi handler (still oracle-keyed)
+    --game chess        legacy Chess handler (still oracle-keyed)
+    --game squares      Super-Bowl squares axes + quarter reporting
+    --game all          everything above (default)
 
-For Acey-Duecey
----------------
-Polls AD's on-chain storage every few seconds. For each game it finds:
+v3 randomness — what 'randomness' actually does
+------------------------------------------------
+The handler runs two coordinated loops against the on-chain RandomOracle:
 
-  status == 0  AND  hand[1] == -1                 → call firstCard
-  status == 0  AND  hand[1] >= 0 AND hand[2] == -1 → call secondCard
-  status == 2  (player has placed continueBet)    → call lastCard
+  1. OracleCommitter — every ~N blocks, generates a fresh 32-byte preimage,
+     hashes it, and calls `postCommit(hash)`. Persists the preimage to a
+     journal at ~/.tezliteapps/commits.json so a restart doesn't lose any
+     pending preimages. Maintains COMMITS_TO_KEEP_AHEAD unrevealed commits
+     ready for new requests to bind to.
 
-Each call picks a uniform-random deck index 0..51 and tags it with a hex
-hash so the operation is traceable.
+  2. RandomnessHandler — polls the oracle's request log:
+       - any pending request whose bound commit is SEALED and we have the
+         preimage in our journal → call revealCommit(commitId, preimage)
+       - any pending request whose bound commit is REVEALED → call
+         fulfillRandom(requestId) (permissionless — anyone can; we do it
+         as the bridge so callers don't have to)
 
-For Plinko
-----------
-Polls Plinko's on-chain storage. For each round it finds:
-
-  roundStatus == 0 (pending)  → call resolve(roundId, slot, seed)
-
-The slot is drawn from a true binomial distribution (sum of N independent
-50/50 coin flips for an N-row board), so the on-chain landing matches
-real Plinko physics — center slots are exponentially more likely than
-edges, mirroring Pascal's triangle. The UI's `animateBall()` then draws
-a plausible left/right path to land on that slot. The seed is a hex
-token committed on chain so the result is auditable.
+The v2 per-game handlers (AD / Plinko / TTT) that called firstCard /
+secondCard / lastCard / resolve / flipForFirst directly are RETIRED in
+v3 — those games now call `RandomOracle.requestRandom` from inside their
+own entrypoints, and the response lands via their `onRandomFulfilled`
+callbacks driven by the RandomnessHandler above.
 
 Why this exists
 ---------------
-Both contracts trust a single tz1 address (`storage.oracle`) to advance
-state. The dApp UI exposes manual buttons for that role during dev, but
-in production you want a daemon doing it in seconds, not a human. The
-worker reads the oracle key once at startup and bails if our key
-doesn't match the on-chain `oracle` for any selected game.
+v2 trusted a single tz1 address (`storage.oracle` on each game contract)
+to pick the random values. v3 removes that trust via commit-reveal +
+user-contributed entropy — see docs/V3_COMMIT_REVEAL.md. The daemon's
+role shifts: it no longer gets to *choose* values, only to schedule
+commits and bridge the reveal+fulfill steps. The values fall out of
+on-chain hashing once a commit is revealed.
 
 Design notes
 ------------
@@ -75,6 +79,8 @@ selected game, otherwise every call will fail.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import re
 import secrets
@@ -149,102 +155,42 @@ def _field(record: Any, name: str, default: Any) -> Any:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# AD — Acey-Duecey decision logic (pure, easy to unit-test)
+# v3 commit-reveal — preimage journal (persisted across restarts)
 # ═══════════════════════════════════════════════════════════════════════
 
-@dataclass
-class ADAction:
-    entrypoint: str          # 'firstCard' | 'secondCard' | 'lastCard'
-    game_id: int             # contract's monotonic gameId
-    card: int                # random deck index 0..51
-    hash: str                # tag string for traceability
+# Where the OracleCommitter keeps generated preimages so a worker
+# restart doesn't lose them (in which case bound requests would never be
+# fulfillable). Per-network so multiple deployments don't collide.
+JOURNAL_DIR = Path.home() / ".tezliteapps"
 
-def next_action_for_game(game_id: int, game: dict) -> ADAction | None:
-    """Inspect one AD game record and decide whether the oracle should
-    act. Returns an ADAction to submit, or None if the game doesn't
-    need help right now (already advanced, or finished).
+def journal_path(network: str) -> Path:
+    return JOURNAL_DIR / f"commits-{network}.json"
 
-    `game` is the dict tzkt/pytezos returns for storage.games[gid].
-    Card slots live under `hand` as a map keyed by 1/2/3. tzkt returns
-    int values as strings, so coerce."""
-    def slot(key: int) -> int:
-        h = _field(game, "hand", {}) or {}
-        raw = h.get(key, h.get(str(key), -1)) if isinstance(h, dict) else -1
-        try:
-            return int(raw)
-        except (TypeError, ValueError):
-            return -1
+def load_journal(network: str) -> dict[str, dict]:
+    p = journal_path(network)
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        warn(f"journal at {p} unreadable ({e}); starting empty (existing "
+             f"on-chain commits without a local preimage will be unfulfillable)")
+        return {}
 
-    status = int(_field(game, "gameStatus", 0))
-    h1 = slot(1)
-    h2 = slot(2)
+def save_journal(network: str, journal: dict[str, dict]) -> None:
+    p = journal_path(network)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(journal, indent=2, sort_keys=True))
+    tmp.replace(p)  # atomic on POSIX
 
-    if status == 0 and h1 == -1:
-        return _build_ad_action("firstCard", game_id)
-    if status == 0 and h1 >= 0 and h2 == -1:
-        return _build_ad_action("secondCard", game_id)
-    if status == 2:
-        return _build_ad_action("lastCard", game_id)
+# How many unrevealed commits we try to maintain on-chain at all times,
+# so new randomRequest ops can always find a fresh commitId to bind to.
+# Raise if request rate is high; lower to reduce per-block postCommit gas.
+COMMITS_TO_KEEP_AHEAD = 3
 
-    # status 1 (awaiting player's continueBet) — not our problem.
-    # status 3 / 4 / 5 — finished. Ignore.
-    return None
-
-
-def _build_ad_action(entrypoint: str, game_id: int) -> ADAction:
-    """Pick a random card + a unique tag for traceability."""
-    card = secrets.randbelow(52)
-    hash_tag = f"{entrypoint}-{secrets.token_hex(6)}"
-    return ADAction(entrypoint=entrypoint, game_id=int(game_id), card=card, hash=hash_tag)
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Plinko — drop resolution logic (pure)
-# ═══════════════════════════════════════════════════════════════════════
-
-@dataclass
-class PlinkoAction:
-    round_id: int
-    rows: int
-    x_bits: dict[int, int]   # per-layer 0/1 deflections on the X axis
-    z_bits: dict[int, int]   # per-layer 0/1 deflections on the Z axis
-    final_x: int             # = sum(x_bits.values())   ∈ [0, rows]
-    final_z: int             # = sum(z_bits.values())   ∈ [0, rows]
-    ring: int                # Chebyshev distance from centre = the contract's payout key
-    seed: str                # auditable hex tag committed on chain
-
-def next_action_for_round(round_id: int, rnd: Any) -> PlinkoAction | None:
-    """Inspect one Plinko round and decide whether to resolve it.
-    Returns a PlinkoAction, or None if the round is already settled or
-    the row count is bogus.
-
-    3D Plinko: the ball makes TWO independent 50/50 deflections per
-    layer — one on X, one on Z — so we draw `rows` coin flips for each
-    axis. The contract derives finalX = sum(xBits), finalZ = sum(zBits),
-    both Binomial(rows, 1/2), then the Chebyshev `ring` distance from
-    centre that drives the (radially-symmetric) multiplier lookup. The
-    UI replays both bit streams as the ball's 3D path, so the on-chain
-    randomness directly drives the animation."""
-    status = int(_field(rnd, "roundStatus", 0))
-    if status != 0:
-        return None
-    rows = int(_field(rnd, "rows", 0))
-    if rows not in (8, 12, 16):
-        # Shouldn't happen — the contract rejects other values at play()
-        # time — but if we somehow see one, skip rather than guess.
-        return None
-    x_bits = {i: secrets.randbelow(2) for i in range(rows)}
-    z_bits = {i: secrets.randbelow(2) for i in range(rows)}
-    final_x = sum(x_bits.values())
-    final_z = sum(z_bits.values())
-    half = rows // 2
-    ring = max(abs(final_x - half), abs(final_z - half))
-    seed = f"plinko-{round_id}-{secrets.token_hex(8)}"
-    return PlinkoAction(
-        round_id=int(round_id), rows=rows,
-        x_bits=x_bits, z_bits=z_bits,
-        final_x=final_x, final_z=final_z, ring=ring, seed=seed,
-    )
+# Empty-bytes encoding the contract uses for an unrevealed commit.
+EMPTY_BYTES_MARKERS = ("", "0x", b"", "00", None)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -286,77 +232,11 @@ class GameHandler:
         raise NotImplementedError
 
 
-class ADHandler(GameHandler):
-    name = "acey-duecey"
-
-    @classmethod
-    def address_constant_for(cls, network: str) -> str:
-        return f"AD_CONTRACT_ADDRESS_{network.upper()}"
-
-    def find_actions(self) -> list[HandlerAction]:
-        storage = self.contract.storage()
-        games = _field(storage, "games", {}) or {}
-        for raw_id, game in games.items():
-            try:
-                gid = int(raw_id)
-            except (TypeError, ValueError):
-                continue
-            action = next_action_for_game(gid, game)
-            if action:
-                return [self._wrap(action)]
-        return []
-
-    def _wrap(self, action: ADAction) -> HandlerAction:
-        label = f"game {action.game_id:>3} → {action.entrypoint}(card={action.card})  tag={action.hash}"
-        def submit(contract: Any) -> str:
-            # PyTezos exposes each entrypoint as an attribute on the
-            # contract proxy — no `.methodsObject[name]` accessor like
-            # Taquito. We have the name as a string, so getattr.
-            entrypoint_fn = getattr(contract, action.entrypoint)
-            op = entrypoint_fn(
-                card=action.card,
-                gameId=action.game_id,
-                hash=action.hash,
-            ).send(min_confirmations=1)
-            return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
-        return HandlerAction(label=label, submit=submit)
-
-
-class PlinkoHandler(GameHandler):
-    name = "plinko"
-
-    @classmethod
-    def address_constant_for(cls, network: str) -> str:
-        return f"PLINKO_CONTRACT_ADDRESS_{network.upper()}"
-
-    def find_actions(self) -> list[HandlerAction]:
-        storage = self.contract.storage()
-        rounds = _field(storage, "rounds", {}) or {}
-        for raw_id, rnd in rounds.items():
-            try:
-                rid = int(raw_id)
-            except (TypeError, ValueError):
-                continue
-            action = next_action_for_round(rid, rnd)
-            if action:
-                return [self._wrap(action)]
-        return []
-
-    def _wrap(self, action: PlinkoAction) -> HandlerAction:
-        x_preview = "".join(str(action.x_bits[i]) for i in range(action.rows))
-        z_preview = "".join(str(action.z_bits[i]) for i in range(action.rows))
-        label = (f"round {action.round_id:>3} → resolve("
-                 f"x={x_preview} z={z_preview} → "
-                 f"({action.final_x},{action.final_z}) ring={action.ring})")
-        def submit(contract: Any) -> str:
-            op = contract.resolve(
-                roundId=action.round_id,
-                xBits=action.x_bits,
-                zBits=action.z_bits,
-                seed=action.seed,
-            ).send(min_confirmations=1)
-            return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
-        return HandlerAction(label=label, submit=submit)
+# NOTE: v2 ADHandler / PlinkoHandler are RETIRED in v3 — those games now
+# call RandomOracle.requestRandom from inside bet()/play() and receive
+# results via their own onRandomFulfilled callbacks. The RandomnessHandler
+# below covers them transparently. TTT lost its direct flipForFirst
+# handler for the same reason.
 
 
 class WarHandler(GameHandler):
@@ -441,50 +321,9 @@ class ChessHandler(_CoinFlipHandler):
         return f"CHESS_CONTRACT_ADDRESS_{network.upper()}"
 
 
-class TTTHandler(GameHandler):
-    """TezTacToe first-move flip.
-
-    Unlike reversi/chess, TTT keeps per-game state nested under a
-    `metaData` map (string→int), and the flip happens *after* both
-    players pair — the game is already `gameStatus == 2` (active) but
-    `firstMoveDecided == 0`. flipForFirst(gameId, bit, seed) sets
-    playerTurn from the bit and marks firstMoveDecided, unblocking
-    makeMove. Idempotent on-chain, so a double-submit just reverts.
-    """
-    name = "ttt"
-
-    @classmethod
-    def address_constant_for(cls, network: str) -> str:
-        return f"TTT_CONTRACT_ADDRESS_{network.upper()}"
-
-    def find_actions(self) -> list[HandlerAction]:
-        storage = self.contract.storage()
-        games = _field(storage, "games", {}) or {}
-        for raw_id, g in games.items():
-            try:
-                gid = int(raw_id)
-            except (TypeError, ValueError):
-                continue
-            meta = _field(g, "metaData", {}) or {}
-            try:
-                status = int(meta.get("gameStatus", 0))
-                decided = int(meta.get("firstMoveDecided", 0))
-            except (TypeError, ValueError, AttributeError):
-                continue
-            # Flip once both players have paired (status 2) and the flip
-            # hasn't run yet.
-            if status != 2 or decided != 0:
-                continue
-            bit = secrets.randbelow(2)
-            seed = f"ttt-flip-{gid}-{secrets.token_hex(6)}"
-            label = f"game {gid:>3} → flipForFirst(bit={bit}) → P{bit + 1} moves first"
-            def submit(contract: Any, gid=gid, bit=bit, seed=seed) -> str:
-                op = contract.flipForFirst(
-                    gameId=gid, bit=bit, seed=seed,
-                ).send(min_confirmations=1)
-                return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
-            return [HandlerAction(label=label, submit=submit)]
-        return []
+# NOTE: v2 TTTHandler is RETIRED in v3 — TTT's flipForFirst entrypoint
+# was removed; joinGame() now triggers RandomOracle.requestRandom and
+# the bit lands via TTT.onRandomFulfilled. RandomnessHandler covers it.
 
 
 class SquaresHandler(GameHandler):
@@ -629,27 +468,140 @@ class SquaresHandler(GameHandler):
         return _field(self.contract.storage(), "admin", "") or ""
 
 
+def _is_unrevealed(preimage_raw: Any) -> bool:
+    """Detect the 'commit not yet revealed' state across the various
+    encodings tzkt / pytezos may return for sp.bytes."""
+    if preimage_raw is None:
+        return True
+    if isinstance(preimage_raw, str):
+        return preimage_raw in EMPTY_BYTES_MARKERS or preimage_raw == "0x" or len(preimage_raw) == 0
+    if isinstance(preimage_raw, (bytes, bytearray)):
+        return len(preimage_raw) == 0
+    return False
+
+
+class OracleCommitter(GameHandler):
+    """Posts fresh sha256(preimage) commits to the RandomOracle on a
+    rolling schedule so requestRandom callers always find a fresh
+    bindable commitId. Persists preimages to ~/.tezliteapps/commits-<net>.json
+    so a restart doesn't lose any pending preimages — a request bound
+    to a commit whose preimage is gone is unfulfillable forever.
+
+    The handler is paired with RandomnessHandler (below): committer
+    keeps fresh commits on chain; randomness handler reveals + fulfills.
+    """
+    name = "oracle-committer"
+
+    @classmethod
+    def address_constant_for(cls, network: str) -> str:
+        return f"ORACLE_CONTRACT_{network.upper()}"
+
+    def __init__(self, network: str, address: str, client: Any):
+        super().__init__(network, address, client)
+        self.journal = load_journal(network)
+
+    def find_actions(self) -> list[HandlerAction]:
+        storage = self.contract.storage()
+        commit_log = _field(storage, "commitLog", {}) or {}
+        current_commit_id = int(_field(storage, "currentCommitId", 0))
+
+        # Count commits that are posted but still sealed (no preimage yet).
+        unrevealed = 0
+        for cid_str, entry in commit_log.items():
+            preimage = _field(entry, "revealedPreimage", "")
+            if _is_unrevealed(preimage):
+                unrevealed += 1
+
+        if unrevealed >= COMMITS_TO_KEEP_AHEAD:
+            return []
+
+        # Generate a fresh preimage + hash. We pre-stage it in the
+        # journal under the expected commitId BEFORE the op submits so
+        # an op-then-crash doesn't strand a posted commit without a
+        # local preimage. After the op confirms, we re-anchor the
+        # journal key to the actual on-chain commitId in case there
+        # were races (multiple committers, manual postCommit, etc.).
+        preimage = secrets.token_bytes(32)
+        hash_bytes = hashlib.sha256(preimage).digest()
+        expected_cid = current_commit_id
+        self.journal[str(expected_cid)] = {
+            "preimage_hex": preimage.hex(),
+            "hash_hex": hash_bytes.hex(),
+            "posted_at_level": None,    # filled in after the op confirms
+            "status": "pre-staged",
+        }
+        save_journal(self.network, self.journal)
+
+        label = (f"postCommit hash=0x{hash_bytes.hex()[:10]}…  "
+                 f"(expected cid {expected_cid}, {unrevealed} unrevealed)")
+        def submit(contract: Any, hash_bytes=hash_bytes, preimage_hex=preimage.hex(), expected_cid=expected_cid) -> str:
+            op = contract.postCommit(hash=hash_bytes).send(min_confirmations=1)
+            # Re-read storage to find the actual commitId assigned.
+            try:
+                after = self.contract.storage()
+                actual_cid = int(_field(after, "currentCommitId", expected_cid + 1)) - 1
+            except Exception:
+                actual_cid = expected_cid
+            if actual_cid != expected_cid:
+                # Race: another op bumped currentCommitId between our read and submit.
+                # Move the journal entry to the correct cid so reveal can find it.
+                self.journal.pop(str(expected_cid), None)
+            self.journal[str(actual_cid)] = {
+                "preimage_hex": preimage_hex,
+                "hash_hex": hash_bytes.hex(),
+                "posted_at_level": int(_field(after, "currentCommitId", 0)),  # informational
+                "status": "posted",
+            }
+            save_journal(self.network, self.journal)
+            return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+        return [HandlerAction(label=label, submit=submit)]
+
+
 class RandomnessHandler(GameHandler):
-    """RandomOracle (v2) — generic randomness service for 3rd-party dApps.
+    """RandomOracle v3 reveal + fulfill bridge.
 
-    Watches the deployed RandomOracle contract for requests with
-    requestStatus == 0 and calls fulfillRandom(requestId, values, seed)
-    with cryptographically-random nats in [0, maxValue].
+    Two action paths per cycle (one per call; the loop picks the most
+    urgent each pass):
 
-    This is the same daemon code that powers AD / Plinko / War / Reversi /
-    Chess / TTT / Squares, just pointed at a different contract. Any dApp
-    on Tezos can request randomness from RandomOracle — see
-    src/services/smart_contract_oracle_reference.py for an integration
-    example and docs/ORACLE_INTEGRATION.md for the full walkthrough."""
+      1. Reveal — any pending request whose bound commit is still SEALED
+         AND whose preimage is in our journal → call
+         revealCommit(commitId, preimage). After this, the same commit's
+         requests become permissionlessly fulfillable.
+
+      2. Fulfill — any pending request whose bound commit is REVEALED →
+         call fulfillRandom(requestId). This is permissionless (anyone
+         can call it), but we do it as the bridge to keep latency low
+         and to invoke the callback contracts that drive AD / Plinko /
+         TTT / and 3rd-party consumers.
+
+    Determinism: this handler has NO say over the random values. They
+    are derived inside fulfillRandom from on-chain inputs alone — the
+    preimage we publish (forced to match the committed hash), the
+    user-supplied nonce stored at request time, and the request's
+    monotonic ID. Any third party can re-derive and verify.
+    """
     name = "randomness"
 
     @classmethod
     def address_constant_for(cls, network: str) -> str:
         return f"ORACLE_CONTRACT_{network.upper()}"
 
+    def __init__(self, network: str, address: str, client: Any):
+        super().__init__(network, address, client)
+        self.journal = load_journal(network)
+
     def find_actions(self) -> list[HandlerAction]:
+        # Re-read the journal each pass — the OracleCommitter (potentially
+        # in the same process) may have added entries since the last cycle.
+        self.journal = load_journal(self.network)
+
         storage = self.contract.storage()
         requests = _field(storage, "requests", {}) or {}
+        commit_log = _field(storage, "commitLog", {}) or {}
+
+        # First pass: any fulfillable request? Prefer fulfillment over
+        # reveal so the callback latency stays minimal once the preimage
+        # is on chain.
         for raw_id, req in requests.items():
             try:
                 rid = int(raw_id)
@@ -657,33 +609,86 @@ class RandomnessHandler(GameHandler):
                 continue
             if int(_field(req, "requestStatus", 0)) != 0:
                 continue
-            n = int(_field(req, "nRandoms", 1))
-            max_value = int(_field(req, "maxValue", 1))
-            # secrets.randbelow(max_value + 1) gives an inclusive draw.
-            values = [secrets.randbelow(max_value + 1) for _ in range(n)]
-            seed = f"oracle-{rid}-{secrets.token_hex(8)}"
-            label = (f"req {rid:>3} → fulfillRandom(n={n}, max={max_value}, "
-                     f"values={values})")
-            def submit(contract: Any, rid=rid, values=values, seed=seed) -> str:
-                op = contract.fulfillRandom(
-                    requestId=rid,
-                    randomValues=values,
-                    seed=seed,
+            cid_raw = _field(req, "commitId", 0)
+            try:
+                cid = int(cid_raw)
+            except (TypeError, ValueError):
+                continue
+            commit = commit_log.get(cid) or commit_log.get(str(cid))
+            if commit is None:
+                continue
+            preimage = _field(commit, "revealedPreimage", "")
+            if not _is_unrevealed(preimage):
+                label = f"req {rid:>3} → fulfillRandom (bound commit {cid} already revealed)"
+                def submit(contract: Any, rid=rid) -> str:
+                    op = contract.fulfillRandom(requestId=rid).send(min_confirmations=1)
+                    return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
+                return [HandlerAction(label=label, submit=submit)]
+
+        # Second pass: any pending request whose bound commit needs a
+        # reveal AND we hold the preimage? Reveal it.
+        for raw_id, req in requests.items():
+            try:
+                rid = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if int(_field(req, "requestStatus", 0)) != 0:
+                continue
+            cid_raw = _field(req, "commitId", 0)
+            try:
+                cid = int(cid_raw)
+            except (TypeError, ValueError):
+                continue
+            commit = commit_log.get(cid) or commit_log.get(str(cid))
+            if commit is None:
+                continue
+            if not _is_unrevealed(_field(commit, "revealedPreimage", "")):
+                continue
+            journal_entry = self.journal.get(str(cid))
+            if not journal_entry or "preimage_hex" not in journal_entry:
+                # Sealed commit with bound requests but no local preimage.
+                # This is a sign the worker is in a divergent state (a
+                # different worker posted that commit, or our journal
+                # was wiped). Log loudly so the operator notices.
+                warn(f"req {rid}: commit {cid} sealed but no preimage in "
+                     f"journal — request will hang until preimage is recovered")
+                continue
+            preimage_bytes = bytes.fromhex(journal_entry["preimage_hex"])
+            label = f"revealCommit({cid})  (unblocks req {rid} + others bound to this commit)"
+            def submit(contract: Any, cid=cid, preimage_bytes=preimage_bytes) -> str:
+                op = contract.revealCommit(
+                    commitId=cid, preimage=preimage_bytes,
                 ).send(min_confirmations=1)
+                # Mark the journal entry as revealed for hygiene.
+                je = self.journal.get(str(cid), {})
+                je["status"] = "revealed"
+                self.journal[str(cid)] = je
+                save_journal(self.network, self.journal)
                 return getattr(op, "hash", None) or getattr(op, "opg_hash", None) or "(unknown)"
             return [HandlerAction(label=label, submit=submit)]
+
         return []
+
+    def storage_oracle(self) -> str:
+        """The randomness handler itself doesn't need the oracle role — it
+        only calls revealCommit (oracle-only) and fulfillRandom
+        (permissionless). The committer handles the oracle gating.
+        Returning self.client's key bypasses the auth check below."""
+        return _field(self.contract.storage(), "oracle", "") or ""
 
 
 HANDLERS: dict[str, type[GameHandler]] = {
-    "acey-duecey": ADHandler,
-    "plinko": PlinkoHandler,
+    # v3: AD / Plinko / TTT are RETIRED here — they call RandomOracle
+    # internally and the RandomnessHandler bridges reveal+fulfill on
+    # their behalf. Running --game randomness covers all three (plus any
+    # 3rd-party dApp using the v3 oracle).
+    "oracle-committer": OracleCommitter,
+    "randomness": RandomnessHandler,
+    # v2 handlers still in place for games that haven't migrated yet.
     "war": WarHandler,
     "reversi": ReversiHandler,
     "chess": ChessHandler,
-    "ttt": TTTHandler,
     "squares": SquaresHandler,
-    "randomness": RandomnessHandler,
 }
 
 
