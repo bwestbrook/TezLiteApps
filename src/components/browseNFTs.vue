@@ -1093,46 +1093,6 @@ export default {
  
   <div class="centerBody">
     <div class="gameManagement" >
-        <div class="browserPanel">
-          <div class="browserPanelRow">
-            <div class="browserPanelLabel">Rank</div>
-            <div class="actionButton browserPanelBtn" @click="prevRank()"> &larr; Prev </div>
-            <select class="selectBox browserPanelSelect" v-model="txlRanking" @change="getNftDataRank()">
-              <option v-for="(key, value) in txlRevRankings" :key="key" :value="value"> {{ value }} </option>
-            </select>
-            <div class="actionButton browserPanelBtn" @click="nextRank()"> Next &rarr; </div>
-          </div>
-          <div class="browserPanelRow">
-            <div class="browserPanelLabel">ID</div>
-            <div class="actionButton browserPanelBtn" @click="prevTxl()"> &larr; Prev </div>
-            <select class="selectBox browserPanelSelect" v-model="txlId" @change="getNftDataId()">
-              <option v-for="(key, value) in idLookUp" :key="key" :value="value"> {{ value }} </option>
-            </select>
-            <div class="actionButton browserPanelBtn" @click="nextTxl()"> Next &rarr; </div>
-          </div>
-          <div class="browserPanelDivider"></div>
-          <div class="attrGrid">
-            <div class="attrCell attrCell--meta">
-              <span class="attrLabel">Rank:</span>
-              <span class="attrValue">{{ txlRanking }}</span>
-            </div>
-            <div class="attrCell attrCell--meta">
-              <span class="attrLabel">ID:</span>
-              <span class="attrValue">{{ txlId }}</span>
-            </div>
-            <div
-              v-for="(raw, key) in txlData"
-              :key="key"
-              :class="['attrCell', rarityTier(raw)]"
-            >
-              <span class="attrLabel">{{ key }}:</span>
-              <span class="attrValue">{{ traitValue(raw) }}</span>
-              <span class="attrRarity" v-if="traitRarity(raw) != null">
-                {{ traitRarity(raw).toFixed(2) }}%
-              </span>
-            </div>
-          </div>
-        </div>
         <div class="rowFlex">
           <div class="actionButton" @click="selectRandom"> Select Random TXL </div>
           <div class="actionButton" @click="checkThisOnObjkt(txlId)"> Buy {{ txlId.toString() }} On All Objkt.com </div>
@@ -1146,34 +1106,73 @@ export default {
             </ul>
           </div>
         </div>
-        <div class="cardArea">
-          <div class="ownerBadge" v-if="owner"> Owner: {{ owner }} </div>
-          <div class="nftCardStage">
-            <div :class="['nftCard', pauseAnimation ? 'nftCard--paused' : '']">
-              <div class="nftCardFace nftCardFace--front">
-                <img
-                  :src="currentNftSrc"
-                  :alt="'TXL #' + txlId"
-                  class="nftCardImg"
-                  draggable="false"
-                />
+        <div class="nftStageRow">
+          <div class="navColumn">
+            <div class="navColumnLabel">Rank</div>
+            <div class="actionButton navColumnBtn" @click="prevRank()"> &larr; Prev </div>
+            <select class="selectBox navColumnSelect" v-model="txlRanking" @change="getNftDataRank()">
+              <option v-for="(key, value) in txlRevRankings" :key="key" :value="value"> {{ value }} </option>
+            </select>
+            <div class="actionButton navColumnBtn" @click="nextRank()"> Next &rarr; </div>
+          </div>
+          <div class="cardArea">
+            <div class="ownerBadge" v-if="owner"> Owner: {{ owner }} </div>
+            <div class="nftCardStage">
+              <div :class="['nftCard', pauseAnimation ? 'nftCard--paused' : '']">
+                <div class="nftCardFace nftCardFace--front">
+                  <img
+                    :src="currentNftSrc"
+                    :alt="'TXL #' + txlId"
+                    class="nftCardImg"
+                    draggable="false"
+                  />
+                </div>
+                <div class="nftCardFace nftCardFace--back">
+                  <img
+                    :src="currentNftSrc"
+                    :alt="'TXL #' + txlId"
+                    class="nftCardImg"
+                    draggable="false"
+                  />
+                </div>
               </div>
-              <div class="nftCardFace nftCardFace--back">
-                <img
-                  :src="currentNftSrc"
-                  :alt="'TXL #' + txlId"
-                  class="nftCardImg"
-                  draggable="false"
-                />
-              </div>
+              <div class="nftCardShadow" aria-hidden="true"></div>
             </div>
-            <div class="nftCardShadow" aria-hidden="true"></div>
+          </div>
+          <div class="navColumn">
+            <div class="navColumnLabel">ID</div>
+            <div class="actionButton navColumnBtn" @click="prevTxl()"> &larr; Prev </div>
+            <select class="selectBox navColumnSelect" v-model="txlId" @change="getNftDataId()">
+              <option v-for="(key, value) in idLookUp" :key="key" :value="value"> {{ value }} </option>
+            </select>
+            <div class="actionButton navColumnBtn" @click="nextTxl()"> Next &rarr; </div>
           </div>
         </div>
         <div class="rowFlex">
           <div class="actionButton" @click="toggleAnimation"> {{pauseAnimationState}}  </div>
           <div class="gameInfo"> Random TXL in {{ countDownSeconds }} </div>
           <div class="actionButton" @click="togglePauseRandom"> {{pauseState}} Random </div>
+        </div>
+        <div class="attrGrid">
+          <div class="attrCell attrCell--meta">
+            <span class="attrLabel">Rank:</span>
+            <span class="attrValue">{{ txlRanking }}</span>
+          </div>
+          <div class="attrCell attrCell--meta">
+            <span class="attrLabel">ID:</span>
+            <span class="attrValue">{{ txlId }}</span>
+          </div>
+          <div
+            v-for="(raw, key) in txlData"
+            :key="key"
+            :class="['attrCell', rarityTier(raw)]"
+          >
+            <span class="attrLabel">{{ key }}:</span>
+            <span class="attrValue">{{ traitValue(raw) }}</span>
+            <span class="attrRarity" v-if="traitRarity(raw) != null">
+              {{ traitRarity(raw).toFixed(2) }}%
+            </span>
+          </div>
         </div>
         <div class="rowFlex" v-if="distinctHolders">
           <div class="txlRank"> Holders: {{ distinctHolders }}</div>
@@ -1185,43 +1184,54 @@ export default {
 </template>
 
 <style scoped>
-/* Consolidated panel: rank + ID navigation and trait chips in one frame.
-   Replaces the prior split layout (top nav rowFlex + bottom chip rowFlex). */
-.browserPanel {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  margin: 4px 0;
-  border: 1px solid var(--ad-border-soft);
-  border-radius: var(--ad-r-md);
-  background: var(--ad-bg-elev-0, transparent);
-}
-.browserPanelRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 6px;
-  width: 100%;
-}
-.browserPanelLabel {
+/* Three-column row: rank nav | spinning NFT | ID nav. On phones the nav
+   columns drop below the card so the NFT keeps its size. */
+.nftStageRow {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 10px;
-  min-width: 56px;
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  color: var(--ad-text-2, var(--ad-text-1));
-  text-transform: uppercase;
+  gap: 14px;
+  width: 100%;
+  margin: 8px 0;
 }
-.browserPanelBtn { flex: 1; }
-.browserPanelSelect { flex: 2; min-width: 120px; }
-.browserPanelDivider {
-  height: 1px;
-  background: var(--ad-border-faint);
-  margin: 2px 0;
+.navColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 0 0 auto;
+  width: clamp(110px, 18vw, 160px);
+}
+.navColumnLabel {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ad-text-2, var(--ad-text-1));
+  padding-bottom: 2px;
+}
+.navColumnBtn { width: 100%; }
+.navColumnSelect { width: 100%; }
+@media (max-width: 600px) {
+  .nftStageRow {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .navColumn {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    width: 100%;
+    gap: 6px;
+  }
+  .navColumnLabel {
+    flex: 0 0 auto;
+    min-width: 44px;
+    text-align: left;
+    padding: 0;
+  }
+  .navColumnBtn { flex: 1; }
+  .navColumnSelect { flex: 2; min-width: 0; }
 }
 /* Trait grid — auto-flowing columns of "Label: value  XX%" inside a single
    panel. Each cell is one line of text with a colored rarity pill on the
@@ -1308,6 +1318,15 @@ export default {
 .cardArea {
   position: relative;
   width: 100%;
+}
+/* Inside the 3-column nav row, the card should hug its intrinsic width so
+   the flanking nav columns get their natural space. */
+.nftStageRow .cardArea {
+  width: auto;
+  flex: 0 1 auto;
+}
+.nftStageRow .nftCardStage {
+  margin: 0 auto;
 }
 /* Current NFT's owner, pinned to the top-right of the content, just below
    the how-to button — white text on a transparent background. */

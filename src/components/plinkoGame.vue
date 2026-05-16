@@ -159,6 +159,58 @@ export default {
       const base = Math.max(2.08, (5.6 - this.rows * 0.13) * 0.8)
       return this.rows === 8 ? base * 0.8 : base
     },
+    // ── Yaw-update cadence ────────────────────────────────────────
+    // Bigger boards re-project more elements per yaw change, so we
+    // throttle harder as `rows` grows. At 6°/s the step sizes work
+    // out to: 8 rows → 0.3°/step, 12 → 0.6°/step, 16 → 0.9°/step —
+    // all still below the perceptible-discreteness threshold for
+    // slow rotation.
+    yawUpdateMs() {
+      if (this.rows >= 16) return 150
+      if (this.rows >= 12) return 100
+      return 50
+    },
+    // ── Yaw-INDEPENDENT world coords ──────────────────────────────
+    // Heavy lifting that does NOT change with yaw — Vue caches these
+    // so the per-yaw-tick work (pegs3d / bins3d) is just `project(...)`
+    // calls + a sort, no lattice math. Critical perf win on 12/16-row
+    // boards where ~500 pegs + ~300 bins re-project every yaw tick.
+    pegsWorld() {
+      const out = []
+      for (let d = 1; d <= this.rows; d++) {
+        for (let c = 0; c <= d; c++) {
+          for (let e = 0; e <= d; e++) {
+            // skin only: on the boundary of this layer's c×e grid
+            if (c !== 0 && c !== d && e !== 0 && e !== d) continue
+            const w = this.worldOf(c, e, d)
+            out.push({ wx: w[0], wy: w[1], wz: w[2] })
+          }
+        }
+      }
+      return out
+    },
+    // For each (rows+1)² bin: precompute its rim corners, hole corners,
+    // and centre point in world space. yaw changes don't invalidate.
+    binsWorld() {
+      const out = []
+      const innerHalf = 0.5 - RIM_INSET
+      for (let X = 0; X <= this.rows; X++) {
+        for (let Z = 0; Z <= this.rows; Z++) {
+          const ring = Math.max(Math.abs(X - this.half), Math.abs(Z - this.half))
+          const rim = [
+            [X - 0.5, Z - 0.5], [X + 0.5, Z - 0.5],
+            [X + 0.5, Z + 0.5], [X - 0.5, Z + 0.5],
+          ].map(([cx, cz]) => this.worldOf(cx, cz, this.rows, BIN_DROP))
+          const hole = [
+            [X - innerHalf, Z - innerHalf], [X + innerHalf, Z - innerHalf],
+            [X + innerHalf, Z + innerHalf], [X - innerHalf, Z + innerHalf],
+          ].map(([cx, cz]) => this.worldOf(cx, cz, this.rows, BIN_DROP))
+          const center = this.worldOf(X, Z, this.rows, BIN_DROP)
+          out.push({ X, Z, ring, rim, hole, center })
+        }
+      }
+      return out
+    },
     // ── Pyramid skin pegs ──────────────────────────────────────────
     // Rendering every lattice point of every layer would be ~1800
     // circles for 16 rows. We render only the "skin" — the perimeter
@@ -166,19 +218,12 @@ export default {
     // at a fraction of the element count. Sorted far→near so SVG paints
     // back-to-front.
     pegs3d() {
-      const out = []
-      for (let d = 1; d <= this.rows; d++) {
-        for (let c = 0; c <= d; c++) {
-          for (let e = 0; e <= d; e++) {
-            // skin only: on the boundary of this layer's c×e grid
-            if (c !== 0 && c !== d && e !== 0 && e !== d) continue
-            const p = this.project(...this.worldOf(c, e, d))
-            out.push({ x: p.x, y: p.y, depth: p.depth })
-          }
-        }
-      }
-      out.sort((a, b) => a.depth - b.depth)
-      return out
+      return this.pegsWorld
+        .map(({ wx, wy, wz }) => {
+          const p = this.project(wx, wy, wz)
+          return { x: p.x, y: p.y, depth: p.depth }
+        })
+        .sort((a, b) => a.depth - b.depth)
     },
     // ── Bin grid ───────────────────────────────────────────────────
     // (rows+1)×(rows+1) cells. Each cell is a TUBE: a colored rim at the
@@ -187,46 +232,29 @@ export default {
     // the well-down-into-the-floor look. On land, the WHOLE winning ring
     // lights up, since payout is radial.
     bins3d() {
-      const out = []
       const a = this.activeRound
       const hitRing = a ? Number(a.ring) : -1
       const hitLive = !!a && Number(a.roundStatus) !== 0 && this.ballLanded
-      const innerHalf = 0.5 - RIM_INSET
-      for (let X = 0; X <= this.rows; X++) {
-        for (let Z = 0; Z <= this.rows; Z++) {
-          const ring = Math.max(Math.abs(X - this.half), Math.abs(Z - this.half))
-          // Rim: cell footprint at the tray surface.
-          const rim = [
-            [X - 0.5, Z - 0.5], [X + 0.5, Z - 0.5],
-            [X + 0.5, Z + 0.5], [X - 0.5, Z + 0.5],
-          ].map(([cx, cz]) => {
-            const p = this.project(...this.worldOf(cx, cz, this.rows, BIN_DROP))
+      const toPoly = (worldCorners) =>
+        worldCorners
+          .map((w) => {
+            const p = this.project(w[0], w[1], w[2])
             return `${p.x.toFixed(2)},${p.y.toFixed(2)}`
           })
-          // Hole: inset polygon at the SAME wy as the rim, so it stays
-          // centred inside the cell footprint regardless of pitch. Depth
-          // feel comes from the colour contrast (darker shade of the
-          // ring colour) plus the ball's shrink-on-land animation.
-          const hole = [
-            [X - innerHalf, Z - innerHalf], [X + innerHalf, Z - innerHalf],
-            [X + innerHalf, Z + innerHalf], [X - innerHalf, Z + innerHalf],
-          ].map(([cx, cz]) => {
-            const p = this.project(...this.worldOf(cx, cz, this.rows, BIN_DROP))
-            return `${p.x.toFixed(2)},${p.y.toFixed(2)}`
-          })
-          const center = this.project(...this.worldOf(X, Z, this.rows, BIN_DROP))
-          out.push({
+          .join(' ')
+      return this.binsWorld
+        .map(({ X, Z, ring, rim, hole, center }) => {
+          const c = this.project(center[0], center[1], center[2])
+          return {
             X, Z, ring,
-            rimPoints: rim.join(' '),
-            holePoints: hole.join(' '),
-            cx: center.x, cy: center.y, depth: center.depth,
+            rimPoints: toPoly(rim),
+            holePoints: toPoly(hole),
+            cx: c.x, cy: c.y, depth: c.depth,
             mult: this.multipliers[ring],
             hit: hitLive && ring === hitRing,
-          })
-        }
-      }
-      out.sort((a, b) => a.depth - b.depth)
-      return out
+          }
+        })
+        .sort((a, b) => a.depth - b.depth)
     },
     // Rotation-INVARIANT viewBox. As yaw spins, every world point
     // traces a circle of radius hypot(wx,wz) about the central axis
@@ -395,16 +423,15 @@ export default {
       if (this.spinFrame) cancelAnimationFrame(this.spinFrame)
       this.spinAnchorYaw = this.yaw
       this.spinT0 = performance.now()
-      // Throttle yaw updates to ~20fps (50ms). At 6°/s that's a 0.3°
-      // step per update — below the visible-jitter threshold for a
-      // slow rotation, but ~3× less reactivity churn than firing every
-      // rAF frame. Critical for 16-row boards where re-projecting
-      // ~500 pegs + ~300 bins per yaw change otherwise overruns the
-      // 16ms frame budget and shows as stutter.
+      // Throttle yaw writes — cadence comes from the yawUpdateMs
+      // computed so bigger boards (12 / 16 rows) throttle harder than
+      // the sparse 8-row board. Reactivity churn dominates per-frame
+      // cost on the dense boards; this caps the work the renderer
+      // has to do per second.
       let lastUpdate = 0
       const tick = () => {
         const now = performance.now()
-        if (now - lastUpdate >= 50) {
+        if (now - lastUpdate >= this.yawUpdateMs) {
           const elapsed = (now - this.spinT0) / 1000
           this.yaw = this.spinAnchorYaw + elapsed * SPIN_RAD_PER_S
           lastUpdate = now

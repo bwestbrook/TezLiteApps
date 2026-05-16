@@ -116,12 +116,14 @@ const TEST_NBA_GAMES = [
 // API (`/apis/site/v2/sports/<path>/scoreboard?dates=YYYYMMDD`). The
 // merged lobby tags each card with the league id for display + later
 // oracle routing.
+// Squares only does well in leagues that put up 5+ points per period —
+// otherwise the mod-10 digit lottery is near-deterministic. Soccer
+// (EPL/MLS) and MLB are dropped for now; can be restored once we model
+// low-scoring periods sensibly. See periodSpecForLeague below.
 const LEAGUES = [
-  { id: 'NBA', path: 'basketball/nba' },
-  { id: 'NHL', path: 'hockey/nhl' },
-  { id: 'MLB', path: 'baseball/mlb' },
-  { id: 'EPL', path: 'soccer/eng.1' },
-  { id: 'MLS', path: 'soccer/usa.1' },
+  { id: 'NBA',  path: 'basketball/nba' },
+  { id: 'WNBA', path: 'basketball/wnba' },
+  { id: 'NHL',  path: 'hockey/nhl' },
 ]
 
 // Forward window for the picker fetch — today + the next (DAYS_AHEAD - 1)
@@ -944,25 +946,15 @@ export default {
     // of reports and the pool's weight distribution mirrors how the
     // sport actually scores. Defaults to NBA/NFL quarters when the
     // league is unknown.
-    //   - Soccer (EPL, MLS): 2 halves, weights 30/70 (halftime / final)
-    //   - Hockey (NHL):      3 periods, 20/30/50
-    //   - Basketball/NFL:    4 quarters, 15/15/15/55
-    //   - Baseball (MLB):    9 innings, ~equal split with a final lift
+    //   - Hockey (NHL):              3 periods, 20/30/50
+    //   - Basketball/NFL (incl WNBA): 4 quarters, 15/15/15/55
+    // Soccer (EPL/MLS) and baseball (MLB) used to live here but were
+    // pulled — too few points per period for the mod-10 digit lottery
+    // to feel fair. Restore from git history if/when we add a more
+    // forgiving payout model for low-scoring sports.
     periodSpecForLeague(league) {
-      if (league === 'EPL' || league === 'MLS') {
-        return { numPeriods: 2, quarterWeights: { 0: 30, 1: 70 } }
-      }
       if (league === 'NHL') {
         return { numPeriods: 3, quarterWeights: { 0: 20, 1: 30, 2: 50 } }
-      }
-      if (league === 'MLB') {
-        // 9 innings, last frame weighted heaviest. Sums to 100.
-        return {
-          numPeriods: 9,
-          quarterWeights: {
-            0: 8, 1: 8, 2: 8, 3: 8, 4: 8, 5: 8, 6: 10, 7: 10, 8: 32,
-          },
-        }
       }
       // Default: NBA/NFL/NCAAM/WNBA — four quarters, 15/15/15/55.
       return {
@@ -1119,7 +1111,7 @@ export default {
           <span class="sqCreateLabel">Pick a game (required)</span>
           <div class="rowFlex sqEspnDateRow">
             <div class="sqCreateHint sqEspnWindowHint">
-              Showing the next {{ DAYS_AHEAD }} days · NBA + EPL
+              Showing the next {{ DAYS_AHEAD }} days · NBA · WNBA · NHL
             </div>
             <div class="actionButton sqEspnRefresh" @click="fetchEspnGames">
               {{ espnLoading ? 'Loading…' : 'Refresh slate' }}
