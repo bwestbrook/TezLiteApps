@@ -268,10 +268,12 @@ export default {
         const p = this.project(...this.worldOf(0, 0, 0))
         return { sx: p.x, sy: p.y, depth: p.depth, scale: 1, spin: 0, resting: true, done: true }
       }
-      const { xBits, zBits, rows, t0 } = this.ball
+      const { xBits, zBits, rows, t0, totalDurationS } = this.ball
       const elapsed = (performance.now() - t0) / 1000
-      // ~0.30s per layer + 0.6s tray-drop tail + 0.4s tube-sink tail.
-      const totalDuration = 0.30 * rows + 0.6 + 0.4
+      // animateBall() seeds the total duration onto the ball so any
+      // changes there (slowdown factor, per-row tuning, …) stay in
+      // sync with the read side.
+      const totalDuration = totalDurationS
       const tNorm = Math.min(1, elapsed / totalDuration)
       const SETTLE = 0.6     // fall from last peg into the rim opening
       const SINK   = 0.5     // sink down inside the tube
@@ -520,7 +522,11 @@ export default {
       this.resetBall()
     },
     // Stop the rAF loop and clear all ball state back to "no ball".
+    // If a drop is mid-flight when this fires (row-switch button), the
+    // spin gets restored to whatever yaw it started from so the camera
+    // doesn't end mid-rotation against the new row geometry.
     resetBall() {
+      if (this.ball?.startYaw != null) this.yaw = this.ball.startYaw
       cancelAnimationFrame(this.animationFrame)
       this.animationFrame = 0
       this.ball = null
@@ -531,19 +537,43 @@ export default {
       const finalX = xBits.reduce((a, b) => a + b, 0)
       const finalZ = zBits.reduce((a, b) => a + b, 0)
       this.ballLanded = false
-      this.ball = { rows, xBits, zBits, finalX, finalZ, t0: performance.now() }
-      this.ballSettleAt = performance.now() + (0.30 * rows + 0.6 + 0.4) * 1000
+      const t0 = performance.now()
+      // 20% slowdown vs the previous timing — duration ×= 1.25. The
+      // wider window lets the 360° stage spin (driven below in the
+      // rAF tick) breathe across all row sizes:
+      //   8 rows  → 3.40s → 4.25s
+      //   12 rows → 4.60s → 5.75s
+      //   16 rows → 5.80s → 7.25s
+      const totalDurationS = (0.30 * rows + 0.6 + 0.4) * 1.25
+      // Anchor the camera's starting yaw so we can drive a smooth full
+      // revolution over the fall and snap back to the same orientation
+      // when the animation ends.
+      const startYaw = this.yaw
+      this.ball = {
+        rows, xBits, zBits, finalX, finalZ,
+        t0, totalDurationS, startYaw,
+      }
+      this.ballSettleAt = t0 + totalDurationS * 1000
       const tick = () => {
         if (!this.ball) return
         this.ballTick++
+        // Drive a single 360° turntable rotation over the fall. progress
+        // is clamped to 1 so the spin doesn't overshoot during the
+        // ballSettleAt+500ms touchdown grace window.
+        const elapsedS = (performance.now() - t0) / 1000
+        const progress = Math.min(1, elapsedS / totalDurationS)
+        this.yaw = startYaw + progress * 2 * Math.PI
         const pos = this.ballPosition
         if (pos?.done) {
           if (performance.now() > this.ballSettleAt + 500) {
             // Touchdown: stop the rAF loop but keep `this.ball` set so
             // the ball stays parked in its bin. Flipping ballLanded
-            // lights the winning cell.
+            // lights the winning cell. Snap yaw back to its anchor —
+            // visually identical to startYaw + 2π, but a clean value
+            // for any subsequent drag math.
             this.ballLanded = true
             this.animationFrame = 0
+            this.yaw = startYaw
             return
           }
         }

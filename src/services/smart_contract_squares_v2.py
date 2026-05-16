@@ -49,6 +49,14 @@ def main():
     # so users don't burn gas on a doomed op.
     PER_PLAYER_PER_GAME = 50
 
+    # Max squares that can actually be sold = 100-cell board minus the
+    # two house cells (idx 44 and idx 90, reserved for TXL holders).
+    # The original auto-lock check used a literal 100 which was never
+    # reachable — sold-out games stranded in PHASE_SELLING until admin
+    # manually called closeSales. Keep this in lockstep with the
+    # `params.squareIdx != 44 / != 90` guards in buySquare.
+    SELLABLE_CELLS = 98
+
     class Squares(sp.Contract):
         def __init__(self, admin, rngOracle, txlContract):
             # Roles
@@ -145,13 +153,18 @@ def main():
             assert params.numPeriods >= sp.nat(1), "BadNumPeriods"
             assert params.numPeriods <= sp.nat(9), "BadNumPeriods"
             # Validate that the weights map has exactly numPeriods entries
-            # (keys 0..numPeriods-1) and sums to 100. The loop unrolls at
-            # compile-time; the `if` is run-time SmartPy.
+            # (keys 0..numPeriods-1) and sums to 100. The Python for-loop
+            # unrolls at compile time; the inner `if` becomes a run-time
+            # SmartPy conditional. `idx` is an sp.nat that increments each
+            # iteration so we don't re-wrap a Python int in sp.nat() —
+            # smartpy 0.2.2's parser rejects sp.nat(<identifier>).
             sumW = sp.nat(0)
+            idx = sp.nat(0)
             for i in range(9):
-                if sp.nat(i) < params.numPeriods:
+                if idx < params.numPeriods:
                     assert i in params.quarterWeights, "MissingPeriod"
                     sumW = sumW + params.quarterWeights[i]
+                idx = idx + 1
             assert sumW == sp.nat(100), "WeightsMustSumTo100"
 
             gid = self.data.currentGameId
@@ -222,8 +235,12 @@ def main():
             game.squares[params.squareIdx] = sp.sender
             game.sold += 1
             game.pot += game.ticketPrice
-            # Auto-lock when all 100 sold so any racing buy reverts cleanly.
-            if game.sold == sp.nat(100):
+            # Auto-lock when every sellable cell is gone. The literal 100
+            # check was never reachable — house cells 44 and 90 can't be
+            # bought, so max sold is SELLABLE_CELLS (98), not 100. Without
+            # this, sold-out games sit in PHASE_SELLING forever waiting
+            # on a manual closeSales call from admin.
+            if game.sold == SELLABLE_CELLS:
                 game.phase = PHASE_LOCKED
                 sp.emit(params.gameId, tag="soldOut")
             self.data.games[params.gameId] = game

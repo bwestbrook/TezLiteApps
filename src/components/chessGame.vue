@@ -221,6 +221,17 @@ export default {
       demoAutoplayTimer: null,
       demoCheckmate: false,
       scholarTotalPly: SCHOLARS_MATE.length,
+      // ── Drag-to-move state ──────────────────────────────────────────
+      // null when no drag in progress, otherwise:
+      //   { fromSq, glyph, isWhite, startX, startY, currX, currY, isDragging }
+      // `isDragging` flips true once the pointer has moved past the
+      // CLICK-vs-DRAG threshold; below that we treat it as a click and
+      // fall through to the existing clickSq handler.
+      drag: null,
+      // After a real drag-drop, the browser still fires `click` on the
+      // source cell. We swallow that one click so it can't undo the
+      // selection / start a fresh half-move.
+      suppressClick: false,
     }
   },
   computed: {
@@ -388,6 +399,10 @@ export default {
   beforeUnmount() {
     if (this.pollInterval) clearInterval(this.pollInterval)
     this.stopScholarMate()
+    // Drag state may still hold document-level listeners if the user
+    // navigated away mid-drag. onDragCancel removes them and clears
+    // state in one shot.
+    if (this.drag) this.onDragCancel()
   },
   methods: {
     setView(v) {
@@ -494,7 +509,122 @@ export default {
         this.blockchainStatus = 'join failed'
       }
     },
+    // Shared rule: can the current user pick up the piece on this cell?
+    // Reused by both clickSq (selection) and onPiecePointerDown (drag).
+    canSelectCell(cell) {
+      if (cell.piece === 0) return false
+      if (!this.inRealGame) {
+        if (this.demoAutoplayActive) return false
+        return pieceSide(cell.piece) === this.demoTurn
+      }
+      if (!this.myTurn) return false
+      return (
+        (this.myColor === 1 && cell.isWhitePiece) ||
+        (this.myColor === 2 && cell.isBlackPiece)
+      )
+    },
+    // ── Drag-to-move ────────────────────────────────────────────────
+    // Pointer events cover mouse + touch uniformly. Strategy:
+    //   1. pointerdown on a movable piece — record start, select the
+    //      square (so legal-target highlights show), capture pointer.
+    //   2. pointermove — if movement exceeds the 6px threshold, flip
+    //      isDragging and start rendering the ghost piece at the cursor.
+    //   3. pointerup — if isDragging, find the destination cell via
+    //      elementFromPoint and attempt the move (real or demo path,
+    //      whichever applies). If never dragged, do nothing — the
+    //      browser's click event will follow and clickSq handles it.
+    onPiecePointerDown(ev, cell) {
+      // Left mouse button only (button === 0). Touch events have
+      // button === 0 too, so this is the right gate. Right-click and
+      // middle-click fall through.
+      if (ev.button !== 0 && ev.pointerType === 'mouse') return
+      if (!this.canSelectCell(cell)) return
+      // Block the default text-select / drag-image so the browser
+      // doesn't try to drag the glyph as text.
+      ev.preventDefault()
+      this.drag = {
+        fromSq: cell.idx,
+        glyph: cell.glyph,
+        isWhite: cell.isWhitePiece,
+        startX: ev.clientX,
+        startY: ev.clientY,
+        currX: ev.clientX,
+        currY: ev.clientY,
+        isDragging: false,
+      }
+      // Pre-select so the legal-target highlights show as soon as the
+      // user starts moving. Existing clickSq logic continues to work
+      // for keyboard / accessibility / pure-click users.
+      this.selectedSq = cell.idx
+      try { ev.currentTarget.setPointerCapture(ev.pointerId) } catch (_e) { /* noop */ }
+      document.addEventListener('pointermove', this.onDragMove)
+      document.addEventListener('pointerup', this.onDragEnd)
+      document.addEventListener('pointercancel', this.onDragCancel)
+    },
+    onDragMove(ev) {
+      if (!this.drag) return
+      this.drag.currX = ev.clientX
+      this.drag.currY = ev.clientY
+      if (!this.drag.isDragging) {
+        const dx = ev.clientX - this.drag.startX
+        const dy = ev.clientY - this.drag.startY
+        if (Math.hypot(dx, dy) > 6) this.drag.isDragging = true
+      }
+    },
+    onDragEnd(ev) {
+      document.removeEventListener('pointermove', this.onDragMove)
+      document.removeEventListener('pointerup', this.onDragEnd)
+      document.removeEventListener('pointercancel', this.onDragCancel)
+      const d = this.drag
+      this.drag = null
+      if (!d) return
+      // No actual drag — let the click handler do its thing.
+      if (!d.isDragging) return
+      // Suppress the click that will fire on the source cell after
+      // this pointerup, so it can't undo our selection / move.
+      this.suppressClick = true
+      requestAnimationFrame(() => { this.suppressClick = false })
+      // Find the cell under the release point. Walk up to whichever
+      // ancestor carries the sq-idx data attribute (the .chCell).
+      const el = ev.target && ev.target.ownerDocument
+        ? ev.target.ownerDocument.elementFromPoint(ev.clientX, ev.clientY)
+        : document.elementFromPoint(ev.clientX, ev.clientY)
+      const cellEl = el ? el.closest('[data-sq-idx]') : null
+      if (!cellEl) {
+        // Released off the board — drop the piece, clear selection.
+        this.selectedSq = null
+        return
+      }
+      const toSq = Number(cellEl.dataset.sqIdx)
+      if (toSq === d.fromSq) {
+        // Dropped back onto the same square — treat as cancel.
+        this.selectedSq = null
+        return
+      }
+      if (this.inRealGame) {
+        // submitMove handles its own selectedSq cleanup + chain call.
+        this.submitMove(d.fromSq, toSq)
+        return
+      }
+      // Demo path: gate on the same legality check the click handler uses.
+      const targets = legalTargets(this.demoBoard, d.fromSq)
+      if (targets.has(toSq)) {
+        this.applyDemoMove(d.fromSq, toSq)
+      } else {
+        this.selectedSq = null
+      }
+    },
+    onDragCancel() {
+      document.removeEventListener('pointermove', this.onDragMove)
+      document.removeEventListener('pointerup', this.onDragEnd)
+      document.removeEventListener('pointercancel', this.onDragCancel)
+      this.drag = null
+      this.selectedSq = null
+    },
     clickSq(cell) {
+      // Click immediately after a drag-drop — already handled by
+      // pointerup; ignore so we don't toggle the selection back off.
+      if (this.suppressClick) return
       // ── DEMO MODE: pseudo-legal moves, turn enforced, captures tracked ──
       if (!this.inRealGame) {
         // Any click during the Scholar's Mate showcase is a "let me take
@@ -837,6 +967,7 @@ export default {
                 <div
                   v-for="cell in row"
                   :key="cell.idx"
+                  :data-sq-idx="cell.idx"
                   :class="[
                     'chCell',
                     cell.isLight ? 'chCell--light' : 'chCell--dark',
@@ -845,8 +976,10 @@ export default {
                     legalDests.has(cell.idx) && cell.piece === 0 ? 'chCell--legal' : '',
                     legalDests.has(cell.idx) && cell.piece !== 0 ? 'chCell--legalCapture' : '',
                     (myTurn && (cell.piece !== 0 || selectedSq != null)) ? 'chCell--tappable' : '',
+                    drag && drag.fromSq === cell.idx ? 'chCell--dragSource' : '',
                   ]"
                   @click="clickSq(cell)"
+                  @pointerdown="onPiecePointerDown($event, cell)"
                 >
                   <span
                     v-if="cell.piece"
@@ -863,6 +996,17 @@ export default {
             </div>
           </div>
         </div>
+        <!-- Floating drag ghost — position: fixed so it's not clipped by
+             the board's overflow / transform stacking context. Centered
+             on the cursor via translate(-50%, -50%) and pointer-events
+             disabled so hit-testing in onDragEnd sees the cell under it,
+             not the ghost itself. -->
+        <div
+          v-if="drag && drag.isDragging"
+          class="chDragGhost"
+          :class="drag.isWhite ? 'chPiece--white' : 'chPiece--black'"
+          :style="{ left: drag.currX + 'px', top: drag.currY + 'px' }"
+        >{{ drag.glyph }}</div>
       </div>
 
       <div v-if="!inRealGame" class="chDemoPanel">
@@ -1392,6 +1536,10 @@ export default {
     0 10px 22px rgba(0, 0, 0, 0.55),
     0 2px 4px rgba(0, 0, 0, 0.45);
   transform: translateZ(6px);
+  /* Block the browser's default touch behaviour (scroll / pinch) on
+     the board so dragging a piece on mobile doesn't scroll the page
+     instead of moving the piece. */
+  touch-action: none;
 }
 .chFileRow { display: flex; align-items: center; }
 .chBoardRow { display: flex; align-items: center; }
@@ -1454,6 +1602,31 @@ export default {
 .chPiece--black {
   color: #1a1a1a;
   text-shadow: 0 0 1px #fff, 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+/* Draggable pieces get a grab cursor; while a drag is in flight,
+   show a grabbing cursor on the source cell instead. */
+.chCell--tappable .chPiece { cursor: grab; }
+.chCell--dragSource { cursor: grabbing; }
+/* Dim the original piece on its home square while it's "in the air"
+   on the cursor, so the user reads the ghost as the real piece. */
+.chCell--dragSource .chPiece {
+  opacity: 0.25;
+  filter: none;
+}
+/* Floating piece that follows the cursor during a drag. position:
+   fixed escapes any ancestor stacking context / overflow, centered
+   on the cursor via translate(-50%, -50%). pointer-events: none so
+   elementFromPoint in onDragEnd sees the cell beneath, not the ghost. */
+.chDragGhost {
+  position: fixed;
+  z-index: 9999;
+  font-size: 38px;       /* slightly larger than the resting 32px */
+  line-height: 1;
+  transform: translate(-50%, -50%) scale(1.05);
+  pointer-events: none;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.55));
+  user-select: none;
+  will-change: left, top;
 }
 
 /* ─── Demo panel: turn bar + captures + move history ──────────────── */
