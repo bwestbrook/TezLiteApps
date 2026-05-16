@@ -57,10 +57,14 @@ def main():
             '''
             # ── Roles + wiring ────────────────────────────────────────────
             self.data.admin = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
-            self.data.txlContract = sp.address("KT1Ro63rVDUx2x8pMChCLSySso8t6JH47oRQ")
-            # v3: RandomOracle KT1 (placeholder — admin rotates via
-            # updateOracleContract). All randomness flows through here.
-            self.data.oracleContract = sp.address("KT19V1YiyPtyCbxouhyeM96SekRTVC7Gw6qq")
+            # NOTE: mainnet build. Revert both KT1s to shadownet
+            # equivalents (TXL: KT1Ro63rV…oRQ, oracle: KT19V1Y…6qq)
+            # before any shadownet rebuild — see task 12 of the AD
+            # deploy plan / contracts/README.md long-term parameterization note.
+            self.data.txlContract = sp.address("KT1TYgt7SphtEQHLk4GySkXckhSctJww5hdj")
+            # v3: RandomOracle KT1 (admin rotates via updateOracleContract).
+            # All randomness flows through here.
+            self.data.oracleContract = sp.address("KT1H3RJBs3SjoLyFRG3Q6LXMGtm4n5wJGa4N")
             # Per-request mutez forwarded to oracle.requestRandom. Must be
             # >= live RandomOracle.fee. Tunable via updateOracleFee.
             self.data.oracleFee = sp.mutez(100000)

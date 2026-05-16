@@ -19,9 +19,10 @@ Currently committed:
 | Contract id    | Source (SmartPy)                              | Status     |
 | -------------- | --------------------------------------------- | ---------- |
 | `oracle`       | `src/services/smart_contract_oracle.py`        | ✓ compiled |
-| `acey-duecey`  | `src/services/smart_contractAD.py`             | TODO       |
+| `acey-duecey`  | `src/services/smart_contractAD.py`             | ✓ compiled |
 | `ttt`          | `src/services/smart_contract_TTT.py`           | TODO       |
 | `squares`      | `src/services/smart_contract_squares_v2.py`    | ✓ compiled |
+| `txl`          | `src/services/smart_contract_txl.py` (v2)      | ✓ compiled |
 
 To add a new one:
 
