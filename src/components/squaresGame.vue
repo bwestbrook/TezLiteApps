@@ -182,7 +182,13 @@ export default {
       // Create-game form. Anyone can start a new pool; admin still
       // owns scoring (reportQuarter) and randomization (setAxes).
       newGameName: '',
-      newGameTicketTez: 1.0,
+      // Default ticket price. Picked 0.1 ꜩ for mainnet-friendliness —
+      // a 98-cell sellout is ~9.8 ꜩ pot, ~5 ꜩ max single-player
+      // exposure at the contract's PER_PLAYER_PER_GAME=50 cap. Creators
+      // can crank it via the input field for higher-stakes pools.
+      // Keep the createCard / createGame `|| 0.1` fallbacks below in
+      // sync — they protect against the user clearing the field.
+      newGameTicketTez: 0.1,
       showCreateForm: false,
       // ─── NBA game picker for createGame ─────────────────────────
       // Lets the creator bind a pool to a real ESPN event. The chosen
@@ -774,7 +780,7 @@ export default {
       }
       const activeAccount = await this.wallet.client.getActiveAccount()
       if (!activeAccount) return
-      const ticketTez = Math.max(0.001, Number(this.newGameTicketTez) || 1)
+      const ticketTez = Math.max(0.001, Number(this.newGameTicketTez) || 0.1)
       const ticketMutez = Math.round(ticketTez * 1_000_000)
       const holderFeeMutez = 50_000 // 0.05 ꜩ — matches AD / Plinko convention
       // Period count + weights are sport-specific (2 halves for soccer,
@@ -839,7 +845,7 @@ export default {
       }
       const activeAccount = await this.wallet.client.getActiveAccount()
       if (!activeAccount) return
-      const ticketTez = Math.max(0.001, Number(this.newGameTicketTez) || 1)
+      const ticketTez = Math.max(0.001, Number(this.newGameTicketTez) || 0.1)
       const ticketMutez = Math.round(ticketTez * 1_000_000)
       const holderFeeMutez = 50_000 // 0.05 ꜩ — matches createGame()
       // Period model from the source game's league. Same path createGame
