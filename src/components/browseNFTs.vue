@@ -1199,10 +1199,8 @@ export default {
           <div class="txlRank" v-if="distinctHolders"> Listed on objkt: {{ onMarketplace }}</div>
           <div class="txlRank" v-if="topHolderLabel"> Top holder: {{ topHolderLabel }}</div>
         </div>
-        <div class="rowFlex">
-          <div class="actionButton" @click="selectRandom"> Select Random TXL </div>
+        <div class="rowFlex txlActionRow">
           <div class="actionButton" @click="checkThisOnObjkt(txlId)"> Buy on Objkt </div>
-          <div class="actionButton" @click="browseAllOnObjkt"> Browse Objkt </div>
           <div class="actionButtonHelp" @click="showLearnMore"> How 2.725K NFT holders earn a share of every game on thextz.life</div>
         </div>
         <div v-if="showInfo" @click="showLearnMore" class="infoPopup">
@@ -1539,6 +1537,18 @@ export default {
   50%      { opacity: 0.45; transform: scaleX(0.85); }
 }
 
+/* Tighter padding on the TXL action row — global mainBody styles set
+   .actionButton to padding 10px 14px / min-height 44px; here we want
+   the row of pills (Buy on Objkt + Learn more) to read as a compact
+   header instead of two thumb-sized blobs. Scoped via .txlActionRow
+   so other actionButtons on the page aren't affected. */
+.txlActionRow .actionButton,
+.txlActionRow .actionButtonHelp {
+  padding: 6px 12px;
+  min-height: 34px;
+  font-size: 12.5px;
+}
+
 /* ─── Mobile ────────────────────────────────────────────────────────
    Most of the page uses shared classes (.gameInfo / .rowFlex /
    .actionButton) that mainBody.vue already styles for mobile. Only
@@ -1549,6 +1559,15 @@ export default {
        on small phones; let it occupy 75 vw if needed. */
     width: clamp(180px, 75vw, 280px);
     margin: 10px auto;
+  }
+  /* Phones: keep the row compact even with the bigger mobile tap-target
+     defaults from mainBody. Use min-height 38 so they still meet the
+     thumb-friendly threshold without ballooning the row. */
+  .txlActionRow .actionButton,
+  .txlActionRow .actionButtonHelp {
+    padding: 8px 12px;
+    min-height: 38px;
+    font-size: 12px;
   }
 }
 @media (min-width: 481px) and (max-width: 768px) {
