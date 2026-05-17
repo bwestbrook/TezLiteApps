@@ -63,6 +63,53 @@
       </div>
     </section>
 
+    <!-- Result histogram — uniform-distribution sanity check across all
+         fulfilled requests on chain. Bins are normalized to [0,1)
+         because requests use different maxValue ranges. A roughly
+         flat bar profile = oracle is producing uniform output. -->
+    <section class="card">
+      <div class="cardHdr">
+        <div class="cardTitle">RESULT DISTRIBUTION</div>
+        <div class="cardBlurb">
+          Every fulfilled request normalized to [0,1) and binned into 10
+          buckets. A uniform random source produces roughly equal bars.
+          <button class="refreshBtn" @click="loadStats" :disabled="statsLoading">
+            {{ statsLoading ? 'loading…' : 'refresh' }}
+          </button>
+        </div>
+      </div>
+      <div v-if="statsError" class="errBox">{{ statsError }}</div>
+      <div class="statGrid statGrid--stats">
+        <div class="stat">
+          <div class="statLbl">Fulfilled requests sampled</div>
+          <div class="statVal">{{ stats.requests || '—' }}</div>
+        </div>
+        <div class="stat">
+          <div class="statLbl">Total random values</div>
+          <div class="statVal">{{ stats.samples || '—' }}</div>
+        </div>
+        <div class="stat">
+          <div class="statLbl">Mean (expected 0.500)</div>
+          <div class="statVal">{{ stats.samples ? stats.mean.toFixed(3) : '—' }}</div>
+        </div>
+      </div>
+      <div v-if="stats.samples > 0" class="histogram" aria-label="Random value distribution">
+        <div
+          v-for="(count, i) in stats.buckets"
+          :key="i"
+          class="histBar"
+          :style="{ height: histogramHeightPct(count) }"
+          :title="`Bucket ${i}: ${bucketRange(i)} — ${count} value${count === 1 ? '' : 's'} (${stats.samples ? ((count / stats.samples) * 100).toFixed(1) : 0}%)`"
+        >
+          <span class="histBarCount">{{ count }}</span>
+          <span class="histBarLabel">{{ bucketRange(i) }}</span>
+        </div>
+      </div>
+      <div v-else-if="!statsLoading && !statsError" class="histEmpty">
+        No fulfilled requests on chain yet.
+      </div>
+    </section>
+
     <!-- FAQ -->
     <section class="card">
       <div class="cardHdr">
@@ -228,6 +275,8 @@
 import { NETWORK, ORACLE_CONTRACT } from '../constants'
 import { getContractStorage, isPlaceholderAddress } from '../services/tzkt'
 
+const HISTOGRAM_BUCKETS = 10
+
 const FAQ = [
   {
     q: 'What is the oracle?',
@@ -274,6 +323,18 @@ export default {
       loading: false,
       loadError: '',
       codeCopied: false,
+      // Result distribution stats. buckets[i] = count of values whose
+      // normalized result falls in [i/10, (i+1)/10). requests = number
+      // of fulfilled records folded in; samples = total random values
+      // across those records; mean is the average normalized value.
+      stats: {
+        requests: 0,
+        samples: 0,
+        mean: 0,
+        buckets: Array(HISTOGRAM_BUCKETS).fill(0),
+      },
+      statsLoading: false,
+      statsError: '',
     }
   },
   computed: {
@@ -336,8 +397,96 @@ def onRandomFulfilled(self, params):
   },
   async mounted() {
     await this.loadStorage()
+    // Stats depend on storage.requests (the bigmap id). Run after.
+    await this.loadStats()
   },
   methods: {
+    // Map raw histogram count → CSS height. Uses the bucket with the
+    // most samples as the 100% reference so the tallest bar always
+    // fills the chart area, even when one bucket dominates. Adds a
+    // small floor (4%) so non-zero buckets stay visible.
+    histogramHeightPct(count) {
+      if (!this.stats.samples) return '0%'
+      const peak = Math.max(...this.stats.buckets, 1)
+      const pct = (count / peak) * 100
+      if (count > 0 && pct < 4) return '4%'
+      return `${pct.toFixed(1)}%`
+    },
+    bucketRange(i) {
+      const lo = (i / HISTOGRAM_BUCKETS).toFixed(1)
+      const hi = ((i + 1) / HISTOGRAM_BUCKETS).toFixed(1)
+      return `${lo}–${hi}`
+    },
+    async loadStats() {
+      this.statsError = ''
+      this.statsLoading = true
+      try {
+        // The contract's `requests` field is a SmartPy sp.map, which
+        // TzKT inlines into the storage payload — keys are stringified
+        // nat request IDs, values are the request records. Fresh fetch
+        // here (instead of reusing this.storage) so the refresh button
+        // always reflects current chain state without forcing the
+        // outer LIVE STATUS panel to repaint too.
+        const data = await getContractStorage(ORACLE_CONTRACT)
+        if (!data || !data.requests || typeof data.requests !== 'object') {
+          // Either storage didn't load or this contract has no
+          // requests map yet. Keep the empty state.
+          this.stats = {
+            requests: 0,
+            samples: 0,
+            mean: 0,
+            buckets: Array(HISTOGRAM_BUCKETS).fill(0),
+          }
+          return
+        }
+        const records = Object.values(data.requests)
+        const buckets = Array(HISTOGRAM_BUCKETS).fill(0)
+        let samples = 0
+        let sumNormalized = 0
+        let requests = 0
+        for (const v of records) {
+          // requestStatus=1 is the post-fulfill state per
+          // smart_contract_oracle.py:390. Skip anything still pending.
+          if (!v || String(v.requestStatus) !== '1') continue
+          // tzkt returns nat values as strings; coerce defensively.
+          const maxValue = Number(v.maxValue)
+          const values = Array.isArray(v.randomValues) ? v.randomValues : []
+          if (!Number.isFinite(maxValue) || values.length === 0) continue
+          // Divisor mirrors the contract: results lie in [0, maxValue],
+          // so dividing by (maxValue+1) lands them in [0, 1). Guard
+          // against the degenerate maxValue = 0 case.
+          const divisor = maxValue + 1
+          if (divisor <= 0) continue
+          let counted = 0
+          for (const raw of values) {
+            const n = Number(raw)
+            if (!Number.isFinite(n)) continue
+            const normalized = n / divisor
+            // Clamp into [0, 1) so a stray value = divisor lands in
+            // the top bucket instead of overflowing the array.
+            const idx = Math.min(
+              HISTOGRAM_BUCKETS - 1,
+              Math.max(0, Math.floor(normalized * HISTOGRAM_BUCKETS)),
+            )
+            buckets[idx]++
+            sumNormalized += normalized
+            samples++
+            counted++
+          }
+          if (counted > 0) requests++
+        }
+        this.stats = {
+          requests,
+          samples,
+          mean: samples > 0 ? sumNormalized / samples : 0,
+          buckets,
+        }
+      } catch (err) {
+        this.statsError = `Could not load result distribution: ${err.message || err}`
+      } finally {
+        this.statsLoading = false
+      }
+    },
     async loadStorage() {
       if (isPlaceholderAddress(ORACLE_CONTRACT)) {
         this.loadError = `No oracle deployed on ${NETWORK} yet.`
@@ -713,5 +862,77 @@ def onRandomFulfilled(self, params):
   .hero { padding: 14px 16px; }
   .heroLogo { width: 78px; height: 78px; }
   .heroTitle { font-size: 24px; }
+}
+
+/* Stat grid variant used for the histogram header row — same columns
+   as the live-status grid, just a touch tighter since these three
+   numbers always sit in a single row above the bars. */
+.statGrid--stats {
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 14px;
+}
+
+/* Histogram — 10 bars laid out as a baseline-aligned flex row. Each
+   bar grows up from a flat floor so peaks are visually compared by
+   relative height. histogramHeightPct() sets the inline height
+   against the tallest bucket as the 100% reference. */
+.histogram {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 180px;
+  padding: 12px 8px 4px;
+  background:
+    repeating-linear-gradient(
+      to top,
+      rgba(245, 236, 225, 0.04) 0,
+      rgba(245, 236, 225, 0.04) 1px,
+      transparent 1px,
+      transparent 36px);
+  border-radius: var(--ad-r-md, 10px);
+  border: 1px solid var(--ad-border-soft, rgba(245, 236, 225, 0.10));
+}
+.histBar {
+  flex: 1 1 0;
+  position: relative;
+  min-height: 0;
+  background:
+    linear-gradient(180deg,
+      var(--ad-violet-1, #7dd3c8) 0%,
+      var(--ad-violet-2, #14a094) 100%);
+  border-radius: 4px 4px 0 0;
+  transition: height 0.35s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 2px;
+}
+.histBarCount {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ad-text-1, #f5ece1);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+  line-height: 1;
+}
+.histBarLabel {
+  position: absolute;
+  bottom: -16px;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: var(--ad-text-3, rgba(245, 236, 225, 0.46));
+  white-space: nowrap;
+}
+.histEmpty {
+  font-style: italic;
+  color: var(--ad-text-3, rgba(245, 236, 225, 0.46));
+  padding: 12px 8px;
+}
+
+@media (max-width: 480px) {
+  .statGrid--stats { grid-template-columns: 1fr; }
+  .histogram { height: 140px; padding: 8px 4px 4px; gap: 3px; }
+  .histBarCount { font-size: 9px; }
+  .histBarLabel { font-size: 8px; bottom: -14px; }
 }
 </style>
