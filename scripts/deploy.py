@@ -115,12 +115,14 @@ CONTRACTS: dict[str, ContractSpec] = {
         id="plinko",
         source=SOURCES_DIR / "smart_contractPlinko.py",
         constants_var="PLINKO_CONTRACT_ADDRESS",
-        # Pot seed at origination — mirrors AD. self.data.pot (5 ꜩ) +
-        # potReserve (10 ꜩ) in __init__ must equal this so L1 balance
-        # matches bookkeeping. default() is NOT triggered by origination
-        # so the initial balance is credited only at the L1 level, not
-        # added to potReserve a second time.
-        initial_balance_tez=15.0,
+        # initial_balance_tez stays at the default 0.0 for shadownet
+        # rebuilds because the __init__ literals are now back to
+        # pot=0/reserve=0. The mainnet origination (KT19ouAM…Mdk) used
+        # a temporary initial_balance_tez=15.0 alongside the now-reverted
+        # __init__ pot=5/reserve=10 — restore both together when
+        # re-prepping plinko for another mainnet origination, or drop
+        # the L1 funding to keep shadownet bookkeeping consistent with
+        # contract-side counters.
     ),
     "war": ContractSpec(
         id="war",
