@@ -601,6 +601,207 @@ Same code as AD-4 with `sp.cast` paths. Put it in the admin block of
 
 ---
 
+## Plinko v3 — re-audit (post-v3 commit-reveal)
+
+Re-pass before the mainnet origination of `smart_contractPlinko.py`
+(v3 commit-reveal consumer, commit `920e227`). The original audit
+covered the v2 surface; this section re-verifies that PLINKO-1..6
+carry forward into the v3 rewrite and adds v3-specific checks for
+the commit-reveal / `requestRandom` / `onRandomFulfilled` flow. Line
+numbers refer to `src/services/smart_contractPlinko.py` at the
+v3 source level (mainnet `__init__` literal swap doesn't shift any
+of the cited regions).
+
+### PLINKO-1 [HIGH, v2 feature] — Oracle bias is the trust model
+
+**Status**: ✓ subsumed by v3. Plinko now consumes the v3 RandomOracle
+via `play()` forwarding `userNonce` + `commitId` (line 244) and
+settling in `onRandomFulfilled` (line 248). The seed is derived
+on-chain in the oracle from the commit-revealed preimage + the
+player's `userNonce` + the requestId — see `smart_contract_oracle.py:352`.
+The operator cannot bias outcomes by picking the seed after seeing
+the request, because the preimage is committed before any request is
+bound to it (verified against the oracle's commit lifecycle).
+PLINKO-1 should be marked DONE in the verification matrix.
+
+### PLINKO-2 [MED, carried] — Pot deficit pulls a hard assert
+
+**Status**: ✓ retained in v3 as a clamp-and-emit pattern, not the
+hard revert that the v2 audit flagged. Lines 310-323:
+
+```python
+if payout > sp.mutez(0):
+    available = self.data.pot + self.data.potReserve
+    actualPayout = payout
+    if payout > available:
+        actualPayout = available
+        deficit = payout - self.data.pot
+        self.data.potReserve -= deficit
+        self.data.pot += deficit
+    ...
+    if actualPayout < payout:
+        sp.emit(sp.record(roundId=roundId, owed=payout, paid=actualPayout), tag='payoutShortfall')
+```
+
+Cap-at-available means the oracle callback never reverts on under-funded
+pots — settlement always completes, the shortfall is emitted as an
+event for off-chain reconciliation, and round storage records the
+actual paid amount. The on-chain bookkeeping (`pot`/`potReserve`)
+moves consistently with the L1 send.
+
+### PLINKO-3 [MED, carried] — `pruneRound`
+
+**Status**: ✓ retained in v3 with the v3 round shape. Lines 156-164.
+Admin-gated, requires `roundStatus != 0` (i.e. not still pending
+oracle fulfillment), emits the record pre-delete for indexers, then
+`del self.data.rounds[roundId]`. The "must be settled" guard prevents
+the admin from pruning a round mid-flight and orphaning a callback.
+
+### PLINKO-4 [LOW, carried] — Cap `setMultiplierRow` entry count
+
+**Status**: ✓ retained in v3. Lines 178-186. Count iterated via a
+loop (the SmartPy stdlib doesn't surface `len()` on `sp.map` in
+this version), capped at 17 to fit the legitimate ring domain
+(0..16 for rows=16) with one slot of headroom. Defeats the
+gas-balloon vector if the admin key is ever compromised.
+
+### PLINKO-5 [LOW, carried] — `topUpPot` positivity + naming
+
+**Status**: ✓ retained in v3. Lines 329-337. Admin-gated; asserts
+`params.amount > sp.mutez(0)` (positivity) and
+`self.data.potReserve >= params.amount` (no underflow), then moves
+the amount from reserve to pot and emits `potToppedUp`.
+
+### PLINKO-6 [LOW, carried] — `updateAdmin`
+
+**Status**: ✓ retained in v3. Lines 101-106. Admin-gated, `sp.cast`
+on `newAdmin`, single-step rotation. Mirrors AD-4 exactly.
+
+### v3-specific checks
+
+**V3-1 [HIGH check]** — `onRandomFulfilled` callback authentication.
+
+Line 257:
+
+```python
+assert sp.sender == self.data.oracleContract, "not oracle"
+```
+
+Strict equality against the storage value. `sp.sender` is the
+immediate caller, set by the protocol — un-spoofable at the SmartPy
+level. Admin can rotate the oracle KT1 via `updateOracleContract`
+(line 109) if it's ever compromised.
+
+**Finding**: ✓ correctly gated. Same shape as AD V3-1.
+
+**V3-2 [MED check]** — Replay of `onRandomFulfilled`.
+
+Line 261: `assert r.roundStatus == 0, "already resolved"`. After a
+successful fulfillment, `roundStatus` flips to 1/2/3 (line 311). A
+replayed callback with the same `requestId`/`callbackContext` would
+revert at this assertion.
+
+**Finding**: ✓ no double-settlement window.
+
+**V3-3 [MED check]** — `play()` amount arithmetic.
+
+Lines 213-216:
+
+```python
+assert sp.amount >= self.data.minBet + self.data.fee + self.data.oracleFee, "bet too small"
+assert sp.amount <= self.data.maxBet + self.data.fee + self.data.oracleFee, "bet too big"
+betAfterFees = sp.amount - self.data.fee - self.data.oracleFee
+```
+
+Both bounds use `>=` / `<=` (not strict-eq), which is intentional and
+asymmetric to AD's `bet()` because plinko's bet size is a player
+choice within the band. The `betAfterFees` calculation cannot
+underflow under the `>=` lower bound. `sp.send(txlContract, fee)`
+on line 218 is unconditional and the `oracleFee` is included in the
+`sp.transfer` payload to the oracle on line 244 — both routes consume
+the fee components before the callback can fire.
+
+**Finding**: ✓ arithmetic is sound under SmartPy's mutez semantics.
+
+**V3-4 [HIGH check]** — State-before-send in the win branch.
+
+Lines 306-321:
+
+```python
+self.data.rounds[roundId] = sp.record(... roundStatus=newStatus ...)
+...
+if payout > sp.mutez(0):
+    available = self.data.pot + self.data.potReserve
+    actualPayout = payout
+    if payout > available:
+        ...
+        self.data.potReserve -= deficit
+        self.data.pot += deficit
+    self.data.pot -= actualPayout
+    sp.send(r.player, actualPayout)
+```
+
+`roundStatus` is written before `sp.send`. The pot is also debited
+before the send. A malicious player contract that re-enters via its
+`default()` finds `roundStatus != 0`, so a replay would revert at
+V3-2's assertion (line 261). The default() entrypoint of Plinko itself
+(line 96-98) only adds to `potReserve` — it does not mutate any
+round state — so reentry through default() can't desync round state.
+
+**Finding**: ✓ checks-effects-interactions order preserved.
+
+**V3-5 [MED check]** — Oracle nRandoms / maxValue parameters.
+
+Line 241: `nRand = sp.mul(sp.nat(2), params.rows)` with `rows ∈ {8,12,16}` →
+`nRand ∈ {16, 24, 32}`. The mainnet oracle's `maxRandomsPerRequest`
+is 32 (verified via tzkt /v1/contracts/<oracle>/storage). Exactly
+fits the worst case; no padding bug. Line 244 forwards
+`maxValue=sp.nat(1)` (each value is a bit). Line 279 defensively
+asserts the oracle returned exactly `2*rows` values — protects
+against a malicious / buggy oracle delivering a different count.
+
+**Finding**: ✓ bounded and defensively validated.
+
+**V3-6 [LOW check]** — Pruned-round callback safety.
+
+Line 259: `assert roundId in self.data.rounds, "no such round"`. If
+a round was pruned between `play()` and the eventual fulfillment, the
+fulfillment reverts cleanly. `pruneRound` only allows settled rounds
+(`roundStatus != 0`), so this can't be hit in practice — defensive
+only.
+
+**Finding**: ✓ defensive, no path to mis-apply a fulfillment to the
+wrong round.
+
+**V3-7 [LOW check]** — Mainnet pot seed bookkeeping.
+
+`__init__` literals: `self.data.pot = sp.tez(5); self.data.potReserve = sp.tez(10)`.
+`scripts/deploy.py` plinko spec has `initial_balance_tez=15.0`. The
+two must agree because `default()` is NOT triggered by origination
+(comment: smart_contractPlinko.py:96-98) — origination credits the
+L1 balance directly without going through `default()`. The contract's
+internal counters and the L1 balance therefore both start at 15 ꜩ.
+
+**Finding**: ✓ bookkeeping consistent. If `initial_balance_tez` were
+ever changed without updating the `__init__` literals (or vice versa),
+on-chain bookkeeping would drift from L1 balance and the first
+`topUpPot` to mainnet would be off. Worth a comment, which is in
+place at both ends.
+
+### Summary
+
+No HIGH findings. PLINKO-1 is subsumed by v3; PLINKO-2..6 are correctly
+carried forward. V3-specific checks all pass: callback gate is sound,
+state machine prevents double-settlement, checks-effects-interactions
+order preserved, oracle parameters bounded and defensively validated.
+Mainnet pot-seed bookkeeping is consistent end-to-end (`__init__`
+literals ↔ `deploy.py initial_balance_tez`).
+
+**Clear to proceed to mainnet origination** (pending deployer-wallet
+funding + explicit go-ahead).
+
+---
+
 ## TTT (`src/services/smart_contract_TTT.py`)
 
 ### TTT-1 [HIGH] — `games = {}` untyped → compile failure

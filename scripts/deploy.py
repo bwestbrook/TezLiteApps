@@ -115,6 +115,12 @@ CONTRACTS: dict[str, ContractSpec] = {
         id="plinko",
         source=SOURCES_DIR / "smart_contractPlinko.py",
         constants_var="PLINKO_CONTRACT_ADDRESS",
+        # Pot seed at origination — mirrors AD. self.data.pot (5 ꜩ) +
+        # potReserve (10 ꜩ) in __init__ must equal this so L1 balance
+        # matches bookkeeping. default() is NOT triggered by origination
+        # so the initial balance is credited only at the L1 level, not
+        # added to potReserve a second time.
+        initial_balance_tez=15.0,
     ),
     "war": ContractSpec(
         id="war",

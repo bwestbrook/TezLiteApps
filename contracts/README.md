@@ -23,6 +23,7 @@ Currently committed:
 | `ttt`          | `src/services/smart_contract_TTT.py`           | TODO       |
 | `squares`      | `src/services/smart_contract_squares_v2.py`    | ✓ compiled |
 | `txl`          | `src/services/smart_contract_txl.py` (v2)      | ✓ compiled |
+| `plinko`       | `src/services/smart_contractPlinko.py` (v3)    | ✓ compiled |
 
 To add a new one:
 
