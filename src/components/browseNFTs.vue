@@ -1204,10 +1204,17 @@ export default {
             <span class="attrValue">{{ topHolderLabel }}</span>
           </div>
         </div>
-        <div class="rowFlex" v-if="owner || distinctHolders">
+        <div class="rowFlex" v-if="distinctHolders">
+          <div class="txlRank"> Holders: {{ distinctHolders }}</div>
+          <div class="txlRank"> Listed on objkt: {{ onMarketplace }}</div>
+        </div>
+        <!-- Bottom action row: Owner (linked to objkt when resolvable) +
+             Learn more. Side-by-side on desktop, stacked on mobile via
+             .txlActionRow--stack. -->
+        <div class="rowFlex txlActionRow txlActionRow--stack">
           <a
             v-if="owner && ownerObjktUrl"
-            :class="['txlRank', 'txlRank--link', isOwnedByMe ? 'txlRank--mine' : '']"
+            :class="['actionButton', 'txlOwnerBtn', isOwnedByMe ? 'txlOwnerBtn--mine' : '']"
             :href="ownerObjktUrl"
             target="_blank"
             rel="noopener noreferrer"
@@ -1215,21 +1222,14 @@ export default {
           >
             <span v-if="isOwnedByMe">Owner: You ({{ owner }})</span>
             <span v-else>Owner: {{ owner }}</span>
-            <span class="txlRank__ext" aria-hidden="true">↗</span>
+            <span class="txlOwnerBtn__ext" aria-hidden="true">↗</span>
           </a>
           <div
-            v-else-if="owner"
-            :class="['txlRank', isOwnedByMe ? 'txlRank--mine' : '']"
-            :title="ownerAddress"
-          >
-            <span v-if="isOwnedByMe">Owner: You ({{ owner }})</span>
-            <span v-else>Owner: {{ owner }}</span>
-          </div>
-          <div class="txlRank" v-if="distinctHolders"> Holders: {{ distinctHolders }}</div>
-          <div class="txlRank" v-if="distinctHolders"> Listed on objkt: {{ onMarketplace }}</div>
-        </div>
-        <div class="rowFlex txlActionRow">
-          <div class="actionButton" @click="checkThisOnObjkt(txlId)"> Buy on Objkt </div>
+            v-else
+            :class="['actionButton', 'txlOwnerBtn', 'txlOwnerBtn--idle']"
+            :title="ownerAddress || 'Owner not loaded yet'"
+            aria-disabled="true"
+          >Owner: {{ owner || '—' }}</div>
           <div class="actionButtonHelp" @click="showLearnMore">Learn more</div>
         </div>
         <div v-if="showInfo" @click="showLearnMore" class="infoPopup">
@@ -1566,39 +1566,47 @@ export default {
   50%      { opacity: 0.45; transform: scaleX(0.85); }
 }
 
-/* Tighter padding on the TXL action row — global mainBody styles set
-   .actionButton to padding 10px 14px / min-height 44px; here the pills
-   read as compact header chips, not thumb blobs. Scoped via
-   .txlActionRow so other actionButtons on the page aren't affected. */
+/* Bottom action row: just Owner + Learn more. Side-by-side on desktop
+   (equal flex), stacked full-width on mobile. Tighter padding than the
+   global mainBody defaults so the row reads as a compact footer chip
+   strip instead of two thumb-sized blobs. */
+.txlActionRow {
+  margin-top: 8px;
+}
 .txlActionRow .actionButton,
-.txlActionRow .actionButtonHelp {
-  padding: 4px 10px;
-  min-height: 28px;
-  font-size: 11.5px;
+.txlActionRow .actionButtonHelp,
+.txlActionRow .txlOwnerBtn {
+  flex: 1 1 0;
+  padding: 8px 12px;
+  min-height: 36px;
+  font-size: 12.5px;
   letter-spacing: 0.02em;
   line-height: 1.2;
+  text-align: center;
 }
 
-/* Owner pill becomes an anchor when ownerObjktUrl is non-empty. The
-   .txlRank--link variant adds a hover lift + the ↗ external-link
-   glyph so it visually reads as clickable while keeping the same
-   pill silhouette as the surrounding stat rails. */
-.txlRank--link {
+/* Owner button — anchor when ownerObjktUrl is non-empty (jade theme,
+   hover lift, ↗ glyph); idle variant when no owner has resolved yet
+   (muted, no pointer). --mine variant overlays the "owned by you"
+   green chip styling. */
+.txlOwnerBtn {
   text-decoration: none;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   border: 1px solid var(--ad-violet-2, rgba(125, 211, 200, 0.55));
   background:
     linear-gradient(135deg,
       rgba(125, 211, 200, 0.10) 0%,
       rgba(20, 160, 148, 0.06) 100%);
+  color: var(--ad-text-1);
   transition: transform 0.12s ease, box-shadow 0.15s ease,
               background 0.15s ease, border-color 0.15s ease;
 }
-.txlRank--link:hover,
-.txlRank--link:focus-visible {
+.txlOwnerBtn:hover,
+.txlOwnerBtn:focus-visible {
   outline: none;
   transform: translateY(-1px);
   border-color: var(--ad-violet-1, #7dd3c8);
@@ -1608,7 +1616,26 @@ export default {
       rgba(20, 160, 148, 0.12) 100%);
   box-shadow: var(--ad-glow-violet, 0 6px 22px rgba(20, 160, 148, 0.26));
 }
-.txlRank__ext {
+.txlOwnerBtn--idle {
+  cursor: default;
+  opacity: 0.7;
+  border-color: var(--ad-border-soft, rgba(245, 236, 225, 0.10));
+  background: var(--ad-bg-elev-1, rgba(245, 236, 225, 0.04));
+}
+.txlOwnerBtn--idle:hover {
+  transform: none;
+  box-shadow: none;
+  background: var(--ad-bg-elev-1, rgba(245, 236, 225, 0.04));
+  border-color: var(--ad-border-soft, rgba(245, 236, 225, 0.10));
+}
+.txlOwnerBtn--mine {
+  border-color: var(--ad-green-1, #88c89a);
+  background:
+    linear-gradient(135deg,
+      rgba(136, 200, 154, 0.18) 0%,
+      rgba(31, 92, 58, 0.10) 100%);
+}
+.txlOwnerBtn__ext {
   font-size: 0.85em;
   opacity: 0.75;
 }
@@ -1624,16 +1651,20 @@ export default {
     width: clamp(180px, 75vw, 280px);
     margin: 10px auto;
   }
-  /* Phones: keep the row compact even with the bigger mobile tap-target
-     defaults from mainBody. We sit a touch under the 44px HIG guidance
-     because there are only two pills in this row and they're not the
-     primary tap targets on the page (the NFT card itself + the
-     hamburger handle most flows). */
-  .txlActionRow .actionButton,
-  .txlActionRow .actionButtonHelp {
-    padding: 6px 10px;
-    min-height: 32px;
-    font-size: 11.5px;
+  /* Phones: stack the Owner + Learn more row full-width. Tap targets
+     keep ≥40px since stacked column gives them room and they're the
+     primary footer actions on this view. */
+  .txlActionRow--stack {
+    flex-direction: column;
+  }
+  .txlActionRow--stack .actionButton,
+  .txlActionRow--stack .actionButtonHelp,
+  .txlActionRow--stack .txlOwnerBtn {
+    flex: 1 1 100%;
+    width: 100%;
+    min-height: 40px;
+    padding: 10px 12px;
+    font-size: 12.5px;
   }
 }
 @media (min-width: 481px) and (max-width: 768px) {
