@@ -63,7 +63,7 @@ code
                     GET;        # option (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (nat %pendingReqId) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (bytes %userNonce) (pair (map %xPath nat nat) (map %zPath nat nat))))))))))))) : @some : @parameter%onRandomFulfilled : @storage
                     IF_NONE
                       {
-                        PUSH int 260; # int : @some : @parameter%onRandomFulfilled : @storage
+                        PUSH int 244; # int : @some : @parameter%onRandomFulfilled : @storage
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : @some : @parameter%onRandomFulfilled : @storage
@@ -123,7 +123,7 @@ code
                             ISNAT;      # option nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled : @storage
                             IF_NONE
                               {
-                                PUSH int 274; # int : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled : @storage
+                                PUSH int 258; # int : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled : @storage
                                 FAILWITH;   # FAILED
                               }
                               {}; # @some : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled : @storage
@@ -245,7 +245,7 @@ code
                     EDIV;       # option (pair mutez mutez) : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled : @storage
                     IF_NONE
                       {
-                        PUSH int 297; # int : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled : @storage
+                        PUSH int 281; # int : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled : @storage
                         FAILWITH;   # FAILED
                       }
                       {
@@ -355,7 +355,7 @@ code
                             SUB_MUTEZ;  # option mutez : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled : @storage
                             IF_NONE
                               {
-                                PUSH int 332; # int : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled : @storage
+                                PUSH int 316; # int : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled : @storage
                                 FAILWITH;   # FAILED
                               }
                               {}; # @some : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled : @storage
@@ -368,7 +368,7 @@ code
                             SUB_MUTEZ;  # option mutez : @storage : @some : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled
                             IF_NONE
                               {
-                                PUSH int 333; # int : @storage : @some : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled
+                                PUSH int 317; # int : @storage : @some : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled
                                 FAILWITH;   # FAILED
                               }
                               {}; # @some : @storage : @some : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled
@@ -391,7 +391,7 @@ code
                         SUB_MUTEZ;  # option mutez : @storage : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled
                         IF_NONE
                           {
-                            PUSH int 335; # int : @storage : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled
+                            PUSH int 319; # int : @storage : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : @storage : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled
@@ -404,7 +404,7 @@ code
                         CONTRACT unit; # option (contract unit) : list operation : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled : @storage
                         IF_NONE
                           {
-                            PUSH int 336; # int : list operation : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled : @storage
+                            PUSH int 320; # int : list operation : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled : @storage
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : list operation : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled : @storage
@@ -423,7 +423,7 @@ code
                         GET;        # option (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (nat %pendingReqId) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (bytes %userNonce) (pair (map %xPath nat nat) (map %zPath nat nat))))))))))))) : @some : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (nat %pendingReqId) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (bytes %userNonce) (pair (map %xPath nat nat) (map %zPath nat nat))))))))))))) : @storage : list operation : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled
                         IF_NONE
                           {
-                            PUSH int 337; # int : @some : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (nat %pendingReqId) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (bytes %userNonce) (pair (map %xPath nat nat) (map %zPath nat nat))))))))))))) : @storage : list operation : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled
+                            PUSH int 321; # int : @some : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (nat %pendingReqId) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (bytes %userNonce) (pair (map %xPath nat nat) (map %zPath nat nat))))))))))))) : @storage : list operation : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : @some : map nat (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (nat %pendingReqId) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (bytes %userNonce) (pair (map %xPath nat nat) (map %zPath nat nat))))))))))))) : @storage : list operation : mutez : mutez : nat : nat : nat : nat : nat : nat : nat : nat : nat : map nat nat : map nat nat : @some : @some : @parameter%onRandomFulfilled
@@ -622,14 +622,14 @@ code
                     SUB_MUTEZ;  # option mutez : mutez : @parameter%play : @storage
                     IF_NONE
                       {
-                        PUSH int 216; # int : mutez : @parameter%play : @storage
+                        PUSH int 200; # int : mutez : @parameter%play : @storage
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : mutez : @parameter%play : @storage
                     SUB_MUTEZ;  # option mutez : @parameter%play : @storage
                     IF_NONE
                       {
-                        PUSH int 216; # int : @parameter%play : @storage
+                        PUSH int 200; # int : @parameter%play : @storage
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : @parameter%play : @storage
@@ -648,7 +648,7 @@ code
                     CONTRACT unit; # option (contract unit) : list operation : @some : @parameter%play : @storage
                     IF_NONE
                       {
-                        PUSH int 218; # int : list operation : @some : @parameter%play : @storage
+                        PUSH int 202; # int : list operation : @some : @parameter%play : @storage
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : list operation : @some : @parameter%play : @storage
@@ -780,7 +780,7 @@ code
                     GET;        # option (pair (mutez %bet) (pair (nat %finalX) (pair (nat %finalZ) (pair (mutez %payout) (pair (nat %pendingReqId) (pair (address %player) (pair (nat %ring) (pair (nat %risk) (pair (nat %roundStatus) (pair (nat %rows) (pair (bytes %userNonce) (pair (map %xPath nat nat) (map %zPath nat nat))))))))))))) : @parameter%pruneRound : @storage
                     IF_NONE
                       {
-                        PUSH int 161; # int : @parameter%pruneRound : @storage
+                        PUSH int 145; # int : @parameter%pruneRound : @storage
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : @parameter%pruneRound : @storage
@@ -904,7 +904,7 @@ code
                         GET;        # option nat : map nat nat : @storage : nat : nat : nat : @parameter%setMultiplierRow
                         IF_NONE
                           {
-                            PUSH int 189; # int : map nat nat : @storage : nat : nat : nat : @parameter%setMultiplierRow
+                            PUSH int 173; # int : map nat nat : @storage : nat : nat : nat : @parameter%setMultiplierRow
                             FAILWITH;   # FAILED
                           }
                           {}; # @some : map nat nat : @storage : nat : nat : nat : @parameter%setMultiplierRow
@@ -965,7 +965,7 @@ code
                     SUB_MUTEZ;  # option mutez : @storage : @parameter%topUpPot
                     IF_NONE
                       {
-                        PUSH int 351; # int : @storage : @parameter%topUpPot
+                        PUSH int 335; # int : @storage : @parameter%topUpPot
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : @storage : @parameter%topUpPot
@@ -1167,7 +1167,7 @@ code
                     SUB_MUTEZ;  # option mutez : @storage : @parameter%withdrawToReserve
                     IF_NONE
                       {
-                        PUSH int 362; # int : @storage : @parameter%withdrawToReserve
+                        PUSH int 346; # int : @storage : @parameter%withdrawToReserve
                         FAILWITH;   # FAILED
                       }
                       {}; # @some : @storage : @parameter%withdrawToReserve

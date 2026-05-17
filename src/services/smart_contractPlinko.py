@@ -53,20 +53,11 @@ def main():
         def __init__(self):
             # Admin / wiring. Both admin and oracle-contract default to the
             # operator's tz1 / tezliteapps oracle KT1 until rotated.
-            #
-            # NOTE: mainnet build. Revert the txlContract + oracleContract
-            # KT1s back to shadownet equivalents (TXL: KT1Ro63rV…oRQ,
-            # oracle: KT19V1Y…6qq) on a separate commit before any
-            # shadownet rebuild — mirrors the AD/oracle deploy plan,
-            # commit e7efe3f.
             self.data.admin = sp.address("tz1ZU2RLW7UgY8XXz49ccKihNy86zs6TdQ8Q")
-            self.data.txlContract = sp.address("KT1TYgt7SphtEQHLk4GySkXckhSctJww5hdj")
+            self.data.txlContract = sp.address("KT1Ro63rVDUx2x8pMChCLSySso8t6JH47oRQ")
             # v3: RandomOracle KT1. updateOracleContract rotates it.
-            self.data.oracleContract = sp.address("KT1H3RJBs3SjoLyFRG3Q6LXMGtm4n5wJGa4N")
+            self.data.oracleContract = sp.address("KT19V1YiyPtyCbxouhyeM96SekRTVC7Gw6qq")
             # Per-request mutez forwarded to oracle.requestRandom.
-            # 100000 mutez matches the live mainnet RandomOracle.fee
-            # (verified via tzkt /v1/contracts/<oracle>/storage). No bump
-            # needed.
             self.data.oracleFee = sp.mutez(100000)
 
             # Bet sizing — admin tunable.
@@ -74,15 +65,8 @@ def main():
             self.data.minBet = sp.mutez(100000)
             self.data.maxBet = sp.mutez(10000000)
 
-            # Mainnet pot seed — mirrors AD: 5 ꜩ working pot + 10 ꜩ
-            # reserve at origination. scripts/deploy.py
-            # initial_balance_tez=15.0 attaches the matching L1 balance
-            # so bookkeeping (self.data.pot + potReserve) and L1 balance
-            # agree. default() is NOT triggered by origination, so the
-            # balance is credited only at the L1 level — these literals
-            # are the contract-side counterparts.
-            self.data.pot = sp.tez(5)
-            self.data.potReserve = sp.tez(10)
+            self.data.pot = sp.mutez(0)
+            self.data.potReserve = sp.tez(0)
             self.data.currentRoundId = sp.nat(0)
 
             # Per-round state. v3 adds:
