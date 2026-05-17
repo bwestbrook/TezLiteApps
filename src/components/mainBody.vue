@@ -40,6 +40,10 @@ export default {
       // so the initial 0 → real-value jump doesn't trigger a flash.
       txlPoolFlash: false,
       txlPoolSeeded: false,
+      // Mobile-only hamburger dropdown anchored to the wallet button.
+      // Holds "Sign in / Sign out" and "Cash out" actions so the topBanner
+      // doesn't have to fit two long pills on a 360px screen.
+      walletMenuOpen: false,
     }
   },
   computed: {
@@ -65,16 +69,6 @@ export default {
         ...all.filter((a) => a.mainnetReady),
         ...all.filter((a) => !a.mainnetReady),
       ]
-    },
-    // Single-glyph status for the mobile wallet pill. The full text
-    // (long status strings, full address) stays in the DOM but is
-    // hidden via @media; this short version is shown in its place.
-    walletShort() {
-      const w = this.walletAddress || ''
-      if (w.startsWith('UNSYNC')) return '✓'
-      if (w.includes('CONNECTING')) return '…'
-      if (w.includes('error') || w.includes('failed') || w.includes('cancelled')) return '!'
-      return '🔗'
     },
   },
   created() {
@@ -117,6 +111,20 @@ export default {
       if (!strip) return
       const delta = Math.max(120, Math.round(strip.clientWidth * 0.7))
       strip.scrollBy({ left: dir * delta, behavior: 'smooth' })
+    },
+    toggleWalletMenu() {
+      this.walletMenuOpen = !this.walletMenuOpen
+    },
+    closeWalletMenu() {
+      this.walletMenuOpen = false
+    },
+    async signInOrOutFromMenu() {
+      this.walletMenuOpen = false
+      await this.toggleWallet()
+    },
+    async cashOutFromMenu() {
+      this.walletMenuOpen = false
+      await this.payNftHolderBC()
     },
     // Keep the selected pill in view when nav changes via socket / keyboard.
     scrollActiveIntoView() {
@@ -359,10 +367,58 @@ export default {
     <div class="centerBody">
       <div class="gameManagement">
         <div class="rowFlex topBanner">
-          <div class="actionButton topBanner__wallet" @click="toggleWallet" :title="walletAddress">
-            <span class="topBanner__wallet__full">{{ walletAddress }}</span>
-            <span class="topBanner__wallet__short" aria-hidden="true">{{ walletShort }}</span>
+          <!-- Desktop wallet pill: full status text, direct toggle. Hidden
+               at ≤480px via CSS, where the mobile hamburger replaces it. -->
+          <div
+            class="actionButton topBanner__wallet topBanner__wallet--desktop"
+            @click="toggleWallet"
+            :title="walletAddress"
+          >{{ walletAddress }}</div>
+          <!-- Mobile wallet pill: hamburger icon → dropdown with Sign in/out
+               and Cash out. Hidden on desktop. -->
+          <div class="topBanner__walletWrap">
+            <div
+              class="actionButton topBanner__wallet topBanner__wallet--mobile"
+              @click="toggleWalletMenu"
+              :title="walletAddress"
+              :aria-expanded="walletMenuOpen ? 'true' : 'false'"
+              aria-haspopup="menu"
+              role="button"
+              tabindex="0"
+              @keydown.enter.prevent="toggleWalletMenu"
+              @keydown.space.prevent="toggleWalletMenu"
+              @keydown.esc.prevent="closeWalletMenu"
+            >
+              <span class="hamburger" :class="{ 'hamburger--open': walletMenuOpen }" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </span>
+            </div>
+            <div
+              v-if="walletMenuOpen"
+              class="walletMenu"
+              role="menu"
+              @click.stop
+            >
+              <button
+                type="button"
+                class="walletMenu__item"
+                role="menuitem"
+                @click="signInOrOutFromMenu"
+              >{{ walletAddress.startsWith('UNSYNC') ? 'Sign out' : 'Sign in' }}</button>
+              <button
+                type="button"
+                class="walletMenu__item"
+                role="menuitem"
+                @click="cashOutFromMenu"
+              >Cash out TXL</button>
+            </div>
           </div>
+          <div
+            v-if="walletMenuOpen"
+            class="walletMenu__backdrop"
+            @click="closeWalletMenu"
+            aria-hidden="true"
+          ></div>
           <div class="actionButton topBanner__cashOut" @click="payNftHolderBC"> Cash Out TXL Earnings </div>
           <div :class="['txlRank', 'topBanner__unclaimed', txlPoolFlash ? 'txlRank--flash' : '']"> Unclaimed: {{ txlPoolValue.toFixed(3) }} ꜩ </div>
           <div
@@ -932,11 +988,83 @@ export default {
   font-family: var(--ad-font-body);
 }
 
-/* Wallet pill: __short is the mobile-only single-glyph fallback. It's
-   hidden by default; the @media (max-width: 480px) block below flips
-   the two spans. Defined here (before the media block) so source order
-   doesn't accidentally re-hide it on mobile. */
-.topBanner__wallet__short { display: none; }
+/* Wallet pills: there are two — a desktop one with full status text
+   (direct toggle on click) and a mobile-only hamburger that opens a
+   dropdown menu. Each is hidden at the other breakpoint. Defined here
+   (before the @media block) so source order doesn't accidentally
+   re-show them. */
+.topBanner__wallet--mobile { display: none; }
+.topBanner__walletWrap {
+  position: relative;
+  display: none;
+}
+
+/* Hamburger glyph — three crisp lines, color from the parent button.
+   When the menu is open the top/bottom lines fold into an X. */
+.hamburger {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 22px;
+  height: 16px;
+  pointer-events: none;
+}
+.hamburger > span {
+  display: block;
+  height: 2px;
+  width: 100%;
+  background: currentColor;
+  border-radius: 1px;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+  transform-origin: center;
+}
+.hamburger--open > span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger--open > span:nth-child(2) { opacity: 0; }
+.hamburger--open > span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* Dropdown anchored under the hamburger. Hidden on desktop because the
+   wrapper is hidden; mobile @media flips both to visible. */
+.walletMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  min-width: 160px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--ad-bg-base);
+  border: 1px solid var(--ad-border-mid);
+  border-radius: var(--ad-r-md);
+  box-shadow: var(--ad-shadow-card);
+}
+.walletMenu__item {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--ad-text-1);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: var(--ad-r-sm);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.walletMenu__item:hover,
+.walletMenu__item:focus-visible {
+  background: var(--ad-bg-elev-2);
+  outline: none;
+}
+.walletMenu__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: transparent;
+}
 
 /* ─── Site-wide mobile rules ─────────────────────────────────────────
    Two-tier responsive pass: ≤480px (phone portrait) and 481–768px
@@ -997,40 +1125,35 @@ export default {
     flex: 0 0 auto;
     margin: 0;
   }
-  .topBanner__wallet {
-    /* Icon-only on mobile — the full status string is in the DOM under
-       __full (hidden) for screen readers and the title tooltip; the
-       single-glyph __short is what renders. Square button matches the
-       44px tap target. */
+  /* Swap wallet pills: hide the desktop text pill, show the hamburger
+     wrapper. The Cash Out TXL Earnings pill is hidden because the
+     hamburger menu now exposes that action — keeps the row tight. */
+  .topBanner__wallet--desktop { display: none; }
+  .topBanner__walletWrap { display: block; flex: 0 0 44px; }
+  .topBanner__wallet--mobile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex: 0 0 44px;
     width: 44px;
     min-width: 44px;
     height: 44px;
     min-height: 44px;
     padding: 0;
-    font-size: 20px;
-    line-height: 44px;
-    text-align: center;
-    font-weight: 700;
-    white-space: nowrap;
-    overflow: hidden;
   }
-  .topBanner__wallet__full { display: none; }
-  .topBanner__wallet__short { display: inline; }
+  .topBanner__cashOut { display: none; }
   .topBanner__network {
     flex: 1 1 auto;
     align-self: stretch;
     min-height: 44px;
     padding: 0 12px;
-    /* Network badge fills the row beside the tiny wallet button. */
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
   }
-  .topBanner__cashOut,
   .topBanner__unclaimed {
-    flex: 1 1 calc(50% - 4px);
+    flex: 1 1 100%;
   }
   .topBanner__reset {
     flex: 1 1 100%;
