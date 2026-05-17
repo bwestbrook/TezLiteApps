@@ -1032,6 +1032,42 @@ export default {
 
 <template>
   <div class="gameManagement squaresRoot">
+    <!-- The 10×10 board always renders — blank (numbered, no owners)
+         when no game is loaded, live once one is. Sits at the top of
+         the view so the play surface is the first thing the user sees;
+         lobby, create form, stats and buy controls live underneath. -->
+    <div class="squaresWrap">
+      <table class="squaresGrid">
+        <thead>
+          <tr>
+            <th></th>
+            <th v-for="c in 10" :key="c">
+              {{ game && game.axesAssigned ? game.axisAway?.[c - 1] : '?' }}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(row, r) in grid" :key="r">
+            <th>{{ game && game.axesAssigned ? game.axisHome?.[r] : '?' }}</th>
+            <td
+              v-for="cell in row"
+              :key="cell.idx"
+              :class="[
+                'square',
+                isHouse(cell.idx) ? 'house' : (cell.owner ? 'taken' : 'open'),
+                isMine(cell.owner) ? 'mine' : '',
+              ]"
+            >
+              <span v-if="isHouse(cell.idx)" class="houseLabel">TXL</span>
+              <span v-else-if="cell.owner" class="ownerInitial">
+                {{ cell.owner.slice(-3) }}
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
     <!-- Top lobby — every upcoming ESPN game across all leagues plus
          every existing on-chain pool. Pool tiles jump to that pool;
          no-pool tiles open the create form pre-bound to that game.
@@ -1285,40 +1321,6 @@ export default {
       <div class="txlRank">Sold: {{ sold }} / 100</div>
       <div class="txlRank">Pot: {{ potTez }} ꜩ</div>
       <div class="txlRank">Ticket: {{ ticketPriceTez }} ꜩ + {{ feePriceTez }} ꜩ fee</div>
-    </div>
-
-    <!-- The 10×10 board always renders — blank (numbered, no owners)
-         when no game is loaded, live once one is. -->
-    <div class="squaresWrap">
-      <table class="squaresGrid">
-        <thead>
-          <tr>
-            <th></th>
-            <th v-for="c in 10" :key="c">
-              {{ game && game.axesAssigned ? game.axisAway?.[c - 1] : '?' }}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(row, r) in grid" :key="r">
-            <th>{{ game && game.axesAssigned ? game.axisHome?.[r] : '?' }}</th>
-            <td
-              v-for="cell in row"
-              :key="cell.idx"
-              :class="[
-                'square',
-                isHouse(cell.idx) ? 'house' : (cell.owner ? 'taken' : 'open'),
-                isMine(cell.owner) ? 'mine' : '',
-              ]"
-            >
-              <span v-if="isHouse(cell.idx)" class="houseLabel">TXL</span>
-              <span v-else-if="cell.owner" class="ownerInitial">
-                {{ cell.owner.slice(-3) }}
-              </span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
     </div>
 
     <!-- Buy + admin controls only make sense once a game is loaded. -->
