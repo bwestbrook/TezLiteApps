@@ -1144,26 +1144,24 @@ export default {
            the currently selected pool's game, or whatever the user
            picked from the top lobby. Only the per-square price is
            needed; everything else is inherited from the game. -->
-      <div v-if="showCreateForm && (game || selectedEspnId)" class="sqCreateForm">
-        <div class="sqCreateField">
-          <span class="sqCreateLabel">New card for</span>
-          <div class="sqCreateHint">
-            {{ selectedGameLabel }} — fresh 10×10 board, same game scoring.
-          </div>
+      <div v-if="showCreateForm && (game || selectedEspnId)" class="sqCreateForm sqCreateForm--compact">
+        <div class="sqCreateHeader">
+          <span class="sqCreateLabel">New card</span>
+          <span class="sqCreateHeaderGame">{{ selectedGameLabel }}</span>
         </div>
-        <label class="sqCreateField">
-          <span class="sqCreateLabel">Tez per square</span>
+        <label class="sqCreateField sqCreateField--inline">
+          <span class="sqCreateLabel">ꜩ / square</span>
           <input
             type="number"
             min="0.001"
             step="0.1"
             v-model.number="newGameTicketTez"
-            class="sqCreateInput"
+            class="sqCreateInput sqCreateInput--compact"
           />
         </label>
         <div class="rowFlex">
           <div class="actionButton sqPrimary" @click="createCard">
-            Create card — {{ Number(newGameTicketTez).toFixed(3) }} ꜩ / square
+            Create — {{ Number(newGameTicketTez).toFixed(3) }} ꜩ/sq
           </div>
         </div>
       </div>
@@ -1269,15 +1267,9 @@ export default {
           />
         </label>
         <div class="sqCreateHint">
-          Defaults: 0.05 ꜩ holder fee, 15/15/15/55 quarter split. Sales
-          auto-lock at 100 squares; admin reports the scores.
-          <template v-if="selectedEspnId">
-            Linked to ESPN game {{ selectedEspnId }} — the oracle will
-            auto-report quarter scores.
-          </template>
-          <template v-else>
-            Select a game above to enable "Start game".
-          </template>
+          0.05 ꜩ holder fee · 15/15/15/55 split · auto-lock at 100.
+          <template v-if="selectedEspnId">Oracle auto-reports scores.</template>
+          <template v-else>Pick a game above to enable Start.</template>
         </div>
         <div class="rowFlex">
           <div
@@ -1285,11 +1277,9 @@ export default {
             @click="createGame"
           >
             <template v-if="canCreateGame">
-              Start game — {{ Number(newGameTicketTez).toFixed(3) }} ꜩ / square
+              Start — {{ Number(newGameTicketTez).toFixed(3) }} ꜩ/sq
             </template>
-            <template v-else>
-              Pick an NBA game first
-            </template>
+            <template v-else>Pick a game first</template>
           </div>
         </div>
       </div>
@@ -1341,25 +1331,19 @@ export default {
           :class="['actionButton', 'sqPrimary', !canBuy || maxBuy === 0 ? 'sqPrimaryDisabled' : '']"
           @click="canBuy && maxBuy > 0 && buyRandomMany()"
         >
-          Buy {{ clampedBuyCount }} squares — {{ buyTotalTez }} ꜩ
+          Buy {{ clampedBuyCount }} — {{ buyTotalTez }} ꜩ
         </div>
-        <div class="actionButton" @click="claimAll">Claim winnings</div>
+        <div class="actionButton" @click="claimAll">Claim</div>
       </div>
       <div class="sqQuickBuyHint">
         <template v-if="atPerGameLimit">
-          You own {{ myOwnedSquaresInGame }} squares — the
-          {{ MAX_BUY_PER_PLAYER_PER_GAME }}-per-game limit. No more buys
-          this game.
+          You own {{ myOwnedSquaresInGame }} squares — the {{ MAX_BUY_PER_PLAYER_PER_GAME }}-per-game limit.
         </template>
         <template v-else-if="myOwnedSquaresInGame > 0">
-          You own {{ myOwnedSquaresInGame }} / {{ MAX_BUY_PER_PLAYER_PER_GAME }}
-          squares in this game — {{ myRemainingAllowance }} more allowed.
-          Center cell pays TXL holders when it wins.
+          You own {{ myOwnedSquaresInGame }}/{{ MAX_BUY_PER_PLAYER_PER_GAME }} · {{ myRemainingAllowance }} more allowed. Center pays TXL.
         </template>
         <template v-else>
-          Squares are assigned at random — up to {{ MAX_BUY_PER_CLICK }} per click
-          and {{ MAX_BUY_PER_PLAYER_PER_GAME }} per game. Center cell pays TXL
-          holders when it wins.
+          Random assignment · ≤{{ MAX_BUY_PER_CLICK }} per click · ≤{{ MAX_BUY_PER_PLAYER_PER_GAME }} per game · center pays TXL.
         </template>
       </div>
 
@@ -1438,17 +1422,30 @@ export default {
 
 /* ─── Create-game panel (open to all users) ─────────────────────────── */
 .sqCreatePanel {
-  margin: 12px 4px 4px;
+  margin: 8px 4px 4px;
 }
 .sqCreateToggle {
   flex: 0 0 auto;
 }
 .sqCreateForm {
-  margin-top: 10px;
-  padding: 12px 14px;
+  margin-top: 6px;
+  padding: 8px 10px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+/* Action buttons inside the create form / quick-buy row break their
+   text instead of overflowing — dynamic content ("Buy 50 squares —
+   5.000 ꜩ", "Start game — 0.100 ꜩ / square", etc.) is long enough to
+   blow out the button on narrower viewports without this. */
+.sqCreateForm .actionButton,
+.sqQuickBuyRow .actionButton {
+  white-space: normal;
+  word-break: break-word;
+  text-align: center;
+  line-height: 1.25;
+  min-width: 0;
+  flex-shrink: 1;
 }
 /* Confirmation tile after a successful card create. Green accent so it
    reads as "✓ done", and sits right below where the form was. */
@@ -1488,31 +1485,62 @@ export default {
 .sqCreateField {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 10px;
+  gap: 2px;
+  margin-bottom: 6px;
 }
 .sqCreateLabel {
-  font-size: 13px;
-  letter-spacing: 2px;
+  font-size: 11px;
+  letter-spacing: 1.6px;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(255, 255, 255, 0.7);
   font-weight: 700;
 }
 .sqCreateInput {
-  padding: 10px 12px;
+  padding: 6px 10px;
   font-family: 'EB Garamond';
-  font-size: 17px;
+  font-size: 15px;
   background: rgba(0, 0, 0, 0.35);
   color: #efeae2;
   border: 1px solid rgba(245, 196, 81, 0.25);
   border-radius: 6px;
 }
 .sqCreateHint {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
   font-style: italic;
-  margin-bottom: 8px;
-  line-height: 1.4;
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+/* Compact mode used for the "new card for an existing game" path —
+   collapses the New card header + game-label into one row, and runs
+   the ꜩ/square label inline with the input instead of stacked. */
+.sqCreateHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.sqCreateHeaderGame {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.sqCreateField--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.sqCreateField--inline .sqCreateLabel {
+  flex: 0 0 auto;
+}
+.sqCreateInput--compact {
+  flex: 1 1 100px;
+  min-width: 0;
+  padding: 5px 8px;
+  font-size: 14px;
 }
 
 /* ─── NBA game picker (inside the create-game form) ──────────────────── */

@@ -64,6 +64,12 @@ export default {
       if (!this.myAddress || !this.ownerAddress) return false
       return this.ownerAddress.toLowerCase() === this.myAddress.toLowerCase()
     },
+    // True when the displayed token is parked on the objkt marketplace
+    // contract (i.e. listed for sale). The Owner button uses this to
+    // switch its appearance from a plain pill to the jade buy-me chip.
+    isForSale() {
+      return this.ownerAddress === OBJKT_MARKETPLACE
+    },
     // Where the Owner pill jumps to on objkt. For a real tz1 collector
     // we open their objkt profile; when the token is parked on the
     // marketplace contract we open the listing itself (same URL as
@@ -1214,15 +1220,27 @@ export default {
         <div class="rowFlex txlActionRow txlActionRow--stack">
           <a
             v-if="owner && ownerObjktUrl"
-            :class="['actionButton', 'txlOwnerBtn', isOwnedByMe ? 'txlOwnerBtn--mine' : '']"
+            :class="[
+              'actionButton',
+              'txlOwnerBtn',
+              isForSale ? 'txlOwnerBtn--forSale' : '',
+              isOwnedByMe ? 'txlOwnerBtn--mine' : '',
+            ]"
             :href="ownerObjktUrl"
             target="_blank"
             rel="noopener noreferrer"
             :title="ownerAddress + ' — open on objkt'"
           >
-            <span v-if="isOwnedByMe">Owner: You ({{ owner }})</span>
-            <span v-else>Owner: {{ owner }}</span>
-            <span class="txlOwnerBtn__ext" aria-hidden="true">↗</span>
+            <template v-if="isForSale">
+              <span>For sale — view on objkt</span>
+              <span class="txlOwnerBtn__ext" aria-hidden="true">↗</span>
+            </template>
+            <template v-else-if="isOwnedByMe">
+              <span>Owner: You ({{ owner }})</span>
+            </template>
+            <template v-else>
+              <span>Owner: {{ owner }}</span>
+            </template>
           </a>
           <div
             v-else
@@ -1585,10 +1603,14 @@ export default {
   text-align: center;
 }
 
-/* Owner button — anchor when ownerObjktUrl is non-empty (jade theme,
-   hover lift, ↗ glyph); idle variant when no owner has resolved yet
-   (muted, no pointer). --mine variant overlays the "owned by you"
-   green chip styling. */
+/* Owner button — default state inherits the standard .actionButton
+   look so it reads as a peer of "Learn more" beside it. Distinct
+   variants only kick in for special states:
+     --forSale  jade buy-me chip with ↗ glyph (token on the objkt
+                marketplace contract — the only time the appearance
+                should change visually).
+     --mine     subtle green chip when the connected wallet owns it.
+     --idle     muted, no pointer, while the owner address loads. */
 .txlOwnerBtn {
   text-decoration: none;
   cursor: pointer;
@@ -1596,37 +1618,17 @@ export default {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid var(--ad-violet-2, rgba(125, 211, 200, 0.55));
-  background:
-    linear-gradient(135deg,
-      rgba(125, 211, 200, 0.10) 0%,
-      rgba(20, 160, 148, 0.06) 100%);
   color: var(--ad-text-1);
-  transition: transform 0.12s ease, box-shadow 0.15s ease,
-              background 0.15s ease, border-color 0.15s ease;
-}
-.txlOwnerBtn:hover,
-.txlOwnerBtn:focus-visible {
-  outline: none;
-  transform: translateY(-1px);
-  border-color: var(--ad-violet-1, #7dd3c8);
-  background:
-    linear-gradient(135deg,
-      rgba(125, 211, 200, 0.18) 0%,
-      rgba(20, 160, 148, 0.12) 100%);
-  box-shadow: var(--ad-glow-violet, 0 6px 22px rgba(20, 160, 148, 0.26));
 }
 .txlOwnerBtn--idle {
   cursor: default;
   opacity: 0.7;
-  border-color: var(--ad-border-soft, rgba(245, 236, 225, 0.10));
-  background: var(--ad-bg-elev-1, rgba(245, 236, 225, 0.04));
 }
 .txlOwnerBtn--idle:hover {
   transform: none;
   box-shadow: none;
-  background: var(--ad-bg-elev-1, rgba(245, 236, 225, 0.04));
-  border-color: var(--ad-border-soft, rgba(245, 236, 225, 0.10));
+  background: inherit;
+  border-color: inherit;
 }
 .txlOwnerBtn--mine {
   border-color: var(--ad-green-1, #88c89a);
@@ -1635,9 +1637,30 @@ export default {
       rgba(136, 200, 154, 0.18) 0%,
       rgba(31, 92, 58, 0.10) 100%);
 }
+.txlOwnerBtn--forSale {
+  border-color: var(--ad-violet-2, rgba(125, 211, 200, 0.55));
+  background:
+    linear-gradient(135deg,
+      rgba(125, 211, 200, 0.12) 0%,
+      rgba(20, 160, 148, 0.08) 100%);
+  font-weight: 600;
+  transition: transform 0.12s ease, box-shadow 0.15s ease,
+              background 0.15s ease, border-color 0.15s ease;
+}
+.txlOwnerBtn--forSale:hover,
+.txlOwnerBtn--forSale:focus-visible {
+  outline: none;
+  transform: translateY(-1px);
+  border-color: var(--ad-violet-1, #7dd3c8);
+  background:
+    linear-gradient(135deg,
+      rgba(125, 211, 200, 0.22) 0%,
+      rgba(20, 160, 148, 0.14) 100%);
+  box-shadow: var(--ad-glow-violet, 0 6px 22px rgba(20, 160, 148, 0.26));
+}
 .txlOwnerBtn__ext {
   font-size: 0.85em;
-  opacity: 0.75;
+  opacity: 0.85;
 }
 
 /* ─── Mobile ────────────────────────────────────────────────────────
