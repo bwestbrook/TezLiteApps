@@ -64,6 +64,20 @@ export default {
       if (!this.myAddress || !this.ownerAddress) return false
       return this.ownerAddress.toLowerCase() === this.myAddress.toLowerCase()
     },
+    // Where the Owner pill jumps to on objkt. For a real tz1 collector
+    // we open their objkt profile; when the token is parked on the
+    // marketplace contract we open the listing itself (same URL as
+    // the Buy on Objkt button). Empty string when there's no owner
+    // resolved yet — the template treats that as non-clickable.
+    ownerObjktUrl() {
+      const addr = this.ownerAddress
+      if (!addr) return ''
+      if (addr === OBJKT_MARKETPLACE) {
+        const kalaId = this.idLookUp[this.txlId]
+        return kalaId ? this.objectKalaUrl + kalaId : ''
+      }
+      return `https://objkt.com/users/${addr}`
+    },
   },
 
   created () {
@@ -1185,10 +1199,26 @@ export default {
               {{ traitRarity(raw).toFixed(2) }}%
             </span>
           </div>
+          <div v-if="topHolderLabel" class="attrCell attrCell--meta">
+            <span class="attrLabel">Top holder:</span>
+            <span class="attrValue">{{ topHolderLabel }}</span>
+          </div>
         </div>
         <div class="rowFlex" v-if="owner || distinctHolders">
+          <a
+            v-if="owner && ownerObjktUrl"
+            :class="['txlRank', 'txlRank--link', isOwnedByMe ? 'txlRank--mine' : '']"
+            :href="ownerObjktUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            :title="ownerAddress + ' — open on objkt'"
+          >
+            <span v-if="isOwnedByMe">Owner: You ({{ owner }})</span>
+            <span v-else>Owner: {{ owner }}</span>
+            <span class="txlRank__ext" aria-hidden="true">↗</span>
+          </a>
           <div
-            v-if="owner"
+            v-else-if="owner"
             :class="['txlRank', isOwnedByMe ? 'txlRank--mine' : '']"
             :title="ownerAddress"
           >
@@ -1197,11 +1227,10 @@ export default {
           </div>
           <div class="txlRank" v-if="distinctHolders"> Holders: {{ distinctHolders }}</div>
           <div class="txlRank" v-if="distinctHolders"> Listed on objkt: {{ onMarketplace }}</div>
-          <div class="txlRank" v-if="topHolderLabel"> Top holder: {{ topHolderLabel }}</div>
         </div>
         <div class="rowFlex txlActionRow">
           <div class="actionButton" @click="checkThisOnObjkt(txlId)"> Buy on Objkt </div>
-          <div class="actionButtonHelp" @click="showLearnMore"> How 2.725K NFT holders earn a share of every game on thextz.life</div>
+          <div class="actionButtonHelp" @click="showLearnMore">Learn more</div>
         </div>
         <div v-if="showInfo" @click="showLearnMore" class="infoPopup">
           <div>
@@ -1538,15 +1567,50 @@ export default {
 }
 
 /* Tighter padding on the TXL action row — global mainBody styles set
-   .actionButton to padding 10px 14px / min-height 44px; here we want
-   the row of pills (Buy on Objkt + Learn more) to read as a compact
-   header instead of two thumb-sized blobs. Scoped via .txlActionRow
-   so other actionButtons on the page aren't affected. */
+   .actionButton to padding 10px 14px / min-height 44px; here the pills
+   read as compact header chips, not thumb blobs. Scoped via
+   .txlActionRow so other actionButtons on the page aren't affected. */
 .txlActionRow .actionButton,
 .txlActionRow .actionButtonHelp {
-  padding: 6px 12px;
-  min-height: 34px;
-  font-size: 12.5px;
+  padding: 4px 10px;
+  min-height: 28px;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+/* Owner pill becomes an anchor when ownerObjktUrl is non-empty. The
+   .txlRank--link variant adds a hover lift + the ↗ external-link
+   glyph so it visually reads as clickable while keeping the same
+   pill silhouette as the surrounding stat rails. */
+.txlRank--link {
+  text-decoration: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--ad-violet-2, rgba(125, 211, 200, 0.55));
+  background:
+    linear-gradient(135deg,
+      rgba(125, 211, 200, 0.10) 0%,
+      rgba(20, 160, 148, 0.06) 100%);
+  transition: transform 0.12s ease, box-shadow 0.15s ease,
+              background 0.15s ease, border-color 0.15s ease;
+}
+.txlRank--link:hover,
+.txlRank--link:focus-visible {
+  outline: none;
+  transform: translateY(-1px);
+  border-color: var(--ad-violet-1, #7dd3c8);
+  background:
+    linear-gradient(135deg,
+      rgba(125, 211, 200, 0.18) 0%,
+      rgba(20, 160, 148, 0.12) 100%);
+  box-shadow: var(--ad-glow-violet, 0 6px 22px rgba(20, 160, 148, 0.26));
+}
+.txlRank__ext {
+  font-size: 0.85em;
+  opacity: 0.75;
 }
 
 /* ─── Mobile ────────────────────────────────────────────────────────
@@ -1561,13 +1625,15 @@ export default {
     margin: 10px auto;
   }
   /* Phones: keep the row compact even with the bigger mobile tap-target
-     defaults from mainBody. Use min-height 38 so they still meet the
-     thumb-friendly threshold without ballooning the row. */
+     defaults from mainBody. We sit a touch under the 44px HIG guidance
+     because there are only two pills in this row and they're not the
+     primary tap targets on the page (the NFT card itself + the
+     hamburger handle most flows). */
   .txlActionRow .actionButton,
   .txlActionRow .actionButtonHelp {
-    padding: 8px 12px;
-    min-height: 38px;
-    font-size: 12px;
+    padding: 6px 10px;
+    min-height: 32px;
+    font-size: 11.5px;
   }
 }
 @media (min-width: 481px) and (max-width: 768px) {
